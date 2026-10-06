@@ -2,6 +2,7 @@
 
 As implementações são ligadas só na raiz de composição (sar/composicao.py).
 """
+
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
@@ -55,8 +56,9 @@ class ExecutorAutorizavel(Protocol):
         """Versão do alvo, gravada na solicitação e conferida na aprovação (§5.3)."""
         ...
 
-    def executar(self, uow: UnidadeDeTrabalho, autor: Contexto, autorizador_id: int,
-                 parametros: Mapping[str, Any]) -> None:
+    def executar(
+        self, uow: UnidadeDeTrabalho, autor: Contexto, autorizador_id: int, parametros: Mapping[str, Any]
+    ) -> None:
         """Executa na mesma transação da aprovação; grava a marca de mês alterado se alcançar mês fechado."""
         ...
 
@@ -75,8 +77,9 @@ class Impedimento:
 
 
 class VerificadorImpedimento(Protocol):
-    def impedimentos(self, uow: UnidadeDeTrabalho, paciente_id: int, data: date,
-                     operacao: OperacaoPeriodo) -> list[Impedimento]: ...
+    def impedimentos(
+        self, uow: UnidadeDeTrabalho, paciente_id: int, data: date, operacao: OperacaoPeriodo
+    ) -> list[Impedimento]: ...
 
     def ao_encerrar(self, uow: UnidadeDeTrabalho, contexto: Contexto, paciente_id: int, data: date) -> None:
         """Efeitos automáticos do encerramento, na mesma transação (DD-31: cancela trocas e extras)."""
@@ -152,7 +155,8 @@ class FontePendencia(Protocol):
 
     def listar(self, uow: UnidadeDeTrabalho, contexto: Contexto) -> list[ItemPendencia]: ...
 
-    def listar_por_pacientes(self, uow: UnidadeDeTrabalho, contexto: Contexto,
-                             paciente_ids: Sequence[int]) -> list[ItemPendencia]:
+    def listar_por_pacientes(
+        self, uow: UnidadeDeTrabalho, contexto: Contexto, paciente_ids: Sequence[int]
+    ) -> list[ItemPendencia]:
         """Uma consulta para o conjunto, nunca uma por paciente (§11.3). Fontes sem paciente devolvem []."""
         ...

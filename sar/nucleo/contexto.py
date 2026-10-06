@@ -1,4 +1,5 @@
 """Contexto da requisição (DDS §3.2): quem age, com qual perfil, de onde e quando."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -22,10 +23,18 @@ class Contexto:
     sessao_id: int | None
     origem: str  # endereço da estação, ou nome do job
     instante: datetime  # UTC, com fuso
+    requisicao_id: str | None = None  # 32 hex; liga auditoria e log técnico da mesma requisição (DD-81)
 
     @classmethod
-    def sistema(cls, origem: str, instante: datetime) -> Contexto:
-        return cls(usuario_id=None, perfil=Perfil.SISTEMA, sessao_id=None, origem=origem, instante=instante)
+    def sistema(cls, origem: str, instante: datetime, requisicao_id: str | None = None) -> Contexto:
+        return cls(
+            usuario_id=None,
+            perfil=Perfil.SISTEMA,
+            sessao_id=None,
+            origem=origem,
+            instante=instante,
+            requisicao_id=requisicao_id,
+        )
 
     @property
     def e_sistema(self) -> bool:

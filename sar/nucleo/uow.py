@@ -1,4 +1,5 @@
 """Contrato da unidade de trabalho (DDS §3.3, §12.1). Implementada no MOD-08."""
+
 from __future__ import annotations
 
 from collections.abc import Callable
@@ -45,3 +46,14 @@ class UnidadeDeTrabalho(Protocol):
         ...
 
     def confirmar(self) -> None: ...
+
+
+class ExecutorDeOperacao(Protocol):
+    """Como o serviço público abre e fecha a unidade de trabalho (DDS §3.3).
+
+    Abre uma unidade nova, executa a operação e confirma no fim. Em impasse ou tempo de trava esgotado,
+    descarta tudo e repete a operação inteira, até três tentativas (DD-59). Por isso a operação recebe a
+    unidade como argumento: um bloco `with` não pode ser repetido.
+    """
+
+    def __call__(self, operacao: Callable[[UnidadeDeTrabalho], R]) -> R: ...

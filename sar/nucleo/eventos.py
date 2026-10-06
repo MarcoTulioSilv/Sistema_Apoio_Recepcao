@@ -10,12 +10,13 @@ evento com consumidor. Efeitos em que a ordem importa (encerramento de período,
 | DocumentoIncorporado | MOD-04        | MOD-02: comprovante do evento; MOD-03: termos (RF-809) |
 | DocumentoRevinculado | MOD-04        | MOD-02 e MOD-03: desfazem vínculos do paciente antigo  |
 """
+
 from __future__ import annotations
 
 from collections import defaultdict
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, TypeVar
+from typing import TYPE_CHECKING, Any, TypeVar
 
 if TYPE_CHECKING:
     from sar.nucleo.uow import UnidadeDeTrabalho
@@ -61,7 +62,7 @@ class Barramento:
     """Registro de manipuladores. Preenchido só na raiz de composição (sar/composicao.py)."""
 
     def __init__(self) -> None:
-        self._manipuladores: dict[type[EventoDominio], list[Manipulador]] = defaultdict(list)
+        self._manipuladores: dict[type[EventoDominio], list[Manipulador[Any]]] = defaultdict(list)
 
     def assinar(self, tipo: type[E], manipulador: Manipulador[E]) -> None:
         self._manipuladores[tipo].append(manipulador)

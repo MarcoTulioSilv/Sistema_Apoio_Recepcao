@@ -2,6 +2,7 @@
 
 Todo módulo lê parâmetros pela porta LeitorParametros, sem importar o MOD-06 (DD-73).
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -32,23 +33,26 @@ class Parametro:
     imutavel_apos_uso: bool = False
 
 
-PARAMETROS: dict[str, Parametro] = {p.nome: p for p in [
-    Parametro("preparacao_turno_antecedencia", Unidade.MINUTOS, 60, 15, 120, Perfil.ADMINISTRACAO),
-    Parametro("confirmacao_turno_antecedencia", Unidade.MINUTOS, 60, 15, 120, Perfil.ADMINISTRACAO),
-    Parametro("rascunho_prazo", Unidade.DIAS, 3, 1, 30, Perfil.ADMINISTRACAO),
-    Parametro("rascunho_aviso", Unidade.DIAS, 1, 1, 7, Perfil.ADMINISTRACAO),
-    Parametro("titular_prazo", Unidade.DIAS, 15, 1, 15, Perfil.ADMINISTRACAO),
-    Parametro("sessao_inatividade", Unidade.MINUTOS, 10, 2, 30, Perfil.TI),
-    Parametro("sessao_duracao_maxima", Unidade.HORAS, 12, 1, 16, Perfil.TI),
-    Parametro("login_tentativas", Unidade.QUANTIDADE, 5, 3, 10, Perfil.TI),
-    Parametro("login_bloqueio_inicial", Unidade.MINUTOS, 5, 1, 30, Perfil.TI),
-    Parametro("login_bloqueio_teto", Unidade.MINUTOS, 60, 15, 240, Perfil.TI),
-    Parametro("captura_token_validade", Unidade.MINUTOS, 10, 2, 30, Perfil.TI),
-    Parametro("quarentena_prazo", Unidade.HORAS, 24, 1, 72, Perfil.TI),
-    Parametro("extracao_ligada", Unidade.BOOLEANO, True, None, None, Perfil.TI),
-    Parametro("antimalware_idade_maxima", Unidade.HORAS, 48, 24, 168, Perfil.TI),
-    Parametro("data_implantacao", Unidade.DATA, None, None, None, Perfil.TI, imutavel_apos_uso=True),
-]}
+PARAMETROS: dict[str, Parametro] = {
+    p.nome: p
+    for p in [
+        Parametro("preparacao_turno_antecedencia", Unidade.MINUTOS, 60, 15, 120, Perfil.ADMINISTRACAO),
+        Parametro("confirmacao_turno_antecedencia", Unidade.MINUTOS, 60, 15, 120, Perfil.ADMINISTRACAO),
+        Parametro("rascunho_prazo", Unidade.DIAS, 3, 1, 30, Perfil.ADMINISTRACAO),
+        Parametro("rascunho_aviso", Unidade.DIAS, 1, 1, 7, Perfil.ADMINISTRACAO),
+        Parametro("titular_prazo", Unidade.DIAS, 15, 1, 15, Perfil.ADMINISTRACAO),
+        Parametro("sessao_inatividade", Unidade.MINUTOS, 10, 2, 30, Perfil.TI),
+        Parametro("sessao_duracao_maxima", Unidade.HORAS, 12, 1, 16, Perfil.TI),
+        Parametro("login_tentativas", Unidade.QUANTIDADE, 5, 3, 10, Perfil.TI),
+        Parametro("login_bloqueio_inicial", Unidade.MINUTOS, 5, 1, 30, Perfil.TI),
+        Parametro("login_bloqueio_teto", Unidade.MINUTOS, 60, 15, 240, Perfil.TI),
+        Parametro("captura_token_validade", Unidade.MINUTOS, 10, 2, 30, Perfil.TI),
+        Parametro("quarentena_prazo", Unidade.HORAS, 24, 1, 72, Perfil.TI),
+        Parametro("extracao_ligada", Unidade.BOOLEANO, True, None, None, Perfil.TI),
+        Parametro("antimalware_idade_maxima", Unidade.HORAS, 48, 24, 168, Perfil.TI),
+        Parametro("data_implantacao", Unidade.DATA, None, None, None, Perfil.TI, imutavel_apos_uso=True),
+    ]
+}
 
 
 class LeitorParametros(Protocol):

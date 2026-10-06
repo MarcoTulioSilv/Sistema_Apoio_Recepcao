@@ -1,4 +1,5 @@
 """Hierarquia única de erros (DDS §3.5). Cada contrato documenta quais destes pode lançar."""
+
 from __future__ import annotations
 
 from datetime import datetime
