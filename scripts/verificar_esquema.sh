@@ -58,6 +58,11 @@ espera_erro "P-02: duas sessões ativas do mesmo usuário" \
 espera_erro "Cobertura por convênio sem convênio" \
   "$(sql_admin "INSERT INTO cobertura (periodo_id, vigencia_inicio, tipo) SELECT id, '2026-04-01', 'convenio' FROM periodo_tratamento WHERE paciente_id=$P1 AND aberto=1")" "ck_cobertura__convenio"
 
+echo "== Configuração de logs do servidor (DD-81, DD-82)"
+espera_valor "binlog desligado (log_bin = 0)" "$(sql_admin "SELECT @@log_bin")" "0"
+espera_valor "log geral desligado" "$(sql_admin "SELECT @@general_log")" "0"
+espera_valor "log de consultas lentas desligado" "$(sql_admin "SELECT @@slow_query_log")" "0"
+
 echo "== Privilégios (DD-58)"
 sql_admin "INSERT INTO documento (id, paciente_id, tipo, versao, arquivo, chave_cifrada, nonce, hash_sha256, paginas, origem,
              capturado_em, capturado_por, local_digitalizacao)
