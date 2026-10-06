@@ -1,18 +1,26 @@
 from __future__ import annotations
 
 import pytest
-from sqlalchemy import CheckConstraint, ForeignKey, Index, Integer, String, UniqueConstraint
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy import CheckConstraint, ForeignKey, Index, Integer, MetaData, String, UniqueConstraint
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
-from sar.modulo_08_dados.modelos import Base
+import sar.modulo_08_dados.modelos.acesso
+import sar.modulo_08_dados.modelos.configuracao  # noqa: F401 — registra os modelos reais
+from sar.modulo_08_dados.modelos import CONVENCAO_NOMES, Base
 
 
-class Dono(Base):
+class BaseTeste(DeclarativeBase):
+    """Separada da Base real, para as tabelas de teste não entrarem na comparação com o banco."""
+
+    metadata = MetaData(naming_convention=CONVENCAO_NOMES)
+
+
+class Dono(BaseTeste):
     __tablename__ = "teste_dono"
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
 
 
-class Item(Base):
+class Item(BaseTeste):
     __tablename__ = "teste_item"
     __table_args__ = (
         UniqueConstraint("dono_id", "codigo"),
@@ -35,3 +43,9 @@ def test_nomes_de_restricao_seguem_a_convencao_das_migracoes() -> None:
         "ix_teste_item__codigo",
         "ck_teste_item__codigo",
     }
+
+
+@pytest.mark.requisito("DD-12")
+def test_todo_relacionamento_dos_modelos_reais_e_lazy_raise() -> None:
+    relacionamentos = [r for m in Base.registry.mappers for r in m.relationships]
+    assert all(r.lazy == "raise" for r in relacionamentos), [str(r) for r in relacionamentos if r.lazy != "raise"]

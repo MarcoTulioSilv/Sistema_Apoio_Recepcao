@@ -6,7 +6,9 @@ fontes de pendência e os jobs de cada módulo.
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
+from enum import Enum
 
 from sqlalchemy import Engine
 
@@ -16,6 +18,21 @@ from sar.modulo_08_dados.uow import ExecutorSQL, FabricaRepositorio, GravadorAud
 from sar.nucleo.eventos import Barramento
 from sar.nucleo.portas import Cifra, Relogio
 from sar.nucleo.uow import ExecutorDeOperacao
+
+
+class Ambiente(str, Enum):
+    DESENVOLVIMENTO = "desenvolvimento"
+    PRODUCAO = "producao"
+
+
+def ambiente_atual() -> Ambiente:
+    """SAR_AMBIENTE; sem a variável, produção (DD-85): o que só existe em desenvolvimento nunca liga por
+    esquecimento. Valor desconhecido é erro, não palpite."""
+    valor = os.environ.get("SAR_AMBIENTE", Ambiente.PRODUCAO.value)
+    try:
+        return Ambiente(valor)
+    except ValueError:
+        raise RuntimeError("SAR_AMBIENTE deve ser 'desenvolvimento' ou 'producao'") from None
 
 
 @dataclass(frozen=True, slots=True)
