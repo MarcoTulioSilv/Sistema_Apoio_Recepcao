@@ -425,3 +425,6 @@ forbidden_modules =
     httpx
 ignore_imports =
     sar.modulo_02_cadastro.cep -> httpx
+# O cliente de CEP só existe a partir do Incremento 2; até lá a exceção acima não casa com nada.
+# Voltar para "error" (o padrão) quando sar.modulo_02_cadastro.cep for criado.
+unmatched_ignore_imports_alerting = warn

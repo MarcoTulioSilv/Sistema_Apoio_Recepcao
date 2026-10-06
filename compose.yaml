@@ -1,0 +1,49 @@
+# Ambiente de desenvolvimento do SAR: só o banco. A aplicação roda no .venv local.
+# Porta 3307 no loopback, para não colidir com outro MySQL da máquina e não ficar exposta na rede.
+name: sar
+
+services:
+  mysql:
+    image: mysql:9.7.2
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_0900_ai_ci
+      - --default-time-zone=+00:00
+      # DD-81, DD-82: sem log binário, sem log geral e sem log de consultas lentas (verificar_esquema.sh confere).
+      - --disable-log-bin
+      - --general-log=0
+      - --slow-query-log=0
+    environment:
+      MYSQL_ROOT_PASSWORD_FILE: /run/secrets/mysql_root
+    secrets: [mysql_root, sar_migracao, sar_web, sar_worker, sar_expurgo]
+    ports:
+      - "127.0.0.1:3307:3306"
+    volumes:
+      - mysql-dados:/var/lib/mysql
+      - ./docker/mysql/init:/docker-entrypoint-initdb.d:ro
+      - ./scripts:/sar/scripts:ro
+    logging:  # DD-81: saída do contêiner com rotação
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p\"$$(cat /run/secrets/mysql_root)\" --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+secrets:
+  mysql_root:
+    file: ./segredos/mysql_root
+  sar_migracao:
+    file: ./segredos/sar_migracao
+  sar_web:
+    file: ./segredos/sar_web
+  sar_worker:
+    file: ./segredos/sar_worker
+  sar_expurgo:
+    file: ./segredos/sar_expurgo
+
+volumes:
+  mysql-dados:

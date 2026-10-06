@@ -1,0 +1,94 @@
+[build-system]
+requires = ["setuptools==84.0.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sar"
+version = "0.0.0"
+description = "Sistema de Apoio à Recepção — Centro de Uro-Nefrologia de Jataí"
+requires-python = ">=3.14"
+dependencies = [
+    "alembic==1.20.0",
+    "cryptography==50.0.2",
+    "flask==3.1.3",
+    "pymysql==1.2.3",
+    "sqlalchemy==2.0.54",
+    "tzdata==2026.5",
+    "waitress==3.0.2",
+]
+
+[project.optional-dependencies]
+dev = [
+    "axe-playwright-python==0.1.8",
+    "bandit==1.9.4",
+    "faker==40.41.0",
+    "hypothesis==6.168.5",
+    "import-linter==2.15",
+    "mypy==2.4.0",
+    "pip-audit==2.10.1",
+    "playwright==1.63.0",
+    "pytest==9.1.1",
+    "pytest-cov==7.1.0",
+    "ruff==0.16.10",
+    "types-pymysql==1.2.0.20260923",
+]
+
+[project.scripts]
+sar = "sar.modulo_08_dados.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["sar*"]
+
+[tool.setuptools.package-data]
+"sar.modulo_08_dados" = ["usuarios_banco.sql", "migracoes/*.py", "migracoes/versions/*.py"]
+"sar.web" = ["modelos/**/*", "static/**/*"]
+
+# ------------------------------------------------------------------ qualidade
+[tool.ruff]
+line-length = 120
+target-version = "py314"
+# Migrações revisadas à mão na Macroentrega III: nem o linter nem o formatador reescrevem o texto delas.
+extend-exclude = ["sar/modulo_08_dados/migracoes"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "S", "SIM", "RUF", "DTZ"]
+ignore = [
+    "RUF001", "RUF002", "RUF003",  # acentos e travessões do português não são ambíguos aqui
+    "UP042",  # os enums do núcleo são (str, Enum) de propósito; StrEnum mudaria o str() deles
+]
+
+[tool.ruff.lint.per-file-ignores]
+"testes/**" = ["S101", "S105", "S106"]  # assert e senhas fictícias nos testes
+
+[tool.mypy]
+python_version = "3.14"
+strict = true
+packages = ["sar"]
+exclude = ["sar/modulo_08_dados/migracoes/"]
+
+[[tool.mypy.overrides]]
+module = ["waitress"]
+ignore_missing_imports = true
+
+[tool.bandit]
+exclude_dirs = ["testes", "migracoes"]  # migrações revisadas à mão; casa em Windows e Linux
+
+[tool.pytest.ini_options]
+testpaths = ["testes"]
+addopts = "--strict-markers --strict-config -ra --import-mode=importlib"
+pythonpath = ["."]
+markers = [
+    "requisito(*ids): requisitos e decisões verificados pelo teste (PT §7)",
+    "integracao: precisa de MySQL",
+    "sistema: Playwright, com a aplicação rodando",
+]
+filterwarnings = ["error"]
+
+[tool.coverage.run]
+source = ["sar"]
+branch = true
+omit = ["sar/modulo_08_dados/migracoes/*", "sar/wsgi.py"]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
