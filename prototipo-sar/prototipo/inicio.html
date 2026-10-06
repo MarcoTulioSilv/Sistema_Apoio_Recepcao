@@ -1,0 +1,275 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Início — SAR</title>
+  <link rel="stylesheet" href="static/css/sar.css">
+  <script src="static/js/sar.js" defer></script>
+</head>
+<body>
+  <div class="flex min-h-screen">
+    <nav aria-label="Navegação principal" class="hidden w-52 shrink-0 flex-col gap-1.5 bg-menu px-4 py-6 text-white lg:flex">
+      <div class="px-3 pb-5 text-2xl font-bold tracking-wide">SAR</div>
+        <a class="menu-link" href="inicio.html" aria-current="page">Início</a>
+        <a class="menu-link" href="cadastro.html">Cadastro</a>
+        <a class="menu-link" href="pendencias.html">Pendências</a>
+        <span class="flex min-h-11 items-center px-3 text-menu-inativo">Documentos</span>
+        <span class="flex min-h-11 items-center px-3 text-menu-inativo">Relatórios</span>
+      <div class="grow"></div>
+      <div class="border-t border-white/15 px-3 pt-3 text-sm text-menu-texto">Recepção<br>Estação balcão 1</div>
+    </nav>
+    <div class="flex min-w-0 grow flex-col">
+      <header class="flex flex-wrap items-center justify-between gap-4 border-b border-borda bg-superficie px-6 py-5 lg:px-8">
+        <div class="flex flex-col gap-0.5">
+          <h1 class="m-0 text-[26px] leading-tight">Início</h1>
+          <p class="m-0 text-[15px] text-suave">Recepção, turnos de hoje</p>
+        </div>
+        <div class="flex items-center gap-4 text-[15px] text-suave">
+          <span class="numero" data-relogio>Quarta, 30/09/2026, 10:05</span>
+          <a class="btn-neutro" href="#">Sair</a>
+        </div>
+      </header>
+      <main class="grow">
+        <div class="flex flex-col gap-6 p-6 xl:flex-row lg:p-8">
+          <div class="flex min-w-0 grow flex-col gap-5">
+            <fieldset class="simulador" data-simulador>
+              <legend class="px-1.5 text-sm font-bold">Simular horário (só no protótipo)</legend>
+              <label class="opcao-simulador"><input type="radio" name="momento" value="05:30"> 05:30</label>
+              <label class="opcao-simulador"><input type="radio" name="momento" value="09:15"> 09:15</label>
+              <label class="opcao-simulador"><input type="radio" name="momento" value="10:05" checked> 10:05</label>
+            </fieldset>
+            <p class="m-0 hidden rounded-lg bg-acao-clara p-3 font-bold text-acao-escura" role="status" data-aviso-confirmada></p>
+            <section class="sessao" data-sessao="1" data-quadros data-estado="futura" data-inicio="06:00" data-fim="10:00" aria-labelledby="sessao-1-titulo" hidden>
+              <div class="flex flex-wrap items-start justify-between gap-3">
+                <div class="flex flex-col gap-1">
+                  <h2 id="sessao-1-titulo" class="m-0 text-xl">Primeiro turno <span class="font-normal text-suave">das 06:00 às 10:00</span></h2>
+                  <p class="m-0 text-[15px] text-suave" data-instrucao></p>
+                </div>
+                <span class="selo-sessao" data-rotulo-estado></span>
+              </div>
+              <ol class="passos" aria-label="Etapas da sessão">
+                <li data-passo="preparacao">Em preparação</li>
+                <li data-passo="aberta">Aberta</li>
+                <li data-passo="confirmada">Confirmada</li>
+              </ol>
+              <div class="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+              <section class="quadro" data-zona="presentes" aria-label="Presentes">
+                <h3 class="m-0 flex items-center gap-2 text-lg text-tinta">Presentes
+                  <span class="numero rounded-full bg-superficie px-2.5 py-0.5 text-sm" data-contagem="presentes">8</span>
+                </h3>
+                <ul class="grade-cartoes" data-lista="presentes">
+                <li class="cartao-paciente" draggable="true" data-paciente="1" data-situacao="presente">
+                  <span class="text-base font-bold" data-nome>Joana Pereira Lima</span>
+                  <span class="numero text-sm text-suave">Prontuário 010245</span>
+                  
+                  
+                  <button type="button" class="btn-mover" data-acao="mover" aria-label="Mover para faltantes: Joana Pereira Lima">Mover para faltantes</button>
+                </li>
+                <li class="cartao-paciente" draggable="true" data-paciente="2" data-situacao="presente">
+                  <span class="text-base font-bold" data-nome>Antônio Carlos Reis</span>
+                  <span class="numero text-sm text-suave">Prontuário 010311</span>
+                  
+                  
+                  <button type="button" class="btn-mover" data-acao="mover" aria-label="Mover para faltantes: Antônio Carlos Reis">Mover para faltantes</button>
+                </li>
+                <li class="cartao-paciente" draggable="true" data-paciente="4" data-situacao="presente">
+                  <span class="text-base font-bold" data-nome>Carlos Henrique Dias</span>
+                  <span class="numero text-sm text-suave">Prontuário 010402</span>
+                  
+                  <span class="flex flex-wrap gap-1"><span class="etiqueta-n">CPF ausente</span></span>
+                  <button type="button" class="btn-mover" data-acao="mover" aria-label="Mover para faltantes: Carlos Henrique Dias">Mover para faltantes</button>
+                </li>
+                <li class="cartao-paciente" draggable="true" data-paciente="5" data-situacao="presente">
+                  <span class="text-base font-bold" data-nome>Divina Aparecida Neves</span>
+                  <span class="numero text-sm text-suave">Prontuário 010150</span>
+                  
+                  
+                  <button type="button" class="btn-mover" data-acao="mover" aria-label="Mover para faltantes: Divina Aparecida Neves">Mover para faltantes</button>
+                </li>
+                <li class="cartao-paciente" draggable="true" data-paciente="6" data-situacao="presente">
+                  <span class="text-base font-bold" data-nome>Osvaldo Tavares Lemos</span>
+                  <span class="numero text-sm text-suave">Prontuário 010333</span>
+                  <span class="text-sm font-bold text-acao">Extra planejada, a 3ª do mês</span>
+                  <span class="flex flex-wrap gap-1"><span class="etiqueta-a">Termo de extra a emitir</span></span>
+                  <button type="button" class="btn-mover" data-acao="mover" aria-label="Mover para faltantes: Osvaldo Tavares Lemos">Mover para faltantes</button>
+                </li>
+                <li class="cartao-paciente" draggable="true" data-paciente="7" data-situacao="presente">
+                  <span class="text-base font-bold" data-nome>Francisca Rodrigues</span>
+                  <span class="numero text-sm text-suave">Prontuário 010199</span>
+                  
+                  <span class="flex flex-wrap gap-1"><span class="etiqueta-n">Cartão do SUS</span></span>
+                  <button type="button" class="btn-mover" data-acao="mover" aria-label="Mover para faltantes: Francisca Rodrigues">Mover para faltantes</button>
+                </li>
+                <li class="cartao-paciente" draggable="true" data-paciente="9" data-situacao="presente">
+                  <span class="text-base font-bold" data-nome>Helena Castro Vieira</span>
+                  <span class="numero text-sm text-suave">Prontuário 010288</span>
+                  
+                  
+                  <button type="button" class="btn-mover" data-acao="mover" aria-label="Mover para faltantes: Helena Castro Vieira">Mover para faltantes</button>
+                </li>
+                <li class="cartao-paciente" draggable="true" data-paciente="10" data-situacao="presente">
+                  <span class="text-base font-bold" data-nome>Ivo Nascimento Paes</span>
+                  <span class="numero text-sm text-suave">Prontuário 010356</span>
+                  
+                  
+                  <button type="button" class="btn-mover" data-acao="mover" aria-label="Mover para faltantes: Ivo Nascimento Paes">Mover para faltantes</button>
+                </li>
+                </ul>
+                <p class="m-0 text-sm text-suave" data-vazio="presentes" hidden>Nenhum paciente presente.</p>
+              </section>
+              <section class="quadro" data-zona="faltantes" aria-label="Faltantes">
+                <h3 class="m-0 flex items-center gap-2 text-lg text-ausente">Faltantes
+                  <span class="numero rounded-full bg-superficie px-2.5 py-0.5 text-sm" data-contagem="faltantes">2</span>
+                </h3>
+                <ul class="grade-cartoes" data-lista="faltantes">
+                <li class="cartao-paciente" draggable="true" data-paciente="3" data-situacao="faltante">
+                  <span class="text-base font-bold" data-nome>Lúcia Martins Prado</span>
+                  <span class="numero text-sm text-suave">Prontuário 010118</span>
+                  <span class="text-sm font-bold text-acao">Troca: veio na terça 29/09, primeiro turno</span>
+                  
+                  <button type="button" class="btn-mover" data-acao="mover" aria-label="Mover para presentes: Lúcia Martins Prado">Mover para presentes</button>
+                </li>
+                <li class="cartao-paciente" draggable="true" data-paciente="8" data-situacao="faltante">
+                  <span class="text-base font-bold" data-nome>Geraldo Batista Cunha</span>
+                  <span class="numero text-sm text-suave">Prontuário 010264</span>
+                  <span class="text-sm font-bold text-acao">Avisou que vai faltar</span>
+                  
+                  <button type="button" class="btn-mover" data-acao="mover" aria-label="Mover para presentes: Geraldo Batista Cunha">Mover para presentes</button>
+                </li>
+                </ul>
+                <p class="m-0 text-sm text-suave" data-vazio="faltantes" hidden>Ninguém faltou.</p>
+              </section>
+              </div>
+              <div class="flex flex-wrap items-center justify-between gap-4 border-t border-linha pt-4">
+                <p class="m-0 text-[15px]"><strong class="numero" data-contagem="total">10</strong> esperados,
+                  <strong class="numero" data-contagem="presentes">8</strong> presentes,
+                  <strong class="numero text-ausente" data-contagem="faltantes">2</strong> faltantes</p>
+                <span class="flex items-center gap-3">
+                  <span class="text-sm text-suave" data-nota-confirmacao></span>
+                  <button type="button" class="btn-primario min-h-12" data-acao="confirmar">Confirmar sessão</button>
+                </span>
+              </div>
+              <p class="sr-only" aria-live="polite" data-anuncio></p>
+            </section>
+            <section class="sessao" data-sessao="2" data-quadros data-estado="futura" data-inicio="11:00" data-fim="15:00" aria-labelledby="sessao-2-titulo" hidden>
+              <div class="flex flex-wrap items-start justify-between gap-3">
+                <div class="flex flex-col gap-1">
+                  <h2 id="sessao-2-titulo" class="m-0 text-xl">Segundo turno <span class="font-normal text-suave">das 11:00 às 15:00</span></h2>
+                  <p class="m-0 text-[15px] text-suave" data-instrucao></p>
+                </div>
+                <span class="selo-sessao" data-rotulo-estado></span>
+              </div>
+              <ol class="passos" aria-label="Etapas da sessão">
+                <li data-passo="preparacao">Em preparação</li>
+                <li data-passo="aberta">Aberta</li>
+                <li data-passo="confirmada">Confirmada</li>
+              </ol>
+              <div class="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+              <section class="quadro" data-zona="presentes" aria-label="Presentes">
+                <h3 class="m-0 flex items-center gap-2 text-lg text-tinta">Presentes
+                  <span class="numero rounded-full bg-superficie px-2.5 py-0.5 text-sm" data-contagem="presentes">8</span>
+                </h3>
+                <ul class="grade-cartoes" data-lista="presentes">
+                <li class="cartao-paciente" draggable="true" data-paciente="101" data-situacao="presente">
+                  <span class="text-base font-bold" data-nome>Maria das Graças Lopes</span>
+                  <span class="numero text-sm text-suave">Prontuário 010501</span>
+                  
+                  
+                  <button type="button" class="btn-mover" data-acao="mover" aria-label="Mover para faltantes: Maria das Graças Lopes">Mover para faltantes</button>
+                </li>
+                <li class="cartao-paciente" draggable="true" data-paciente="102" data-situacao="presente">
+                  <span class="text-base font-bold" data-nome>Sebastião Alves Rocha</span>
+                  <span class="numero text-sm text-suave">Prontuário 010512</span>
+                  
+                  
+                  <button type="button" class="btn-mover" data-acao="mover" aria-label="Mover para faltantes: Sebastião Alves Rocha">Mover para faltantes</button>
+                </li>
+                <li class="cartao-paciente" draggable="true" data-paciente="103" data-situacao="presente">
+                  <span class="text-base font-bold" data-nome>Benedita Souza Alves</span>
+                  <span class="numero text-sm text-suave">Prontuário 010087</span>
+                  <span class="text-sm font-bold text-acao">Troca: vem do segundo turno de terça</span>
+                  <span class="flex flex-wrap gap-1"><span class="etiqueta-a">Declaração de troca a emitir</span></span>
+                  <button type="button" class="btn-mover" data-acao="mover" aria-label="Mover para faltantes: Benedita Souza Alves">Mover para faltantes</button>
+                </li>
+                <li class="cartao-paciente" draggable="true" data-paciente="104" data-situacao="presente">
+                  <span class="text-base font-bold" data-nome>Raimundo Nonato Silva</span>
+                  <span class="numero text-sm text-suave">Prontuário 010523</span>
+                  
+                  <span class="flex flex-wrap gap-1"><span class="etiqueta-n">Comprovante de endereço</span></span>
+                  <button type="button" class="btn-mover" data-acao="mover" aria-label="Mover para faltantes: Raimundo Nonato Silva">Mover para faltantes</button>
+                </li>
+                <li class="cartao-paciente" draggable="true" data-paciente="105" data-situacao="presente">
+                  <span class="text-base font-bold" data-nome>Aparecida Gomes Pinto</span>
+                  <span class="numero text-sm text-suave">Prontuário 010534</span>
+                  
+                  
+                  <button type="button" class="btn-mover" data-acao="mover" aria-label="Mover para faltantes: Aparecida Gomes Pinto">Mover para faltantes</button>
+                </li>
+                <li class="cartao-paciente" draggable="true" data-paciente="106" data-situacao="presente">
+                  <span class="text-base font-bold" data-nome>Edson Ferreira Matos</span>
+                  <span class="numero text-sm text-suave">Prontuário 010377</span>
+                  <span class="text-sm font-bold text-acao">Extra planejada</span>
+                  <span class="flex flex-wrap gap-1"><span class="etiqueta-a">Termo de extra a digitalizar</span></span>
+                  <button type="button" class="btn-mover" data-acao="mover" aria-label="Mover para faltantes: Edson Ferreira Matos">Mover para faltantes</button>
+                </li>
+                <li class="cartao-paciente" draggable="true" data-paciente="107" data-situacao="presente">
+                  <span class="text-base font-bold" data-nome>Terezinha Moura Campos</span>
+                  <span class="numero text-sm text-suave">Prontuário 010545</span>
+                  
+                  
+                  <button type="button" class="btn-mover" data-acao="mover" aria-label="Mover para faltantes: Terezinha Moura Campos">Mover para faltantes</button>
+                </li>
+                <li class="cartao-paciente" draggable="true" data-paciente="108" data-situacao="presente">
+                  <span class="text-base font-bold" data-nome>José Roberto Freitas</span>
+                  <span class="numero text-sm text-suave">Prontuário 010556</span>
+                  
+                  
+                  <button type="button" class="btn-mover" data-acao="mover" aria-label="Mover para faltantes: José Roberto Freitas">Mover para faltantes</button>
+                </li>
+                </ul>
+                <p class="m-0 text-sm text-suave" data-vazio="presentes" hidden>Nenhum paciente presente.</p>
+              </section>
+              <section class="quadro" data-zona="faltantes" aria-label="Faltantes">
+                <h3 class="m-0 flex items-center gap-2 text-lg text-ausente">Faltantes
+                  <span class="numero rounded-full bg-superficie px-2.5 py-0.5 text-sm" data-contagem="faltantes">0</span>
+                </h3>
+                <ul class="grade-cartoes" data-lista="faltantes">
+
+                </ul>
+                <p class="m-0 text-sm text-suave" data-vazio="faltantes">Ninguém faltou.</p>
+              </section>
+              </div>
+              <div class="flex flex-wrap items-center justify-between gap-4 border-t border-linha pt-4">
+                <p class="m-0 text-[15px]"><strong class="numero" data-contagem="total">8</strong> esperados,
+                  <strong class="numero" data-contagem="presentes">8</strong> presentes,
+                  <strong class="numero text-ausente" data-contagem="faltantes">0</strong> faltantes</p>
+                <span class="flex items-center gap-3">
+                  <span class="text-sm text-suave" data-nota-confirmacao></span>
+                  <button type="button" class="btn-primario min-h-12" data-acao="confirmar">Confirmar sessão</button>
+                </span>
+              </div>
+              <p class="sr-only" aria-live="polite" data-anuncio></p>
+            </section>
+          </div>
+
+          <aside class="flex w-full shrink-0 flex-col gap-5 xl:w-72">
+            <section aria-labelledby="pend-titulo" class="cartao flex flex-col gap-2.5 p-4">
+              <h2 id="pend-titulo" class="m-0 mb-1 text-lg">Pendências</h2>
+              <a class="flex min-h-11 items-center justify-between rounded-lg bg-urgencia-fundo px-3 font-bold text-urgencia no-underline" href="pendencias.html"><span>Urgência</span><span class="numero">1</span></a>
+              <a class="flex min-h-11 items-center justify-between rounded-lg bg-alta-fundo px-3 font-bold text-alta no-underline" href="pendencias.html"><span>Alta</span><span class="numero">4</span></a>
+              <a class="flex min-h-11 items-center justify-between rounded-lg bg-normal-fundo px-3 font-bold text-normal no-underline" href="pendencias.html"><span>Normal</span><span class="numero">10</span></a>
+              <p class="m-0 text-sm text-suave">A lista se atualiza sozinha a cada minuto.</p>
+            </section>
+            <section aria-labelledby="aniv-titulo" class="cartao flex flex-col gap-2 p-4">
+              <h2 id="aniv-titulo" class="m-0 text-lg">Aniversariantes de hoje</h2>
+              <p class="m-0">Divina Aparecida Neves</p>
+            </section>
+            <a class="btn-primario min-h-12" href="cadastro.html">Novo cadastro</a>
+          </aside>
+        </div>
+      </main>
+    </div>
+  </div>
+</body>
+</html>

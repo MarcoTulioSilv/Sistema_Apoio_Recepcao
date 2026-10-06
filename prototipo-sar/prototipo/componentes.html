@@ -1,0 +1,401 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Guia de componentes — SAR</title>
+  <link rel="stylesheet" href="static/css/sar.css">
+  <script src="static/js/sar.js" defer></script>
+</head>
+<body>
+  <div class="flex min-h-screen">
+    <nav aria-label="Navegação principal" class="hidden w-52 shrink-0 flex-col gap-1.5 bg-menu px-4 py-6 text-white lg:flex">
+      <div class="px-3 pb-5 text-2xl font-bold tracking-wide">SAR</div>
+        <a class="menu-link" href="inicio.html">Início</a>
+        <a class="menu-link" href="cadastro.html">Cadastro</a>
+        <a class="menu-link" href="pendencias.html">Pendências</a>
+        <span class="flex min-h-11 items-center px-3 text-menu-inativo">Documentos</span>
+        <span class="flex min-h-11 items-center px-3 text-menu-inativo">Relatórios</span>
+      <div class="grow"></div>
+      <div class="border-t border-white/15 px-3 pt-3 text-sm text-menu-texto">Recepção<br>Estação balcão 1</div>
+    </nav>
+    <div class="flex min-w-0 grow flex-col">
+      <header class="flex flex-wrap items-center justify-between gap-4 border-b border-borda bg-superficie px-6 py-5 lg:px-8">
+        <div class="flex flex-col gap-0.5">
+          <h1 class="m-0 text-[26px] leading-tight">Guia de componentes</h1>
+          <p class="m-0 text-[15px] text-suave">Interface da recepção do SAR: fundamentos, componentes e regras</p>
+        </div>
+        <div class="flex items-center gap-4 text-[15px] text-suave">
+          <span class="numero" data-relogio>Quarta, 30/09/2026, 10:05</span>
+          <a class="btn-neutro" href="#">Sair</a>
+        </div>
+      </header>
+      <main class="grow">
+        <div class="flex flex-col gap-6 p-6 lg:flex-row lg:p-8">
+          <nav aria-label="Seções do guia" class="shrink-0 lg:w-52">
+            <ul class="m-0 flex list-none flex-col gap-2 p-0 lg:sticky lg:top-6">
+              <li><a href="#cores">Cores</a></li>
+              <li><a href="#tipografia">Tipografia</a></li>
+              <li><a href="#medidas">Medidas</a></li>
+              <li><a href="#botoes">Botões</a></li>
+              <li><a href="#etiquetas">Etiquetas e selos</a></li>
+              <li><a href="#pacientes">Cartão de paciente e quadros</a></li>
+              <li><a href="#formularios">Campos de formulário</a></li>
+              <li><a href="#avisos">Avisos e contêineres</a></li>
+              <li><a href="#regras">Regras</a></li>
+            </ul>
+          </nav>
+          <div class="flex min-w-0 grow flex-col gap-6">
+          <section id="cores" aria-labelledby="cores-t" class="cartao flex flex-col gap-4 p-5">
+            <div class="flex flex-col gap-1"><h2 id="cores-t" class="m-0 text-xl">Cores</h2>
+            <p class="m-0 max-w-[75ch] text-[15px] text-suave">Definidas uma vez, como tokens, em <code>src/sar.css</code>. Cada linha abaixo é um par de cor de texto sobre cor de fundo realmente usado nas telas, com o valor de cada uma e o contraste medido. Todos passam de 4,5:1 (nível AA); a maioria passa de 7:1 (AAA). Prioridades e presença nunca dependem só da cor: sempre há texto ao lado, e os tons diferem também em luminosidade.</p></div>
+            <div class="overflow-x-auto"><table class="w-full border-collapse text-left text-sm">
+              <thead><tr class="text-suave"><th class="p-2">Amostra</th><th class="p-2">Cor do texto</th><th class="p-2">Cor do fundo</th><th class="p-2">Contraste</th><th class="p-2">Onde</th></tr></thead>
+              <tbody>
+              <tr class="border-t border-linha">
+                <td class="p-2"><span class="inline-flex min-w-24 items-center justify-center rounded-md border border-borda px-3 py-1.5 font-bold bg-superficie text-tinta">Aa 123</span></td>
+                <td class="p-2"><span class="flex items-center gap-2"><span class="inline-block h-5 w-5 shrink-0 rounded border border-borda-forte bg-tinta"></span><span><strong>tinta</strong><br><span class="numero text-suave">#1b2230</span></span></span></td><td class="p-2"><span class="flex items-center gap-2"><span class="inline-block h-5 w-5 shrink-0 rounded border border-borda-forte bg-superficie"></span><span><strong>superficie</strong><br><span class="numero text-suave">#ffffff</span></span></span></td>
+                <td class="numero p-2 font-bold">15.9:1</td><td class="p-2 text-suave">Texto principal</td></tr>
+              <tr class="border-t border-linha">
+                <td class="p-2"><span class="inline-flex min-w-24 items-center justify-center rounded-md border border-borda px-3 py-1.5 font-bold bg-fundo text-tinta">Aa 123</span></td>
+                <td class="p-2"><span class="flex items-center gap-2"><span class="inline-block h-5 w-5 shrink-0 rounded border border-borda-forte bg-tinta"></span><span><strong>tinta</strong><br><span class="numero text-suave">#1b2230</span></span></span></td><td class="p-2"><span class="flex items-center gap-2"><span class="inline-block h-5 w-5 shrink-0 rounded border border-borda-forte bg-fundo"></span><span><strong>fundo</strong><br><span class="numero text-suave">#f4f3ef</span></span></span></td>
+                <td class="numero p-2 font-bold">14.3:1</td><td class="p-2 text-suave">Texto principal sobre o fundo da página</td></tr>
+              <tr class="border-t border-linha">
+                <td class="p-2"><span class="inline-flex min-w-24 items-center justify-center rounded-md border border-borda px-3 py-1.5 font-bold bg-superficie text-suave">Aa 123</span></td>
+                <td class="p-2"><span class="flex items-center gap-2"><span class="inline-block h-5 w-5 shrink-0 rounded border border-borda-forte bg-suave"></span><span><strong>suave</strong><br><span class="numero text-suave">#4e5663</span></span></span></td><td class="p-2"><span class="flex items-center gap-2"><span class="inline-block h-5 w-5 shrink-0 rounded border border-borda-forte bg-superficie"></span><span><strong>superficie</strong><br><span class="numero text-suave">#ffffff</span></span></span></td>
+                <td class="numero p-2 font-bold">7.4:1</td><td class="p-2 text-suave">Texto de apoio, legendas, horários</td></tr>
+              <tr class="border-t border-linha">
+                <td class="p-2"><span class="inline-flex min-w-24 items-center justify-center rounded-md border border-borda px-3 py-1.5 font-bold bg-fundo text-suave">Aa 123</span></td>
+                <td class="p-2"><span class="flex items-center gap-2"><span class="inline-block h-5 w-5 shrink-0 rounded border border-borda-forte bg-suave"></span><span><strong>suave</strong><br><span class="numero text-suave">#4e5663</span></span></span></td><td class="p-2"><span class="flex items-center gap-2"><span class="inline-block h-5 w-5 shrink-0 rounded border border-borda-forte bg-fundo"></span><span><strong>fundo</strong><br><span class="numero text-suave">#f4f3ef</span></span></span></td>
+                <td class="numero p-2 font-bold">6.7:1</td><td class="p-2 text-suave">Texto de apoio nos quadros</td></tr>
+              <tr class="border-t border-linha">
+                <td class="p-2"><span class="inline-flex min-w-24 items-center justify-center rounded-md border border-borda px-3 py-1.5 font-bold bg-superficie text-acao">Aa 123</span></td>
+                <td class="p-2"><span class="flex items-center gap-2"><span class="inline-block h-5 w-5 shrink-0 rounded border border-borda-forte bg-acao"></span><span><strong>acao</strong><br><span class="numero text-suave">#1d4e89</span></span></span></td><td class="p-2"><span class="flex items-center gap-2"><span class="inline-block h-5 w-5 shrink-0 rounded border border-borda-forte bg-superficie"></span><span><strong>superficie</strong><br><span class="numero text-suave">#ffffff</span></span></span></td>
+                <td class="numero p-2 font-bold">8.4:1</td><td class="p-2 text-suave">Links, botão secundário</td></tr>
+              <tr class="border-t border-linha">
+                <td class="p-2"><span class="inline-flex min-w-24 items-center justify-center rounded-md border border-borda px-3 py-1.5 font-bold bg-acao text-white">Aa 123</span></td>
+                <td class="p-2"><span class="flex items-center gap-2"><span class="inline-block h-5 w-5 shrink-0 rounded border border-borda-forte bg-white"></span><span><strong>branco</strong><br><span class="numero text-suave">#ffffff</span></span></span></td><td class="p-2"><span class="flex items-center gap-2"><span class="inline-block h-5 w-5 shrink-0 rounded border border-borda-forte bg-acao"></span><span><strong>acao</strong><br><span class="numero text-suave">#1d4e89</span></span></span></td>
+                <td class="numero p-2 font-bold">8.4:1</td><td class="p-2 text-suave">Texto do botão primário</td></tr>
+              <tr class="border-t border-linha">
+                <td class="p-2"><span class="inline-flex min-w-24 items-center justify-center rounded-md border border-borda px-3 py-1.5 font-bold bg-acao-clara text-acao-escura">Aa 123</span></td>
+                <td class="p-2"><span class="flex items-center gap-2"><span class="inline-block h-5 w-5 shrink-0 rounded border border-borda-forte bg-acao-escura"></span><span><strong>acao-escura</strong><br><span class="numero text-suave">#123763</span></span></span></td><td class="p-2"><span class="flex items-center gap-2"><span class="inline-block h-5 w-5 shrink-0 rounded border border-borda-forte bg-acao-clara"></span><span><strong>acao-clara</strong><br><span class="numero text-suave">#e4ecf6</span></span></span></td>
+                <td class="numero p-2 font-bold">10.1:1</td><td class="p-2 text-suave">Aviso de confirmação, cartão presente ativo</td></tr>
+              <tr class="border-t border-linha">
+                <td class="p-2"><span class="inline-flex min-w-24 items-center justify-center rounded-md border border-borda px-3 py-1.5 font-bold bg-acao-clara text-acao">Aa 123</span></td>
+                <td class="p-2"><span class="flex items-center gap-2"><span class="inline-block h-5 w-5 shrink-0 rounded border border-borda-forte bg-acao"></span><span><strong>acao</strong><br><span class="numero text-suave">#1d4e89</span></span></span></td><td class="p-2"><span class="flex items-center gap-2"><span class="inline-block h-5 w-5 shrink-0 rounded border border-borda-forte bg-acao-clara"></span><span><strong>acao-clara</strong><br><span class="numero text-suave">#e4ecf6</span></span></span></td>
+                <td class="numero p-2 font-bold">7.0:1</td><td class="p-2 text-suave">Selo em preparação ou aberta</td></tr>
+              <tr class="border-t border-linha">
+                <td class="p-2"><span class="inline-flex min-w-24 items-center justify-center rounded-md border border-borda px-3 py-1.5 font-bold bg-urgencia text-white">Aa 123</span></td>
+                <td class="p-2"><span class="flex items-center gap-2"><span class="inline-block h-5 w-5 shrink-0 rounded border border-borda-forte bg-white"></span><span><strong>branco</strong><br><span class="numero text-suave">#ffffff</span></span></span></td><td class="p-2"><span class="flex items-center gap-2"><span class="inline-block h-5 w-5 shrink-0 rounded border border-borda-forte bg-urgencia"></span><span><strong>urgencia</strong><br><span class="numero text-suave">#8e1b14</span></span></span></td>
+                <td class="numero p-2 font-bold">9.1:1</td><td class="p-2 text-suave">Botão e selo de urgência</td></tr>
+              <tr class="border-t border-linha">
+                <td class="p-2"><span class="inline-flex min-w-24 items-center justify-center rounded-md border border-borda px-3 py-1.5 font-bold bg-urgencia-fundo text-urgencia">Aa 123</span></td>
+                <td class="p-2"><span class="flex items-center gap-2"><span class="inline-block h-5 w-5 shrink-0 rounded border border-borda-forte bg-urgencia"></span><span><strong>urgencia</strong><br><span class="numero text-suave">#8e1b14</span></span></span></td><td class="p-2"><span class="flex items-center gap-2"><span class="inline-block h-5 w-5 shrink-0 rounded border border-borda-forte bg-urgencia-fundo"></span><span><strong>urgencia-fundo</strong><br><span class="numero text-suave">#fbe9e7</span></span></span></td>
+                <td class="numero p-2 font-bold">7.7:1</td><td class="p-2 text-suave">Título da faixa e etiqueta de urgência</td></tr>
+              <tr class="border-t border-linha">
+                <td class="p-2"><span class="inline-flex min-w-24 items-center justify-center rounded-md border border-borda px-3 py-1.5 font-bold bg-urgencia-fundo text-urgencia-texto">Aa 123</span></td>
+                <td class="p-2"><span class="flex items-center gap-2"><span class="inline-block h-5 w-5 shrink-0 rounded border border-borda-forte bg-urgencia-texto"></span><span><strong>urgencia-texto</strong><br><span class="numero text-suave">#5c1510</span></span></span></td><td class="p-2"><span class="flex items-center gap-2"><span class="inline-block h-5 w-5 shrink-0 rounded border border-borda-forte bg-urgencia-fundo"></span><span><strong>urgencia-fundo</strong><br><span class="numero text-suave">#fbe9e7</span></span></span></td>
+                <td class="numero p-2 font-bold">11.4:1</td><td class="p-2 text-suave">Texto da faixa de urgência</td></tr>
+              <tr class="border-t border-linha">
+                <td class="p-2"><span class="inline-flex min-w-24 items-center justify-center rounded-md border border-borda px-3 py-1.5 font-bold bg-alta-fundo text-alta">Aa 123</span></td>
+                <td class="p-2"><span class="flex items-center gap-2"><span class="inline-block h-5 w-5 shrink-0 rounded border border-borda-forte bg-alta"></span><span><strong>alta</strong><br><span class="numero text-suave">#6e4400</span></span></span></td><td class="p-2"><span class="flex items-center gap-2"><span class="inline-block h-5 w-5 shrink-0 rounded border border-borda-forte bg-alta-fundo"></span><span><strong>alta-fundo</strong><br><span class="numero text-suave">#fff1d6</span></span></span></td>
+                <td class="numero p-2 font-bold">7.6:1</td><td class="p-2 text-suave">Etiqueta de prioridade alta</td></tr>
+              <tr class="border-t border-linha">
+                <td class="p-2"><span class="inline-flex min-w-24 items-center justify-center rounded-md border border-borda px-3 py-1.5 font-bold bg-normal-fundo text-normal">Aa 123</span></td>
+                <td class="p-2"><span class="flex items-center gap-2"><span class="inline-block h-5 w-5 shrink-0 rounded border border-borda-forte bg-normal"></span><span><strong>normal</strong><br><span class="numero text-suave">#3a4250</span></span></span></td><td class="p-2"><span class="flex items-center gap-2"><span class="inline-block h-5 w-5 shrink-0 rounded border border-borda-forte bg-normal-fundo"></span><span><strong>normal-fundo</strong><br><span class="numero text-suave">#eceef2</span></span></span></td>
+                <td class="numero p-2 font-bold">8.7:1</td><td class="p-2 text-suave">Etiqueta de prioridade normal</td></tr>
+              <tr class="border-t border-linha">
+                <td class="p-2"><span class="inline-flex min-w-24 items-center justify-center rounded-md border border-borda px-3 py-1.5 font-bold bg-ausente-fundo text-ausente">Aa 123</span></td>
+                <td class="p-2"><span class="flex items-center gap-2"><span class="inline-block h-5 w-5 shrink-0 rounded border border-borda-forte bg-ausente"></span><span><strong>ausente</strong><br><span class="numero text-suave">#6b2e00</span></span></span></td><td class="p-2"><span class="flex items-center gap-2"><span class="inline-block h-5 w-5 shrink-0 rounded border border-borda-forte bg-ausente-fundo"></span><span><strong>ausente-fundo</strong><br><span class="numero text-suave">#fde7d6</span></span></span></td>
+                <td class="numero p-2 font-bold">8.7:1</td><td class="p-2 text-suave">Cartão faltante</td></tr>
+              <tr class="border-t border-linha">
+                <td class="p-2"><span class="inline-flex min-w-24 items-center justify-center rounded-md border border-borda px-3 py-1.5 font-bold bg-menu text-menu-texto">Aa 123</span></td>
+                <td class="p-2"><span class="flex items-center gap-2"><span class="inline-block h-5 w-5 shrink-0 rounded border border-borda-forte bg-menu-texto"></span><span><strong>menu-texto</strong><br><span class="numero text-suave">#dde3ec</span></span></span></td><td class="p-2"><span class="flex items-center gap-2"><span class="inline-block h-5 w-5 shrink-0 rounded border border-borda-forte bg-menu"></span><span><strong>menu</strong><br><span class="numero text-suave">#1b2230</span></span></span></td>
+                <td class="numero p-2 font-bold">12.3:1</td><td class="p-2 text-suave">Itens do menu lateral</td></tr>
+              <tr class="border-t border-linha">
+                <td class="p-2"><span class="inline-flex min-w-24 items-center justify-center rounded-md border border-borda px-3 py-1.5 font-bold bg-menu text-menu-inativo">Aa 123</span></td>
+                <td class="p-2"><span class="flex items-center gap-2"><span class="inline-block h-5 w-5 shrink-0 rounded border border-borda-forte bg-menu-inativo"></span><span><strong>menu-inativo</strong><br><span class="numero text-suave">#8e99aa</span></span></span></td><td class="p-2"><span class="flex items-center gap-2"><span class="inline-block h-5 w-5 shrink-0 rounded border border-borda-forte bg-menu"></span><span><strong>menu</strong><br><span class="numero text-suave">#1b2230</span></span></span></td>
+                <td class="numero p-2 font-bold">5.5:1</td><td class="p-2 text-suave">Itens do menu ainda indisponíveis</td></tr>
+              <tr class="border-t border-linha">
+                <td class="p-2"><span class="inline-flex min-w-24 items-center justify-center rounded-md border border-borda px-3 py-1.5 font-bold bg-borda text-suave">Aa 123</span></td>
+                <td class="p-2"><span class="flex items-center gap-2"><span class="inline-block h-5 w-5 shrink-0 rounded border border-borda-forte bg-suave"></span><span><strong>suave</strong><br><span class="numero text-suave">#4e5663</span></span></span></td><td class="p-2"><span class="flex items-center gap-2"><span class="inline-block h-5 w-5 shrink-0 rounded border border-borda-forte bg-borda"></span><span><strong>borda</strong><br><span class="numero text-suave">#d9d6ce</span></span></span></td>
+                <td class="numero p-2 font-bold">5.1:1</td><td class="p-2 text-suave">Texto de botão desabilitado</td></tr>
+              </tbody></table></div>
+          </section>
+          <section id="tipografia" aria-labelledby="tipo-t" class="cartao flex flex-col gap-3 p-5">
+            <div class="flex flex-col gap-1"><h2 id="tipo-t" class="m-0 text-xl">Tipografia</h2>
+            <p class="m-0 max-w-[75ch] text-[15px] text-suave">Uma família só, Atkinson Hyperlegible, em 400 e 700, servida pelo próprio servidor. Foi desenhada para leitura fácil, com letras de formas bem distintas (I, l e 1; O e 0), o que ajuda quem lê nomes e números o dia inteiro. Números em colunas usam a classe <code>numero</code>, com algarismos de largura igual.</p></div>
+            <div class="flex flex-col">
+              <div class="flex flex-wrap items-baseline gap-4 border-t border-linha py-3"><span class="w-32 shrink-0 text-sm text-suave">26 px, negrito</span><span class="text-[26px] font-bold">Título da página</span><code class="text-sm text-suave">text-[26px] font-bold</code></div>
+              <div class="flex flex-wrap items-baseline gap-4 border-t border-linha py-3"><span class="w-32 shrink-0 text-sm text-suave">20 px, negrito</span><span class="text-xl font-bold">Título de seção ou de sessão de turno</span><code class="text-sm text-suave">text-xl font-bold</code></div>
+              <div class="flex flex-wrap items-baseline gap-4 border-t border-linha py-3"><span class="w-32 shrink-0 text-sm text-suave">18 px, negrito</span><span class="text-lg font-bold">Título de cartão lateral e de quadro</span><code class="text-sm text-suave">text-lg font-bold</code></div>
+              <div class="flex flex-wrap items-baseline gap-4 border-t border-linha py-3"><span class="w-32 shrink-0 text-sm text-suave">16 px</span><span class="text-base">Texto corrido, campos, nome no cartão</span><code class="text-sm text-suave">text-base</code></div>
+              <div class="flex flex-wrap items-baseline gap-4 border-t border-linha py-3"><span class="w-32 shrink-0 text-sm text-suave">15 px</span><span class="text-[15px]">Instruções e textos de apoio</span><code class="text-sm text-suave">text-[15px]</code></div>
+              <div class="flex flex-wrap items-baseline gap-4 border-t border-linha py-3"><span class="w-32 shrink-0 text-sm text-suave">14 px</span><span class="text-sm">Rótulos, etiquetas, legendas</span><code class="text-sm text-suave">text-sm</code></div>
+            </div>
+          </section>
+          <section id="medidas" aria-labelledby="med-t" class="cartao flex flex-col gap-3 p-5">
+            <h2 id="med-t" class="m-0 text-xl">Medidas</h2>
+            <ul class="m-0 flex max-w-[75ch] flex-col gap-2 pl-5 text-[15px]">
+              <li><strong>Alvo de toque e clique:</strong> 44 px de altura mínima em todo botão, campo e link de ação (<code>min-h-11</code>).</li>
+              <li><strong>Espaços:</strong> 8, 12, 16, 20 e 24 px (<code>gap-2</code> a <code>gap-6</code>). Dentro de um cartão, 12 ou 16; entre cartões, 20 ou 24.</li>
+              <li><strong>Cantos:</strong> 8 px em botões, campos e cartões de paciente; 12 px em cartões de seção e sessões; totalmente arredondado em etiquetas e selos.</li>
+              <li><strong>Foco:</strong> contorno de 3 px na cor de ação, afastado 2 px, em todo elemento focável pelo teclado.</li>
+            </ul>
+          </section>
+          <section id="botoes" aria-labelledby="botoes-t" class="cartao flex flex-col gap-5 p-5">
+            <div class="flex flex-col gap-1"><h2 id="botoes-t" class="m-0 text-xl">Botões</h2><p class="m-0 max-w-[75ch] text-[15px] text-suave">Um botão primário por área de ação. O texto diz exatamente o que acontece: "Confirmar sessão", não "OK".</p></div>
+            <div class="flex flex-col gap-2">
+              <h3 class="m-0 text-base">Primário</h3>
+              <div class="amostra"><button type="button" class="btn-primario">Confirmar sessão</button> <button type="button" class="btn-primario" disabled>Salvar paciente</button></div>
+              <p class="m-0 max-w-[75ch] text-sm text-suave">A ação principal da área. Desabilitado quando a regra ainda não permite; a razão aparece em texto ao lado, nunca só pelo botão apagado.</p>
+              <pre class="codigo"><code>&lt;button type=&quot;button&quot; class=&quot;btn-primario&quot;&gt;Confirmar sessão&lt;/button&gt; &lt;button type=&quot;button&quot; class=&quot;btn-primario&quot; disabled&gt;Salvar paciente&lt;/button&gt;</code></pre>
+            </div>
+            <div class="flex flex-col gap-2">
+              <h3 class="m-0 text-base">Secundário</h3>
+              <div class="amostra"><button type="button" class="btn-secundario">Salvar rascunho</button> <a class="btn-secundario" href="#botoes">Conferir</a></div>
+              <p class="m-0 max-w-[75ch] text-sm text-suave">Ações alternativas e ações de linha nas listas de pendências. Pode ser <code>&lt;a&gt;</code> quando leva a outra tela.</p>
+              <pre class="codigo"><code>&lt;button type=&quot;button&quot; class=&quot;btn-secundario&quot;&gt;Salvar rascunho&lt;/button&gt; &lt;a class=&quot;btn-secundario&quot; href=&quot;#botoes&quot;&gt;Conferir&lt;/a&gt;</code></pre>
+            </div>
+            <div class="flex flex-col gap-2">
+              <h3 class="m-0 text-base">Neutro</h3>
+              <div class="amostra"><button type="button" class="btn-neutro">Remover</button> <a class="btn-neutro" href="#botoes">Sair</a></div>
+              <p class="m-0 max-w-[75ch] text-sm text-suave">Ações de baixo peso ou destrutivas leves, como remover um telefone.</p>
+              <pre class="codigo"><code>&lt;button type=&quot;button&quot; class=&quot;btn-neutro&quot;&gt;Remover&lt;/button&gt; &lt;a class=&quot;btn-neutro&quot; href=&quot;#botoes&quot;&gt;Sair&lt;/a&gt;</code></pre>
+            </div>
+            <div class="flex flex-col gap-2">
+              <h3 class="m-0 text-base">Urgente</h3>
+              <div class="amostra"><a class="btn-urgente" href="#botoes">Confirmar turno</a></div>
+              <p class="m-0 max-w-[75ch] text-sm text-suave">Só para resolver uma pendência de urgência. Nunca mais de um por tela.</p>
+              <pre class="codigo"><code>&lt;a class=&quot;btn-urgente&quot; href=&quot;#botoes&quot;&gt;Confirmar turno&lt;/a&gt;</code></pre>
+            </div>
+            <div class="flex flex-col gap-2">
+              <h3 class="m-0 text-base">Mover (cartão de paciente)</h3>
+              <div class="amostra"><button type="button" class="btn-mover">Mover para faltantes</button></div>
+              <p class="m-0 max-w-[75ch] text-sm text-suave">Dentro do cartão de paciente. É o caminho pelo teclado para trocar de quadro.</p>
+              <pre class="codigo"><code>&lt;button type=&quot;button&quot; class=&quot;btn-mover&quot;&gt;Mover para faltantes&lt;/button&gt;</code></pre>
+            </div>
+          </section>
+          <section id="etiquetas" aria-labelledby="etiquetas-t" class="cartao flex flex-col gap-5 p-5">
+            <div class="flex flex-col gap-1"><h2 id="etiquetas-t" class="m-0 text-xl">Etiquetas e selos</h2><p class="m-0 max-w-[75ch] text-[15px] text-suave">Etiqueta mostra a prioridade de uma pendência. Selo mostra o estado de uma sessão de turno. O estado do selo vem de <code>data-estado</code> na sessão.</p></div>
+            <div class="flex flex-col gap-2">
+              <h3 class="m-0 text-base">Etiquetas de pendência</h3>
+              <div class="amostra"><span class="etiqueta-u">Sessão não confirmada</span> <span class="etiqueta-a">Termo a emitir</span> <span class="etiqueta-n">CPF ausente</span></div>
+              <p class="m-0 max-w-[75ch] text-sm text-suave"><code>etiqueta-u</code> urgência, <code>etiqueta-a</code> alta, <code>etiqueta-n</code> normal (§11.1 do DDS). O texto nomeia a pendência; a cor só reforça.</p>
+              <pre class="codigo"><code>&lt;span class=&quot;etiqueta-u&quot;&gt;Sessão não confirmada&lt;/span&gt; &lt;span class=&quot;etiqueta-a&quot;&gt;Termo a emitir&lt;/span&gt; &lt;span class=&quot;etiqueta-n&quot;&gt;CPF ausente&lt;/span&gt;</code></pre>
+            </div>
+            <div class="flex flex-col gap-2">
+              <h3 class="m-0 text-base">Selos de sessão</h3>
+              <div class="amostra"><div class="sessao" data-estado="futura"><span class="selo-sessao">Em breve</span></div><div class="sessao" data-estado="preparacao"><span class="selo-sessao">Em preparação</span></div><div class="sessao" data-estado="aberta"><span class="selo-sessao">Aberta</span></div><div class="sessao" data-estado="liberada"><span class="selo-sessao">Confirmação liberada</span></div><div class="sessao" data-estado="vencida"><span class="selo-sessao">Aguardando confirmação</span></div></div>
+              <p class="m-0 max-w-[75ch] text-sm text-suave">Os cinco estados da DD-76. Na produção, o estado vem do servidor, derivado do relógio.</p>
+              <pre class="codigo"><code>&lt;div class=&quot;sessao&quot; data-estado=&quot;futura&quot;&gt;&lt;span class=&quot;selo-sessao&quot;&gt;Em breve&lt;/span&gt;&lt;/div&gt;&lt;div class=&quot;sessao&quot; data-estado=&quot;preparacao&quot;&gt;&lt;span class=&quot;selo-sessao&quot;&gt;Em preparação&lt;/span&gt;&lt;/div&gt;&lt;div class=&quot;sessao&quot; data-estado=&quot;aberta&quot;&gt;&lt;span class=&quot;selo-sessao&quot;&gt;Aberta&lt;/span&gt;&lt;/div&gt;&lt;div class=&quot;sessao&quot; data-estado=&quot;liberada&quot;&gt;&lt;span class=&quot;selo-sessao&quot;&gt;Confirmação liberada&lt;/span&gt;&lt;/div&gt;&lt;div class=&quot;sessao&quot; data-estado=&quot;vencida&quot;&gt;&lt;span class=&quot;selo-sessao&quot;&gt;Aguardando confirmação&lt;/span&gt;&lt;/div&gt;</code></pre>
+            </div>
+            <div class="flex flex-col gap-2">
+              <h3 class="m-0 text-base">Etapas da sessão</h3>
+              <div class="amostra"><ol class="passos" aria-label="Etapas da sessão"><li data-passo="preparacao" data-feito>Em preparação</li><li data-passo="aberta" aria-current="step">Aberta</li><li data-passo="confirmada">Confirmada</li></ol></div>
+              <p class="m-0 max-w-[75ch] text-sm text-suave">A etapa atual leva <code>aria-current="step"</code>; as concluídas, <code>data-feito</code>.</p>
+              <pre class="codigo"><code>&lt;ol class=&quot;passos&quot; aria-label=&quot;Etapas da sessão&quot;&gt;&lt;li data-passo=&quot;preparacao&quot; data-feito&gt;Em preparação&lt;/li&gt;&lt;li data-passo=&quot;aberta&quot; aria-current=&quot;step&quot;&gt;Aberta&lt;/li&gt;&lt;li data-passo=&quot;confirmada&quot;&gt;Confirmada&lt;/li&gt;&lt;/ol&gt;</code></pre>
+            </div>
+          </section>
+          <section id="pacientes" aria-labelledby="pacientes-t" class="cartao flex flex-col gap-5 p-5">
+            <div class="flex flex-col gap-1"><h2 id="pacientes-t" class="m-0 text-xl">Cartão de paciente e quadros</h2><p class="m-0 max-w-[75ch] text-[15px] text-suave">O coração da tela inicial (DD-76). O cartão troca de quadro por clique no cartão, pelo botão ou arrastando. O botão garante o uso pelo teclado e em tela de toque.</p></div>
+            <div class="flex flex-col gap-2">
+              <h3 class="m-0 text-base">Cartão presente e faltante</h3>
+              <div class="amostra"><ul class="grade-cartoes w-full">                <li class="cartao-paciente" draggable="true" data-paciente="901" data-situacao="presente">
+                  <span class="text-base font-bold" data-nome>Joana Pereira Lima</span>
+                  <span class="numero text-sm text-suave">Prontuário 010245</span>
+                  
+                  
+                  <button type="button" class="btn-mover" data-acao="mover" aria-label="Mover para faltantes: Joana Pereira Lima">Mover para faltantes</button>
+                </li>                <li class="cartao-paciente" draggable="true" data-paciente="902" data-situacao="faltante">
+                  <span class="text-base font-bold" data-nome>Geraldo Batista Cunha</span>
+                  <span class="numero text-sm text-suave">Prontuário 010264</span>
+                  <span class="text-sm font-bold text-acao">Avisou que vai faltar</span>
+                  
+                  <button type="button" class="btn-mover" data-acao="mover" aria-label="Mover para presentes: Geraldo Batista Cunha">Mover para presentes</button>
+                </li>                <li class="cartao-paciente" draggable="true" data-paciente="903" data-situacao="presente">
+                  <span class="text-base font-bold" data-nome>Osvaldo Tavares Lemos</span>
+                  <span class="numero text-sm text-suave">Prontuário 010333</span>
+                  <span class="text-sm font-bold text-acao">Extra planejada, a 3ª do mês</span>
+                  <span class="flex flex-wrap gap-1"><span class="etiqueta-a">Termo de extra a emitir</span></span>
+                  <button type="button" class="btn-mover" data-acao="mover" aria-label="Mover para faltantes: Osvaldo Tavares Lemos">Mover para faltantes</button>
+                </li></ul></div>
+              <p class="m-0 max-w-[75ch] text-sm text-suave">Nome e prontuário sempre; origem (troca ou extra) e pendências só quando existem. <code>data-situacao="faltante"</code> muda a borda e o fundo. Com <code>data-travado</code> na sessão, nada se move.</p>
+              <pre class="codigo"><code>&lt;ul class=&quot;grade-cartoes w-full&quot;&gt;                &lt;li class=&quot;cartao-paciente&quot; draggable=&quot;true&quot; data-paciente=&quot;901&quot; data-situacao=&quot;presente&quot;&gt;
+                  &lt;span class=&quot;text-base font-bold&quot; data-nome&gt;Joana Pereira Lima&lt;/span&gt;
+                  &lt;span class=&quot;numero text-sm text-suave&quot;&gt;Prontuário 010245&lt;/span&gt;
+                  
+                  
+                  &lt;button type=&quot;button&quot; class=&quot;btn-mover&quot; data-acao=&quot;mover&quot; aria-label=&quot;Mover para faltantes: Joana Pereira Lima&quot;&gt;Mover para faltantes&lt;/button&gt;
+                &lt;/li&gt;                &lt;li class=&quot;cartao-paciente&quot; draggable=&quot;true&quot; data-paciente=&quot;902&quot; data-situacao=&quot;faltante&quot;&gt;
+                  &lt;span class=&quot;text-base font-bold&quot; data-nome&gt;Geraldo Batista Cunha&lt;/span&gt;
+                  &lt;span class=&quot;numero text-sm text-suave&quot;&gt;Prontuário 010264&lt;/span&gt;
+                  &lt;span class=&quot;text-sm font-bold text-acao&quot;&gt;Avisou que vai faltar&lt;/span&gt;
+                  
+                  &lt;button type=&quot;button&quot; class=&quot;btn-mover&quot; data-acao=&quot;mover&quot; aria-label=&quot;Mover para presentes: Geraldo Batista Cunha&quot;&gt;Mover para presentes&lt;/button&gt;
+                &lt;/li&gt;                &lt;li class=&quot;cartao-paciente&quot; draggable=&quot;true&quot; data-paciente=&quot;903&quot; data-situacao=&quot;presente&quot;&gt;
+                  &lt;span class=&quot;text-base font-bold&quot; data-nome&gt;Osvaldo Tavares Lemos&lt;/span&gt;
+                  &lt;span class=&quot;numero text-sm text-suave&quot;&gt;Prontuário 010333&lt;/span&gt;
+                  &lt;span class=&quot;text-sm font-bold text-acao&quot;&gt;Extra planejada, a 3ª do mês&lt;/span&gt;
+                  &lt;span class=&quot;flex flex-wrap gap-1&quot;&gt;&lt;span class=&quot;etiqueta-a&quot;&gt;Termo de extra a emitir&lt;/span&gt;&lt;/span&gt;
+                  &lt;button type=&quot;button&quot; class=&quot;btn-mover&quot; data-acao=&quot;mover&quot; aria-label=&quot;Mover para faltantes: Osvaldo Tavares Lemos&quot;&gt;Mover para faltantes&lt;/button&gt;
+                &lt;/li&gt;&lt;/ul&gt;</code></pre>
+            </div>
+            <div class="flex flex-col gap-2">
+              <h3 class="m-0 text-base">Quadro</h3>
+              <div class="amostra"><div class="grid w-full grid-cols-1 gap-4 lg:grid-cols-2">              <section class="quadro" data-zona="presentes" aria-label="Presentes">
+                <h3 class="m-0 flex items-center gap-2 text-lg text-tinta">Presentes
+                  <span class="numero rounded-full bg-superficie px-2.5 py-0.5 text-sm" data-contagem="presentes">1</span>
+                </h3>
+                <ul class="grade-cartoes" data-lista="presentes">
+                <li class="cartao-paciente" draggable="true" data-paciente="904" data-situacao="presente">
+                  <span class="text-base font-bold" data-nome>Antônio Carlos Reis</span>
+                  <span class="numero text-sm text-suave">Prontuário 010311</span>
+                  
+                  
+                  <button type="button" class="btn-mover" data-acao="mover" aria-label="Mover para faltantes: Antônio Carlos Reis">Mover para faltantes</button>
+                </li>
+                </ul>
+                <p class="m-0 text-sm text-suave" data-vazio="presentes" hidden>Nenhum paciente presente.</p>
+              </section>              <section class="quadro" data-zona="faltantes" data-sobre="true" aria-label="Faltantes">
+                <h3 class="m-0 flex items-center gap-2 text-lg text-ausente">Faltantes
+                  <span class="numero rounded-full bg-superficie px-2.5 py-0.5 text-sm" data-contagem="faltantes">0</span>
+                </h3>
+                <ul class="grade-cartoes" data-lista="faltantes">
+
+                </ul>
+                <p class="m-0 text-sm text-suave" data-vazio="faltantes">Ninguém faltou.</p>
+              </section></div></div>
+              <p class="m-0 max-w-[75ch] text-sm text-suave">Presentes à esquerda, com o dobro da largura; faltantes à direita. Durante o arraste, o quadro de destino recebe <code>data-sobre="true"</code> (à direita, o exemplo desse estado). Quadro vazio mostra uma frase que diz o que isso significa.</p>
+              <pre class="codigo"><code>&lt;div class=&quot;grid w-full grid-cols-1 gap-4 lg:grid-cols-2&quot;&gt;              &lt;section class=&quot;quadro&quot; data-zona=&quot;presentes&quot; aria-label=&quot;Presentes&quot;&gt;
+                &lt;h3 class=&quot;m-0 flex items-center gap-2 text-lg text-tinta&quot;&gt;Presentes
+                  &lt;span class=&quot;numero rounded-full bg-superficie px-2.5 py-0.5 text-sm&quot; data-contagem=&quot;presentes&quot;&gt;1&lt;/span&gt;
+                &lt;/h3&gt;
+                &lt;ul class=&quot;grade-cartoes&quot; data-lista=&quot;presentes&quot;&gt;
+                &lt;li class=&quot;cartao-paciente&quot; draggable=&quot;true&quot; data-paciente=&quot;904&quot; data-situacao=&quot;presente&quot;&gt;
+                  &lt;span class=&quot;text-base font-bold&quot; data-nome&gt;Antônio Carlos Reis&lt;/span&gt;
+                  &lt;span class=&quot;numero text-sm text-suave&quot;&gt;Prontuário 010311&lt;/span&gt;
+                  
+                  
+                  &lt;button type=&quot;button&quot; class=&quot;btn-mover&quot; data-acao=&quot;mover&quot; aria-label=&quot;Mover para faltantes: Antônio Carlos Reis&quot;&gt;Mover para faltantes&lt;/button&gt;
+                &lt;/li&gt;
+                &lt;/ul&gt;
+                &lt;p class=&quot;m-0 text-sm text-suave&quot; data-vazio=&quot;presentes&quot; hidden&gt;Nenhum paciente presente.&lt;/p&gt;
+              &lt;/section&gt;              &lt;section class=&quot;quadro&quot; data-zona=&quot;faltantes&quot; data-sobre=&quot;true&quot; aria-label=&quot;Faltantes&quot;&gt;
+                &lt;h3 class=&quot;m-0 flex items-center gap-2 text-lg text-ausente&quot;&gt;Faltantes
+                  &lt;span class=&quot;numero rounded-full bg-superficie px-2.5 py-0.5 text-sm&quot; data-contagem=&quot;faltantes&quot;&gt;0&lt;/span&gt;
+                &lt;/h3&gt;
+                &lt;ul class=&quot;grade-cartoes&quot; data-lista=&quot;faltantes&quot;&gt;
+
+                &lt;/ul&gt;
+                &lt;p class=&quot;m-0 text-sm text-suave&quot; data-vazio=&quot;faltantes&quot;&gt;Ninguém faltou.&lt;/p&gt;
+              &lt;/section&gt;&lt;/div&gt;</code></pre>
+            </div>
+          </section>
+          <section id="formularios" aria-labelledby="formularios-t" class="cartao flex flex-col gap-5 p-5">
+            <div class="flex flex-col gap-1"><h2 id="formularios-t" class="m-0 text-xl">Campos de formulário</h2><p class="m-0 max-w-[75ch] text-[15px] text-suave">Rótulo sempre visível acima do campo, ligado a ele. Obrigatório marcado com asterisco e explicado no rodapé do formulário.</p></div>
+            <div class="flex flex-col gap-2">
+              <h3 class="m-0 text-base">Campo normal, com erro e desabilitado</h3>
+              <div class="amostra"><div class="grid w-full grid-cols-1 gap-3 md:grid-cols-3">
+<div class="campo"><label class="rotulo" for="g-nome">Nome completo <span class="text-urgencia" aria-hidden="true">*</span></label><input class="entrada" id="g-nome" type="text" value="Maria Aparecida Fontes"></div>
+<div class="campo"><label class="rotulo" for="g-cpf">CPF</label><input class="entrada" id="g-cpf" type="text" value="123.456.789-00" aria-invalid="true" aria-describedby="g-cpf-erro"><p class="ajuda-erro m-0" id="g-cpf-erro">CPF inválido: confira os dígitos.</p></div>
+<div class="campo"><label class="rotulo" for="g-busca">Acrescentar paciente</label><input class="entrada" id="g-busca" type="search" disabled placeholder="Sessão confirmada"></div>
+</div></div>
+              <p class="m-0 max-w-[75ch] text-sm text-suave">Erro com <code>aria-invalid="true"</code> e mensagem ligada por <code>aria-describedby</code>. A mensagem diz o que fazer, não só o que está errado.</p>
+              <pre class="codigo"><code>&lt;div class=&quot;grid w-full grid-cols-1 gap-3 md:grid-cols-3&quot;&gt;
+&lt;div class=&quot;campo&quot;&gt;&lt;label class=&quot;rotulo&quot; for=&quot;g-nome&quot;&gt;Nome completo &lt;span class=&quot;text-urgencia&quot; aria-hidden=&quot;true&quot;&gt;*&lt;/span&gt;&lt;/label&gt;&lt;input class=&quot;entrada&quot; id=&quot;g-nome&quot; type=&quot;text&quot; value=&quot;Maria Aparecida Fontes&quot;&gt;&lt;/div&gt;
+&lt;div class=&quot;campo&quot;&gt;&lt;label class=&quot;rotulo&quot; for=&quot;g-cpf&quot;&gt;CPF&lt;/label&gt;&lt;input class=&quot;entrada&quot; id=&quot;g-cpf&quot; type=&quot;text&quot; value=&quot;123.456.789-00&quot; aria-invalid=&quot;true&quot; aria-describedby=&quot;g-cpf-erro&quot;&gt;&lt;p class=&quot;ajuda-erro m-0&quot; id=&quot;g-cpf-erro&quot;&gt;CPF inválido: confira os dígitos.&lt;/p&gt;&lt;/div&gt;
+&lt;div class=&quot;campo&quot;&gt;&lt;label class=&quot;rotulo&quot; for=&quot;g-busca&quot;&gt;Acrescentar paciente&lt;/label&gt;&lt;input class=&quot;entrada&quot; id=&quot;g-busca&quot; type=&quot;search&quot; disabled placeholder=&quot;Sessão confirmada&quot;&gt;&lt;/div&gt;
+&lt;/div&gt;</code></pre>
+            </div>
+            <div class="flex flex-col gap-2">
+              <h3 class="m-0 text-base">Telefone</h3>
+              <div class="amostra"><div class="w-full">                <div class="grid grid-cols-[5rem_minmax(0,1fr)] items-end gap-3 sm:grid-cols-[5rem_minmax(0,1fr)_9rem_auto]" data-telefone>
+                  <label class="campo"><span class="rotulo">DDD</span><input class="entrada" type="text" inputmode="numeric" maxlength="2" name="ddd" value="64"></label>
+                  <label class="campo"><span class="rotulo">Número</span><input class="entrada" type="tel" inputmode="numeric" maxlength="10" name="numero" value="999990001"></label>
+                  <label class="campo"><span class="rotulo">Tipo</span><select class="entrada" name="tipo"><option selected>Celular</option><option>Fixo</option><option>Recado</option></select></label>
+                  <button type="button" class="btn-neutro" data-acao="remover-telefone" aria-label="Remover este telefone">Remover</button>
+                </div></div></div>
+              <p class="m-0 max-w-[75ch] text-sm text-suave">Linha repetível. Em lista que se repete, o rótulo envolve o campo, para não depender de <code>id</code> único.</p>
+              <pre class="codigo"><code>&lt;div class=&quot;w-full&quot;&gt;                &lt;div class=&quot;grid grid-cols-[5rem_minmax(0,1fr)] items-end gap-3 sm:grid-cols-[5rem_minmax(0,1fr)_9rem_auto]&quot; data-telefone&gt;
+                  &lt;label class=&quot;campo&quot;&gt;&lt;span class=&quot;rotulo&quot;&gt;DDD&lt;/span&gt;&lt;input class=&quot;entrada&quot; type=&quot;text&quot; inputmode=&quot;numeric&quot; maxlength=&quot;2&quot; name=&quot;ddd&quot; value=&quot;64&quot;&gt;&lt;/label&gt;
+                  &lt;label class=&quot;campo&quot;&gt;&lt;span class=&quot;rotulo&quot;&gt;Número&lt;/span&gt;&lt;input class=&quot;entrada&quot; type=&quot;tel&quot; inputmode=&quot;numeric&quot; maxlength=&quot;10&quot; name=&quot;numero&quot; value=&quot;999990001&quot;&gt;&lt;/label&gt;
+                  &lt;label class=&quot;campo&quot;&gt;&lt;span class=&quot;rotulo&quot;&gt;Tipo&lt;/span&gt;&lt;select class=&quot;entrada&quot; name=&quot;tipo&quot;&gt;&lt;option selected&gt;Celular&lt;/option&gt;&lt;option&gt;Fixo&lt;/option&gt;&lt;option&gt;Recado&lt;/option&gt;&lt;/select&gt;&lt;/label&gt;
+                  &lt;button type=&quot;button&quot; class=&quot;btn-neutro&quot; data-acao=&quot;remover-telefone&quot; aria-label=&quot;Remover este telefone&quot;&gt;Remover&lt;/button&gt;
+                &lt;/div&gt;&lt;/div&gt;</code></pre>
+            </div>
+            <div class="flex flex-col gap-2">
+              <h3 class="m-0 text-base">Contato</h3>
+              <div class="amostra"><div class="w-full">                <div class="flex flex-col gap-3 rounded-lg border border-borda p-4" data-contato>
+                  <div class="grid grid-cols-1 items-end gap-3 sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_auto]">
+                    <label class="campo"><span class="rotulo">Nome do contato</span><input class="entrada" type="text" name="contato_nome" value="José Fontes"></label>
+                    <label class="campo"><span class="rotulo">Parentesco</span><select class="entrada" name="parentesco"><option>Selecione…</option><option selected>Cônjuge</option><option>Filho ou filha</option><option>Pai ou mãe</option><option>Irmão ou irmã</option><option>Outro parente</option><option>Vizinho ou amigo</option></select></label>
+                    <button type="button" class="btn-neutro" data-acao="remover-contato" aria-label="Remover este contato">Remover contato</button>
+                  </div>
+                  <div class="flex flex-col gap-3" data-lista-telefones>
+                <div class="grid grid-cols-[5rem_minmax(0,1fr)] items-end gap-3 sm:grid-cols-[5rem_minmax(0,1fr)_9rem_auto]" data-telefone>
+                  <label class="campo"><span class="rotulo">DDD</span><input class="entrada" type="text" inputmode="numeric" maxlength="2" name="ddd" value="64"></label>
+                  <label class="campo"><span class="rotulo">Número</span><input class="entrada" type="tel" inputmode="numeric" maxlength="10" name="numero" value="999990002"></label>
+                  <label class="campo"><span class="rotulo">Tipo</span><select class="entrada" name="tipo"><option selected>Celular</option><option>Fixo</option><option>Recado</option></select></label>
+                  <button type="button" class="btn-neutro" data-acao="remover-telefone" aria-label="Remover este telefone">Remover</button>
+                </div>
+                  </div>
+                  <button type="button" class="btn-secundario self-start" data-acao="adicionar-telefone">Adicionar telefone do contato</button>
+                </div></div></div>
+              <p class="m-0 max-w-[75ch] text-sm text-suave">Cada contato tem os próprios telefones (INV-12).</p>
+              <pre class="codigo"><code>&lt;div class=&quot;w-full&quot;&gt;                &lt;div class=&quot;flex flex-col gap-3 rounded-lg border border-borda p-4&quot; data-contato&gt;
+                  &lt;div class=&quot;grid grid-cols-1 items-end gap-3 sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_auto]&quot;&gt;
+                    &lt;label class=&quot;campo&quot;&gt;&lt;span class=&quot;rotulo&quot;&gt;Nome do contato&lt;/span&gt;&lt;input class=&quot;entrada&quot; type=&quot;text&quot; name=&quot;contato_nome&quot; value=&quot;José Fontes&quot;&gt;&lt;/label&gt;
+                    &lt;label class=&quot;campo&quot;&gt;&lt;span class=&quot;rotulo&quot;&gt;Parentesco&lt;/span&gt;&lt;select class=&quot;entrada&quot; name=&quot;parentesco&quot;&gt;&lt;option&gt;Selecione…&lt;/option&gt;&lt;option selected&gt;Cônjuge&lt;/option&gt;&lt;option&gt;Filho ou filha&lt;/option&gt;&lt;option&gt;Pai ou mãe&lt;/option&gt;&lt;option&gt;Irmão ou irmã&lt;/option&gt;&lt;option&gt;Outro parente&lt;/option&gt;&lt;option&gt;Vizinho ou amigo&lt;/option&gt;&lt;/select&gt;&lt;/label&gt;
+                    &lt;button type=&quot;button&quot; class=&quot;btn-neutro&quot; data-acao=&quot;remover-contato&quot; aria-label=&quot;Remover este contato&quot;&gt;Remover contato&lt;/button&gt;
+                  &lt;/div&gt;
+                  &lt;div class=&quot;flex flex-col gap-3&quot; data-lista-telefones&gt;
+                &lt;div class=&quot;grid grid-cols-[5rem_minmax(0,1fr)] items-end gap-3 sm:grid-cols-[5rem_minmax(0,1fr)_9rem_auto]&quot; data-telefone&gt;
+                  &lt;label class=&quot;campo&quot;&gt;&lt;span class=&quot;rotulo&quot;&gt;DDD&lt;/span&gt;&lt;input class=&quot;entrada&quot; type=&quot;text&quot; inputmode=&quot;numeric&quot; maxlength=&quot;2&quot; name=&quot;ddd&quot; value=&quot;64&quot;&gt;&lt;/label&gt;
+                  &lt;label class=&quot;campo&quot;&gt;&lt;span class=&quot;rotulo&quot;&gt;Número&lt;/span&gt;&lt;input class=&quot;entrada&quot; type=&quot;tel&quot; inputmode=&quot;numeric&quot; maxlength=&quot;10&quot; name=&quot;numero&quot; value=&quot;999990002&quot;&gt;&lt;/label&gt;
+                  &lt;label class=&quot;campo&quot;&gt;&lt;span class=&quot;rotulo&quot;&gt;Tipo&lt;/span&gt;&lt;select class=&quot;entrada&quot; name=&quot;tipo&quot;&gt;&lt;option selected&gt;Celular&lt;/option&gt;&lt;option&gt;Fixo&lt;/option&gt;&lt;option&gt;Recado&lt;/option&gt;&lt;/select&gt;&lt;/label&gt;
+                  &lt;button type=&quot;button&quot; class=&quot;btn-neutro&quot; data-acao=&quot;remover-telefone&quot; aria-label=&quot;Remover este telefone&quot;&gt;Remover&lt;/button&gt;
+                &lt;/div&gt;
+                  &lt;/div&gt;
+                  &lt;button type=&quot;button&quot; class=&quot;btn-secundario self-start&quot; data-acao=&quot;adicionar-telefone&quot;&gt;Adicionar telefone do contato&lt;/button&gt;
+                &lt;/div&gt;&lt;/div&gt;</code></pre>
+            </div>
+          </section>
+          <section id="avisos" aria-labelledby="avisos-t" class="cartao flex flex-col gap-5 p-5">
+            <div class="flex flex-col gap-1"><h2 id="avisos-t" class="m-0 text-xl">Avisos e contêineres</h2><p class="m-0 max-w-[75ch] text-[15px] text-suave"></p></div>
+            <div class="flex flex-col gap-2">
+              <h3 class="m-0 text-base">Faixa de urgência</h3>
+              <div class="amostra"><div class="flex w-full flex-wrap items-center justify-between gap-4 rounded-xl border border-urgencia-borda bg-urgencia-fundo px-5 py-4"><div class="flex flex-col gap-1"><strong class="text-lg text-urgencia">Primeiro turno de hoje não confirmado</strong><span class="text-[15px] text-urgencia-texto">Terminou às 10:00. Confirme com a ficha assinada.</span></div><a class="btn-urgente" href="#avisos">Confirmar turno</a></div></div>
+              <p class="m-0 max-w-[75ch] text-sm text-suave">Só para pendência de urgência que exige ação agora.</p>
+              <pre class="codigo"><code>&lt;div class=&quot;flex w-full flex-wrap items-center justify-between gap-4 rounded-xl border border-urgencia-borda bg-urgencia-fundo px-5 py-4&quot;&gt;&lt;div class=&quot;flex flex-col gap-1&quot;&gt;&lt;strong class=&quot;text-lg text-urgencia&quot;&gt;Primeiro turno de hoje não confirmado&lt;/strong&gt;&lt;span class=&quot;text-[15px] text-urgencia-texto&quot;&gt;Terminou às 10:00. Confirme com a ficha assinada.&lt;/span&gt;&lt;/div&gt;&lt;a class=&quot;btn-urgente&quot; href=&quot;#avisos&quot;&gt;Confirmar turno&lt;/a&gt;&lt;/div&gt;</code></pre>
+            </div>
+            <div class="flex flex-col gap-2">
+              <h3 class="m-0 text-base">Aviso de resultado</h3>
+              <div class="amostra"><p class="m-0 w-full rounded-lg bg-acao-clara p-3 font-bold text-acao-escura" role="status">Primeiro turno confirmado às 09:15.</p></div>
+              <p class="m-0 max-w-[75ch] text-sm text-suave">Confirma o que acabou de acontecer, com <code>role="status"</code> para leitor de tela.</p>
+              <pre class="codigo"><code>&lt;p class=&quot;m-0 w-full rounded-lg bg-acao-clara p-3 font-bold text-acao-escura&quot; role=&quot;status&quot;&gt;Primeiro turno confirmado às 09:15.&lt;/p&gt;</code></pre>
+            </div>
+            <div class="flex flex-col gap-2">
+              <h3 class="m-0 text-base">Cartão de seção</h3>
+              <div class="amostra"><section class="cartao flex w-72 flex-col gap-2 p-4"><h3 class="m-0 text-lg">Aniversariantes de hoje</h3><p class="m-0">Divina Aparecida Neves</p></section></div>
+              <p class="m-0 max-w-[75ch] text-sm text-suave">Agrupa um assunto. Não é enfeite: se o conteúdo não é um assunto separado, não vai em cartão.</p>
+              <pre class="codigo"><code>&lt;section class=&quot;cartao flex w-72 flex-col gap-2 p-4&quot;&gt;&lt;h3 class=&quot;m-0 text-lg&quot;&gt;Aniversariantes de hoje&lt;/h3&gt;&lt;p class=&quot;m-0&quot;&gt;Divina Aparecida Neves&lt;/p&gt;&lt;/section&gt;</code></pre>
+            </div>
+          </section>
+          <section id="regras" aria-labelledby="regras-t" class="cartao flex flex-col gap-3 p-5">
+            <h2 id="regras-t" class="m-0 text-xl">Regras para quem constrói</h2>
+            <ul class="m-0 flex max-w-[80ch] flex-col gap-2 pl-5 text-[15px]">
+              <li><strong>CSP estrita (DD-09).</strong> Nenhum <code>style=</code>, nenhum <code>&lt;script&gt;</code> inline, nenhum <code>onclick=</code>, nenhum recurso de fora do servidor. Estilo só por classe; comportamento só em arquivo <code>.js</code>.</li>
+              <li><strong>Estado por atributo.</strong> O código muda atributos; o CSS muda a aparência: <code>aria-pressed</code>, <code>aria-invalid</code>, <code>aria-current</code>, <code>disabled</code>, <code>data-situacao</code>, <code>data-estado</code>, <code>data-sobre</code>, <code>data-travado</code>.</li>
+              <li><strong>Elementos de verdade.</strong> Ação é <code>&lt;button&gt;</code>; navegação é <code>&lt;a href&gt;</code>; campo tem <code>&lt;label&gt;</code>. Nunca clique em <code>&lt;div&gt;</code> ou <code>&lt;span&gt;</code> sem equivalente pelo teclado.</li>
+              <li><strong>Linguagem da recepção.</strong> Primeiro, segundo e terceiro turno (DD-75); códigos de escala só nas telas da enfermagem. Botões dizem a ação; mensagens de erro dizem como resolver.</li>
+              <li><strong>Componente novo entra aqui primeiro.</strong> Um componente só vai para uma tela depois de existir neste guia, com seus estados.</li>
+            </ul>
+          </section>
+          </div>
+        </div>
+      </main>
+    </div>
+  </div>
+</body>
+</html>

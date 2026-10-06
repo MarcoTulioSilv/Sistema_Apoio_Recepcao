@@ -1,0 +1,200 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Novo cadastro — SAR</title>
+  <link rel="stylesheet" href="static/css/sar.css">
+  <script src="static/js/sar.js" defer></script>
+</head>
+<body>
+  <div class="flex min-h-screen">
+    <nav aria-label="Navegação principal" class="hidden w-52 shrink-0 flex-col gap-1.5 bg-menu px-4 py-6 text-white lg:flex">
+      <div class="px-3 pb-5 text-2xl font-bold tracking-wide">SAR</div>
+        <a class="menu-link" href="inicio.html">Início</a>
+        <a class="menu-link" href="cadastro.html" aria-current="page">Cadastro</a>
+        <a class="menu-link" href="pendencias.html">Pendências</a>
+        <span class="flex min-h-11 items-center px-3 text-menu-inativo">Documentos</span>
+        <span class="flex min-h-11 items-center px-3 text-menu-inativo">Relatórios</span>
+      <div class="grow"></div>
+      <div class="border-t border-white/15 px-3 pt-3 text-sm text-menu-texto">Recepção<br>Estação balcão 1</div>
+    </nav>
+    <div class="flex min-w-0 grow flex-col">
+      <header class="flex flex-wrap items-center justify-between gap-4 border-b border-borda bg-superficie px-6 py-5 lg:px-8">
+        <div class="flex flex-col gap-0.5">
+          <h1 class="m-0 text-[26px] leading-tight">Novo cadastro</h1>
+          <p class="m-0 text-[15px] text-suave">Na ordem da ficha de cadastro em papel</p>
+        </div>
+        <div class="flex items-center gap-4 text-[15px] text-suave">
+          <span class="numero" data-relogio>Quarta, 30/09/2026, 10:05</span>
+          <a class="btn-neutro" href="#">Sair</a>
+        </div>
+      </header>
+      <main class="grow">
+        <form class="flex min-h-full flex-col" data-tela="cadastro" novalidate>
+          <div class="flex grow flex-col gap-4 p-6 lg:px-8">
+            <fieldset class="cartao m-0 flex flex-col gap-3 px-5 pt-3 pb-5">
+              <legend class="px-1.5 text-[17px] font-bold">Identificação</legend>
+              <div class="grid grid-cols-1 gap-x-4 gap-y-3 md:grid-cols-3">
+                <div class="campo">
+                  <label class="rotulo" for="nome">Nome completo <span class="text-urgencia" aria-hidden="true">*</span></label>
+                  <input class="entrada" id="nome" name="nome" type="text" value="Maria Aparecida Fontes" required data-minimo>
+                </div>
+                <div class="campo">
+                  <label class="rotulo" for="prontuario">Prontuário <span class="text-urgencia" aria-hidden="true">*</span></label>
+                  <input class="entrada" id="prontuario" name="prontuario" type="text" value="010415" required data-minimo>
+                </div>
+                <div class="campo">
+                  <label class="rotulo" for="inicio">Início do tratamento <span class="text-urgencia" aria-hidden="true">*</span></label>
+                  <input class="entrada" id="inicio" name="inicio" type="date" required data-minimo>
+                </div>
+                <div class="campo">
+                  <label class="rotulo" for="nascimento">Data de nascimento</label>
+                  <input class="entrada" id="nascimento" name="nascimento" type="date">
+                </div>
+                <div class="campo">
+                  <label class="rotulo" for="sexo">Sexo</label>
+                  <select class="entrada" id="sexo" name="sexo"><option>Não informado</option><option>Feminino</option><option>Masculino</option></select>
+                </div>
+                <div class="campo">
+                  <label class="rotulo" for="mae">Nome da mãe</label>
+                  <input class="entrada" id="mae" name="mae" type="text">
+                </div>
+                <div class="campo">
+                  <label class="rotulo" for="cpf">CPF</label>
+                  <input class="entrada" id="cpf" name="cpf" type="text" inputmode="numeric" value="123.456.789-00" aria-describedby="cpf-erro" data-validar="cpf">
+                  <p class="ajuda-erro m-0" id="cpf-erro" aria-live="polite"></p>
+                </div>
+                <div class="campo">
+                  <label class="rotulo" for="cns">Cartão do SUS (CNS)</label>
+                  <input class="entrada" id="cns" name="cns" type="text" inputmode="numeric">
+                </div>
+                <div class="campo">
+                  <label class="rotulo" for="rg">RG e órgão emissor</label>
+                  <input class="entrada" id="rg" name="rg" type="text">
+                </div>
+              </div>
+            </fieldset>
+            <fieldset class="cartao m-0 flex flex-col gap-3 px-5 pt-3 pb-5">
+              <legend class="px-1.5 text-[17px] font-bold">Endereço</legend>
+              <div class="grid grid-cols-1 gap-x-4 gap-y-3 md:grid-cols-3">
+                <div class="campo">
+                  <label class="rotulo" for="cep">CEP</label>
+                  <span class="flex gap-2">
+                    <input class="entrada" id="cep" name="cep" type="text" inputmode="numeric">
+                    <button type="button" class="btn-secundario shrink-0">Buscar</button>
+                  </span>
+                </div>
+                <div class="campo">
+                  <label class="rotulo" for="logradouro">Logradouro</label>
+                  <input class="entrada" id="logradouro" name="logradouro" type="text">
+                </div>
+                <div class="campo">
+                  <label class="rotulo" for="numero">Número</label>
+                  <input class="entrada" id="numero" name="numero" type="text">
+                </div>
+                <div class="campo">
+                  <label class="rotulo" for="bairro">Bairro</label>
+                  <input class="entrada" id="bairro" name="bairro" type="text">
+                </div>
+                <div class="campo">
+                  <label class="rotulo" for="municipio">Município (Goiás)</label>
+                  <select class="entrada" id="municipio" name="municipio"><option>Jataí</option><option>Rio Verde</option><option>Mineiros</option><option>Outro município de Goiás…</option></select>
+                </div>
+                <div class="campo">
+                  <label class="rotulo" for="complemento">Complemento</label>
+                  <input class="entrada" id="complemento" name="complemento" type="text">
+                </div>
+              </div>
+            </fieldset>
+            <fieldset class="cartao m-0 flex flex-col gap-3 px-5 pt-3 pb-5">
+              <legend class="px-1.5 text-[17px] font-bold">Tratamento</legend>
+              <div class="grid grid-cols-1 gap-x-4 gap-y-3 md:grid-cols-3">
+                <div class="campo">
+                  <label class="rotulo" for="cobertura">Cobertura</label>
+                  <select class="entrada" id="cobertura" name="cobertura"><option>SUS</option><option>Convênio</option></select>
+                </div>
+                <div class="campo">
+                  <label class="rotulo" for="carteirinha">Carteirinha do convênio</label>
+                  <input class="entrada" id="carteirinha" name="carteirinha" type="text">
+                </div>
+              </div>
+            </fieldset>
+            <fieldset class="cartao m-0 flex flex-col gap-3 px-5 pt-3 pb-5">
+              <legend class="px-1.5 text-[17px] font-bold">Telefones do paciente</legend>
+              <div class="flex flex-col gap-3" data-lista-telefones>
+                <div class="grid grid-cols-[5rem_minmax(0,1fr)] items-end gap-3 sm:grid-cols-[5rem_minmax(0,1fr)_9rem_auto]" data-telefone>
+                  <label class="campo"><span class="rotulo">DDD</span><input class="entrada" type="text" inputmode="numeric" maxlength="2" name="ddd" value="64"></label>
+                  <label class="campo"><span class="rotulo">Número</span><input class="entrada" type="tel" inputmode="numeric" maxlength="10" name="numero" value="999990001"></label>
+                  <label class="campo"><span class="rotulo">Tipo</span><select class="entrada" name="tipo"><option selected>Celular</option><option>Fixo</option><option>Recado</option></select></label>
+                  <button type="button" class="btn-neutro" data-acao="remover-telefone" aria-label="Remover este telefone">Remover</button>
+                </div>
+              </div>
+              <button type="button" class="btn-secundario self-start" data-acao="adicionar-telefone">Adicionar telefone</button>
+            </fieldset>
+            <fieldset class="cartao m-0 flex flex-col gap-3 px-5 pt-3 pb-5">
+              <legend class="px-1.5 text-[17px] font-bold">Contatos</legend>
+              <p class="m-0 text-sm text-suave">Pessoas para avisar ou chamar: familiares, responsáveis, vizinhos.</p>
+              <div class="flex flex-col gap-3" data-lista-contatos>
+                <div class="flex flex-col gap-3 rounded-lg border border-borda p-4" data-contato>
+                  <div class="grid grid-cols-1 items-end gap-3 sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_auto]">
+                    <label class="campo"><span class="rotulo">Nome do contato</span><input class="entrada" type="text" name="contato_nome" value="José Fontes"></label>
+                    <label class="campo"><span class="rotulo">Parentesco</span><select class="entrada" name="parentesco"><option>Selecione…</option><option selected>Cônjuge</option><option>Filho ou filha</option><option>Pai ou mãe</option><option>Irmão ou irmã</option><option>Outro parente</option><option>Vizinho ou amigo</option></select></label>
+                    <button type="button" class="btn-neutro" data-acao="remover-contato" aria-label="Remover este contato">Remover contato</button>
+                  </div>
+                  <div class="flex flex-col gap-3" data-lista-telefones>
+                <div class="grid grid-cols-[5rem_minmax(0,1fr)] items-end gap-3 sm:grid-cols-[5rem_minmax(0,1fr)_9rem_auto]" data-telefone>
+                  <label class="campo"><span class="rotulo">DDD</span><input class="entrada" type="text" inputmode="numeric" maxlength="2" name="ddd" value="64"></label>
+                  <label class="campo"><span class="rotulo">Número</span><input class="entrada" type="tel" inputmode="numeric" maxlength="10" name="numero" value="999990002"></label>
+                  <label class="campo"><span class="rotulo">Tipo</span><select class="entrada" name="tipo"><option selected>Celular</option><option>Fixo</option><option>Recado</option></select></label>
+                  <button type="button" class="btn-neutro" data-acao="remover-telefone" aria-label="Remover este telefone">Remover</button>
+                </div>
+                  </div>
+                  <button type="button" class="btn-secundario self-start" data-acao="adicionar-telefone">Adicionar telefone do contato</button>
+                </div>
+              </div>
+              <button type="button" class="btn-secundario self-start" data-acao="adicionar-contato">Adicionar contato</button>
+            </fieldset>
+            <template id="modelo-telefone">
+                <div class="grid grid-cols-[5rem_minmax(0,1fr)] items-end gap-3 sm:grid-cols-[5rem_minmax(0,1fr)_9rem_auto]" data-telefone>
+                  <label class="campo"><span class="rotulo">DDD</span><input class="entrada" type="text" inputmode="numeric" maxlength="2" name="ddd"></label>
+                  <label class="campo"><span class="rotulo">Número</span><input class="entrada" type="tel" inputmode="numeric" maxlength="10" name="numero"></label>
+                  <label class="campo"><span class="rotulo">Tipo</span><select class="entrada" name="tipo"><option selected>Celular</option><option>Fixo</option><option>Recado</option></select></label>
+                  <button type="button" class="btn-neutro" data-acao="remover-telefone" aria-label="Remover este telefone">Remover</button>
+                </div>
+            </template>
+            <template id="modelo-contato">
+                <div class="flex flex-col gap-3 rounded-lg border border-borda p-4" data-contato>
+                  <div class="grid grid-cols-1 items-end gap-3 sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_auto]">
+                    <label class="campo"><span class="rotulo">Nome do contato</span><input class="entrada" type="text" name="contato_nome"></label>
+                    <label class="campo"><span class="rotulo">Parentesco</span><select class="entrada" name="parentesco"><option>Selecione…</option><option>Cônjuge</option><option>Filho ou filha</option><option>Pai ou mãe</option><option>Irmão ou irmã</option><option>Outro parente</option><option>Vizinho ou amigo</option></select></label>
+                    <button type="button" class="btn-neutro" data-acao="remover-contato" aria-label="Remover este contato">Remover contato</button>
+                  </div>
+                  <div class="flex flex-col gap-3" data-lista-telefones>
+                <div class="grid grid-cols-[5rem_minmax(0,1fr)] items-end gap-3 sm:grid-cols-[5rem_minmax(0,1fr)_9rem_auto]" data-telefone>
+                  <label class="campo"><span class="rotulo">DDD</span><input class="entrada" type="text" inputmode="numeric" maxlength="2" name="ddd"></label>
+                  <label class="campo"><span class="rotulo">Número</span><input class="entrada" type="tel" inputmode="numeric" maxlength="10" name="numero"></label>
+                  <label class="campo"><span class="rotulo">Tipo</span><select class="entrada" name="tipo"><option selected>Celular</option><option>Fixo</option><option>Recado</option></select></label>
+                  <button type="button" class="btn-neutro" data-acao="remover-telefone" aria-label="Remover este telefone">Remover</button>
+                </div>
+                  </div>
+                  <button type="button" class="btn-secundario self-start" data-acao="adicionar-telefone">Adicionar telefone do contato</button>
+                </div>
+            </template>
+          </div>
+          <footer class="sticky bottom-0 flex flex-wrap items-center justify-between gap-4 border-t border-borda bg-superficie px-6 py-4 lg:px-8">
+            <div class="flex flex-col gap-1">
+              <p class="m-0 text-base font-bold" aria-live="polite">Mínimo para salvar o paciente: <span class="numero" data-contagem="minimo">2</span> de 3</p>
+              <p class="m-0 max-w-[62ch] text-sm text-suave">Nome, prontuário e início do tratamento. O resto pode ficar para depois e vira pendência. Rascunho salvo automaticamente às 10:18.</p>
+            </div>
+            <div class="flex gap-3">
+              <button type="button" class="btn-secundario min-h-12">Salvar rascunho</button>
+              <button type="submit" class="btn-primario min-h-12" data-acao="salvar-paciente" disabled>Salvar paciente</button>
+            </div>
+          </footer>
+        </form>
+      </main>
+    </div>
+  </div>
+</body>
+</html>

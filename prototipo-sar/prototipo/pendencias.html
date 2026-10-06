@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Pendências — SAR</title>
+  <link rel="stylesheet" href="static/css/sar.css">
+  <script src="static/js/sar.js" defer></script>
+</head>
+<body>
+  <div class="flex min-h-screen">
+    <nav aria-label="Navegação principal" class="hidden w-52 shrink-0 flex-col gap-1.5 bg-menu px-4 py-6 text-white lg:flex">
+      <div class="px-3 pb-5 text-2xl font-bold tracking-wide">SAR</div>
+        <a class="menu-link" href="inicio.html">Início</a>
+        <a class="menu-link" href="cadastro.html">Cadastro</a>
+        <a class="menu-link" href="pendencias.html" aria-current="page">Pendências</a>
+        <span class="flex min-h-11 items-center px-3 text-menu-inativo">Documentos</span>
+        <span class="flex min-h-11 items-center px-3 text-menu-inativo">Relatórios</span>
+      <div class="grow"></div>
+      <div class="border-t border-white/15 px-3 pt-3 text-sm text-menu-texto">Recepção<br>Estação balcão 1</div>
+    </nav>
+    <div class="flex min-w-0 grow flex-col">
+      <header class="flex flex-wrap items-center justify-between gap-4 border-b border-borda bg-superficie px-6 py-5 lg:px-8">
+        <div class="flex flex-col gap-0.5">
+          <h1 class="m-0 text-[26px] leading-tight">Pendências</h1>
+          <p class="m-0 text-[15px] text-suave">Recepção, 15 pendências</p>
+        </div>
+        <div class="flex items-center gap-4 text-[15px] text-suave">
+          <span class="numero" data-relogio>Quarta, 30/09/2026, 10:05</span>
+          <a class="btn-neutro" href="#">Sair</a>
+        </div>
+      </header>
+      <main class="grow">
+        <div class="flex flex-col gap-4 p-6 lg:p-8">
+          <p class="m-0 max-w-[70ch] text-[15px] text-suave">Dentro de cada prioridade, a mais antiga aparece primeiro. Uma pendência some sozinha quando a causa é resolvida.</p>
+          <section aria-labelledby="g-U" class="cartao overflow-hidden">
+            <div class="flex items-center gap-2.5 px-4 py-3">
+              <h2 id="g-U" class="m-0 text-lg text-urgencia">Urgência</h2>
+              <span class="etiqueta-u numero">1</span>
+            </div>
+            <ul class="m-0 list-none p-0">
+              <li class="flex flex-wrap items-center justify-between gap-4 border-t border-linha px-4 py-3">
+                <span class="flex min-w-0 flex-col gap-0.5"><strong>Primeiro turno de hoje não confirmado</strong><span class="text-sm text-suave">Terminou às 10:00</span></span>
+                <a class="btn-secundario shrink-0" href="inicio.html">Confirmar</a>
+              </li>
+            </ul>
+          </section>
+          <section aria-labelledby="g-A" class="cartao overflow-hidden">
+            <div class="flex items-center gap-2.5 px-4 py-3">
+              <h2 id="g-A" class="m-0 text-lg text-alta">Alta</h2>
+              <span class="etiqueta-a numero">4</span>
+            </div>
+            <ul class="m-0 list-none p-0">
+              <li class="flex flex-wrap items-center justify-between gap-4 border-t border-linha px-4 py-3">
+                <span class="flex min-w-0 flex-col gap-0.5"><strong>Declaração de troca de turno a emitir: Benedita Souza Alves</strong><span class="text-sm text-suave">Do segundo turno de terça 29/09 para o de quarta 30/09</span></span>
+                <a class="btn-secundario shrink-0" href="#">Emitir</a>
+              </li>
+              <li class="flex flex-wrap items-center justify-between gap-4 border-t border-linha px-4 py-3">
+                <span class="flex min-w-0 flex-col gap-0.5"><strong>Termo de diálise extra aguardando digitalização: Edson Ferreira Matos</strong><span class="text-sm text-suave">Competência 09/2026</span></span>
+                <a class="btn-secundario shrink-0" href="#">Digitalizar</a>
+              </li>
+              <li class="flex flex-wrap items-center justify-between gap-4 border-t border-linha px-4 py-3">
+                <span class="flex min-w-0 flex-col gap-0.5"><strong>Documento aguardando conferência: cartão do SUS de Francisca Rodrigues</strong><span class="text-sm text-suave">Expira em 20 h</span></span>
+                <a class="btn-secundario shrink-0" href="#">Conferir</a>
+              </li>
+              <li class="flex flex-wrap items-center justify-between gap-4 border-t border-linha px-4 py-3">
+                <span class="flex min-w-0 flex-col gap-0.5"><strong>Pedido de titular: acesso aos dados</strong><span class="text-sm text-suave">Prazo legal em 12/10/2026</span></span>
+                <a class="btn-secundario shrink-0" href="#">Abrir</a>
+              </li>
+            </ul>
+          </section>
+          <section aria-labelledby="g-N" class="cartao overflow-hidden">
+            <div class="flex items-center gap-2.5 px-4 py-3">
+              <h2 id="g-N" class="m-0 text-lg text-normal">Normal</h2>
+              <span class="etiqueta-n numero">10</span>
+            </div>
+            <ul class="m-0 list-none p-0">
+              <li class="flex flex-wrap items-center justify-between gap-4 border-t border-linha px-4 py-3">
+                <span class="flex min-w-0 flex-col gap-0.5"><strong>Cadastro incompleto: Carlos Henrique Dias</strong><span class="text-sm text-suave">CPF, sexo e naturalidade</span></span>
+                <a class="btn-secundario shrink-0" href="cadastro.html">Completar</a>
+              </li>
+              <li class="flex flex-wrap items-center justify-between gap-4 border-t border-linha px-4 py-3">
+                <span class="flex min-w-0 flex-col gap-0.5"><strong>Documento do checklist faltante: Carlos Henrique Dias</strong><span class="text-sm text-suave">Comprovante de endereço</span></span>
+                <a class="btn-secundario shrink-0" href="#">Digitalizar</a>
+              </li>
+              <li class="flex flex-wrap items-center justify-between gap-4 border-t border-linha px-4 py-3">
+                <span class="flex min-w-0 flex-col gap-0.5"><strong>Cadastro incompleto: 4 outros pacientes</strong><span class="text-sm text-suave">Sexo e naturalidade, vindos da carga inicial</span></span>
+                <a class="btn-secundario shrink-0" href="#">Ver lista</a>
+              </li>
+              <li class="flex flex-wrap items-center justify-between gap-4 border-t border-linha px-4 py-3">
+                <span class="flex min-w-0 flex-col gap-0.5"><strong>Documento do checklist faltante: 3 outros pacientes</strong><span class="text-sm text-suave">Cartão do SUS ou comprovante de endereço</span></span>
+                <a class="btn-secundario shrink-0" href="#">Ver lista</a>
+              </li>
+              <li class="flex flex-wrap items-center justify-between gap-4 border-t border-linha px-4 py-3">
+                <span class="flex min-w-0 flex-col gap-0.5"><strong>Rascunho de cadastro próximo do descarte</strong><span class="text-sm text-suave">Será descartado amanhã</span></span>
+                <a class="btn-secundario shrink-0" href="cadastro.html">Retomar</a>
+              </li>
+            </ul>
+          </section>
+        </div>
+      </main>
+    </div>
+  </div>
+</body>
+</html>
