@@ -1,0 +1,8 @@
+# Fim de linha LF em tudo que é texto: os scripts rodam no Linux (CI e servidor).
+* text=auto eol=lf
+
+*.docx  binary
+*.zip   binary
+*.woff2 binary
+*.png   binary
+*.ico   binary
