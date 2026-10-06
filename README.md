@@ -1,6 +1,6 @@
 # SAR — Sistema de Apoio à Recepção
 
-Sistema web de apoio à recepção do Centro de Uro-Nefrologia de Jataí-GO. **Não é prontuário eletrônico.**
+Sistema web de apoio à recepção de clinica médica. **Não se define como prontuário eletrônico.**
 Todo dado de paciente é dado pessoal sensível de saúde (LGPD, art. 11): nenhum dado real entra neste
 repositório, nos testes ou nos logs.
 
