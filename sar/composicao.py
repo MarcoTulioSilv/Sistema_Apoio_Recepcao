@@ -12,6 +12,9 @@ from enum import Enum
 
 from sqlalchemy import Engine
 
+from sar.modulo_01_acesso.contrato import AuditService
+from sar.modulo_01_acesso.servicos import ServicoAuditoria
+from sar.modulo_08_dados.cadeia import gravar_encadeado
 from sar.modulo_08_dados.cifra import CifraAesGcm
 from sar.modulo_08_dados.relogio import RelogioSistema
 from sar.modulo_08_dados.uow import ExecutorSQL, FabricaRepositorio, GravadorAuditoria, UnidadeDeTrabalhoSQL
@@ -41,10 +44,11 @@ class Componentes:
     cifra: Cifra
     barramento: Barramento
     executar: ExecutorDeOperacao
+    auditoria: AuditService
 
 
-def compor(engine: Engine, chave_mestra: bytes, gravar_auditoria: GravadorAuditoria) -> Componentes:
-    """O gravador de auditoria é obrigatório: nenhuma operação confirma sem gravar a sua trilha (DD-03)."""
+def compor(engine: Engine, chave_mestra: bytes, gravar_auditoria: GravadorAuditoria = gravar_encadeado) -> Componentes:
+    """O gravador padrão é a cadeia encadeada (DD-03); outro gravador só nos testes de unidade, sem banco."""
     barramento = Barramento()
     repositorios: dict[type, FabricaRepositorio] = {}
 
@@ -56,4 +60,5 @@ def compor(engine: Engine, chave_mestra: bytes, gravar_auditoria: GravadorAudito
         cifra=CifraAesGcm(chave_mestra),
         barramento=barramento,
         executar=ExecutorSQL(nova_unidade),
+        auditoria=ServicoAuditoria(),
     )

@@ -11,7 +11,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
-from sqlalchemy import Engine
+from sqlalchemy import Engine, text
 
 from sar.modulo_08_dados.banco import ConfigBanco, criar_engine
 from sar.nucleo.logs import RUIDOSOS
@@ -42,6 +42,44 @@ def engine_migracao() -> Iterator[Engine]:
     engine = criar_engine(ConfigBanco.do_ambiente("sar_migracao"))
     yield engine
     engine.dispose()
+
+
+@pytest.fixture(scope="session")
+def engine_web() -> Iterator[Engine]:
+    """O usuário de banco do processo web (DD-58), com os privilégios de produção."""
+    engine = criar_engine(ConfigBanco.do_ambiente("sar_web"))
+    yield engine
+    engine.dispose()
+
+
+@pytest.fixture(scope="session")
+def engine_worker() -> Iterator[Engine]:
+    """O usuário de banco do worker (DD-58)."""
+    engine = criar_engine(ConfigBanco.do_ambiente("sar_worker"))
+    yield engine
+    engine.dispose()
+
+
+ZERAR_TRILHA = (
+    "DELETE FROM aviso_integridade",
+    "DELETE FROM auditoria_ancora",
+    "DELETE FROM auditoria_corte",
+    "DELETE FROM auditoria",
+    "UPDATE auditoria_cabeca SET ultimo_registro_id = 0, ultimo_hash = REPEAT('0', 64) WHERE id = 1",
+)
+
+
+@pytest.fixture
+def trilha_zerada(engine_migracao: Engine) -> Iterator[Engine]:
+    """Cadeia vazia no começo e no fim do teste. A aplicação nunca apaga a trilha; só o usuário de migração,
+    no banco de teste."""
+    with engine_migracao.begin() as c:
+        for comando in ZERAR_TRILHA:
+            c.execute(text(comando))
+    yield engine_migracao
+    with engine_migracao.begin() as c:
+        for comando in ZERAR_TRILHA:
+            c.execute(text(comando))
 
 
 @pytest.fixture(autouse=True)
