@@ -23,3 +23,8 @@ relatorios/
 
 # Protótipo
 docs/prototipo/node_modules/
+
+# Instruções locais do Claude Code: fora do repositório
+CLAUDE.md
+
+.env
