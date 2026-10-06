@@ -1,0 +1,7 @@
+{% extends "base.html" %}
+{% block titulo %}SAR — erro{% endblock %}
+{% block conteudo %}
+  <h1>Não foi possível concluir</h1>
+  <p>Ocorreu um erro inesperado. Tente de novo; se continuar, avise o TI informando o código abaixo.</p>
+  <p data-sobre="requisicao">Código: {{ g.requisicao_id }}</p>
+{% endblock %}

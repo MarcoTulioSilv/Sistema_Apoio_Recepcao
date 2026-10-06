@@ -1,0 +1,135 @@
+/* SAR — estilos da interface (Tailwind v4). Fonte deste arquivo: src/sar.css.
+   Gerar static/css/sar.css com o executável standalone do Tailwind (AD-05; ver CLAUDE.md)
+   Sem CDN e sem fonte externa: a CSP do SAR só aceita recursos do próprio servidor (DD-09). */
+@import "tailwindcss";
+@source "../modelos";
+
+@font-face {
+  font-family: "Atkinson Hyperlegible";
+  font-weight: 400;
+  font-display: swap;
+  src: url("../fonts/atkinson-hyperlegible-latin-400-normal.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Atkinson Hyperlegible";
+  font-weight: 700;
+  font-display: swap;
+  src: url("../fonts/atkinson-hyperlegible-latin-700-normal.woff2") format("woff2");
+}
+
+@theme {
+  --font-sans: "Atkinson Hyperlegible", system-ui, sans-serif;
+
+  --color-fundo: #f4f3ef;
+  --color-superficie: #ffffff;
+  --color-borda: #d9d6ce;
+  --color-borda-forte: #b9b5aa;
+  --color-linha: #eceae4;
+  --color-tinta: #1b2230;
+  --color-suave: #4e5663;
+
+  --color-acao: #1d4e89;
+  --color-acao-escura: #123763;
+  --color-acao-clara: #e4ecf6;
+
+  --color-urgencia: #8e1b14;
+  --color-urgencia-texto: #5c1510;
+  --color-urgencia-fundo: #fbe9e7;
+  --color-urgencia-borda: #e8b9b3;
+  --color-alta: #6e4400;
+  --color-alta-fundo: #fff1d6;
+  --color-normal: #3a4250;
+  --color-normal-fundo: #eceef2;
+
+  --color-ausente: #6b2e00;
+  --color-ausente-borda: #8a3b00;
+  --color-ausente-fundo: #fde7d6;
+
+  --color-menu: #1b2230;
+  --color-menu-texto: #dde3ec;
+  --color-menu-inativo: #8e99aa;
+}
+
+@layer base {
+  body { @apply bg-fundo text-tinta font-sans antialiased; }
+  :focus-visible { @apply outline-3 outline-offset-2 outline-acao; }
+  a { @apply text-acao; }
+  .numero { font-variant-numeric: tabular-nums; }
+}
+
+/* Componentes da casa como utilitários do Tailwind v4 (@utility), para poderem ser combinados
+   com variantes (hover:, lg:, disabled:) e reaproveitados por @apply. */
+
+/* Botões: 44 px de altura mínima */
+@utility btn { @apply inline-flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-lg px-4 font-bold no-underline transition-colors; }
+@utility btn-primario { @apply btn bg-acao text-white hover:bg-acao-escura disabled:cursor-not-allowed disabled:bg-borda disabled:text-suave; }
+@utility btn-secundario { @apply btn border border-acao bg-superficie text-acao hover:bg-acao-clara; }
+@utility btn-neutro {
+  @apply btn border border-borda bg-superficie font-normal text-tinta hover:border-borda-forte;
+  &[aria-pressed="true"] { @apply border-ausente-borda bg-ausente-fundo font-bold text-ausente; }
+}
+@utility btn-urgente { @apply btn bg-urgencia text-white hover:bg-urgencia-texto; }
+
+/* Etiquetas de pendência por prioridade */
+@utility etiqueta { @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-sm; }
+@utility etiqueta-u { @apply etiqueta bg-urgencia-fundo text-urgencia; }
+@utility etiqueta-a { @apply etiqueta bg-alta-fundo text-alta; }
+@utility etiqueta-n { @apply etiqueta bg-normal-fundo text-normal; }
+
+@utility cartao { @apply rounded-xl border border-borda bg-superficie; }
+
+/* Campos de formulário */
+@utility campo { @apply flex flex-col gap-1.5; }
+@utility rotulo { @apply text-sm font-bold; }
+@utility entrada { @apply min-h-11 w-full rounded-lg border border-borda-forte bg-superficie px-3 text-base text-tinta aria-invalid:border-2 aria-invalid:border-urgencia disabled:bg-fundo; }
+@utility ajuda-erro { @apply min-h-5 text-sm text-urgencia; }
+
+/* Tabelas em grade */
+@utility grade-cabecalho { @apply grid gap-3 px-4 py-2 text-sm font-bold text-suave; }
+@utility grade-linha { @apply grid items-center gap-3 border-t border-linha px-4 py-2.5; }
+
+/* Menu lateral */
+@utility menu-link {
+  @apply flex min-h-11 items-center rounded-lg px-3 text-menu-texto no-underline hover:bg-white/10;
+  &[aria-current="page"] { @apply bg-superficie font-bold text-tinta; }
+}
+
+/* Quadros da preparação do turno: presentes e faltantes */
+@utility quadro {
+  @apply flex flex-col gap-3 rounded-xl border-2 border-dashed border-transparent bg-fundo p-3 transition-colors;
+  &[data-zona="faltantes"] { @apply bg-ausente-fundo/40; }
+  &[data-sobre="true"] { @apply border-acao bg-acao-clara; }
+}
+@utility grade-cartoes { @apply m-0 grid list-none grid-cols-[repeat(auto-fill,minmax(13rem,1fr))] gap-2 p-0; }
+@utility cartao-paciente {
+  @apply flex cursor-grab select-none flex-col items-start gap-1 rounded-lg border border-borda bg-superficie p-3 active:cursor-grabbing;
+  &[data-situacao="faltante"] { @apply border-2 border-ausente-borda bg-ausente-fundo; }
+  &[data-arrastando="true"] { @apply opacity-50; }
+  [data-travado] & { @apply cursor-default; }
+}
+@utility btn-mover { @apply mt-auto inline-flex min-h-11 cursor-pointer items-center rounded-lg border border-borda-forte bg-superficie px-3 text-sm font-bold text-acao hover:bg-acao-clara; }
+
+/* Sessão de turno na tela inicial (DD-76) */
+@utility sessao {
+  @apply flex flex-col gap-4 rounded-xl border border-borda bg-superficie p-4;
+  &[data-estado="vencida"] { @apply border-2 border-urgencia-borda; }
+}
+@utility selo-sessao {
+  @apply rounded-full bg-normal-fundo px-3 py-1 text-sm font-bold text-normal;
+  [data-estado="preparacao"] & { @apply bg-acao-clara text-acao; }
+  [data-estado="aberta"] & { @apply bg-acao-clara text-acao; }
+  [data-estado="liberada"] & { @apply bg-acao text-white; }
+  [data-estado="vencida"] & { @apply bg-urgencia text-white; }
+}
+@utility passos {
+  @apply m-0 flex list-none flex-wrap gap-2 p-0 text-sm text-suave;
+  & > li { @apply rounded-full border border-borda px-3 py-1; }
+  & > li[data-feito] { @apply border-acao-clara bg-acao-clara text-acao; }
+  & > li[aria-current="step"] { @apply border-acao bg-acao font-bold text-white; }
+}
+@utility simulador { @apply m-0 flex flex-wrap items-center gap-2 rounded-xl border border-dashed border-borda-forte px-4 pt-1 pb-3; }
+@utility opcao-simulador { @apply inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-lg border border-borda bg-superficie px-3 has-checked:border-acao has-checked:font-bold; }
+
+/* Guia de componentes (só na página do guia) */
+@utility codigo { @apply m-0 overflow-x-auto rounded-lg bg-menu p-3 text-[13px] leading-relaxed text-menu-texto; }
+@utility amostra { @apply flex flex-wrap items-start gap-3 rounded-lg border border-dashed border-borda-forte bg-fundo p-4; }

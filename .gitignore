@@ -1,0 +1,30 @@
+# Ambiente
+.venv/
+__pycache__/
+*.egg-info/
+build/
+
+# Segredos: nunca no repositório (DDS §3.9, §12.3). Só o leia-me é versionado.
+segredos/*
+!segredos/LEIA-ME.md
+
+# Gerados
+sar/web/static/css/sar.css
+bin/
+.coverage
+coverage.xml
+htmlcov/
+relatorios/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.hypothesis/
+.import_linter_cache/
+
+# Protótipo
+docs/prototipo/node_modules/
+
+# Instruções locais do Claude Code: fora do repositório
+CLAUDE.md
+
+.env
