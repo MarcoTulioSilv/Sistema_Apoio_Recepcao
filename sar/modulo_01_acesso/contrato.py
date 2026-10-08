@@ -9,9 +9,30 @@ from enum import Enum
 from typing import Protocol
 
 from sar.modulo_01_acesso.matriz import MATRIZ, Acesso, Celula, Entrada
-from sar.nucleo.contexto import Contexto
-from sar.nucleo.erros import AcessoNegado
+from sar.nucleo.contexto import Contexto, Perfil
+from sar.nucleo.erros import AcessoNegado, ErroSAR
 from sar.nucleo.uow import UnidadeDeTrabalho
+
+
+# ------------------------------------------------------------------ autenticação (DDS §5.2, §5.4)
+class CredencialInvalida(AcessoNegado):
+    """Mensagem sempre a mesma: login inexistente, senha errada, usuário inativo ou bloqueado. O motivo real
+    vai só para a trilha (§5.2)."""
+
+
+class TermoPendente(AcessoNegado):
+    """Senha certa, mas sem termo de ciência registrado pelo TI (DEC-47)."""
+
+
+class TrocaDeSenhaExigida(ErroSAR):
+    """Senha certa e provisória: repetir a entrada informando a nova senha."""
+
+
+@dataclass(frozen=True, slots=True)
+class UsuarioAutenticado:
+    usuario_id: int
+    perfil: Perfil
+    nome: str
 
 
 class PermissionGuard:
@@ -127,6 +148,15 @@ class AuditService(Protocol):
         """Sistema. Apaga a trilha com mais de 5 anos (DEC-45) e grava o ponto de corte (RNF-628). Devolve
         quantos registros saíram."""
         ...
+
+
+class AuthService(Protocol):
+    def entrar(self, login: str, senha: str, origem: str, nova_senha: str | None = None) -> UsuarioAutenticado:
+        """CredencialInvalida (mensagem única), TermoPendente, TrocaDeSenhaExigida ou RegraViolada (nova senha
+        fraca, DD-83). Toda tentativa entra na trilha, inclusive as falhas (§4.1)."""
+        ...
+
+    def trocar_propria_senha(self, contexto: Contexto, senha_atual: str, nova_senha: str) -> None: ...
 
 
 class IntegridadeService(Protocol):

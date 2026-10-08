@@ -3,12 +3,17 @@
 from __future__ import annotations
 
 import re
+import unicodedata
 from collections.abc import Iterable, Sequence
 from datetime import datetime
+from functools import cache
+from itertools import pairwise
+from pathlib import Path
 
 from sar.modulo_01_acesso.contrato import ResultadoVerificacao
 from sar.modulo_08_dados.canonico import calcular_hash, json_do_registro
 from sar.modulo_08_dados.interfaces.trilha import Ancora, Cabeca, Elo
+from sar.nucleo.erros import RegraViolada
 
 
 def json_do_elo(elo: Elo) -> str:
@@ -91,3 +96,60 @@ def normalizar_codigo(texto: str) -> str | None:
     exatamente 16 hexadecimais."""
     limpo = re.sub(r"[\s-]", "", texto).lower()
     return limpo if re.fullmatch(rf"[0-9a-f]{{{TAMANHO_CODIGO}}}", limpo) else None
+
+
+# ------------------------------------------------------------------ senha (DD-83) e bloqueio (§5.2)
+SENHA_MINIMO, SENHA_MAXIMO, SENHA_MAXIMO_BYTES = 8, 64, 72  # 72 bytes: limite do bcrypt
+_TECLADO = ("qwertyuiop", "asdfghjkl", "zxcvbnm", "1234567890")
+
+
+@cache
+def _senhas_fracas() -> frozenset[str]:
+    linhas = (Path(__file__).parent / "senhas_fracas.txt").read_text(encoding="utf-8").splitlines()
+    return frozenset(linha.strip() for linha in linhas if linha.strip() and not linha.startswith("#"))
+
+
+def _normalizar(texto: str) -> str:
+    sem_acento = unicodedata.normalize("NFKD", texto).encode("ascii", "ignore").decode("ascii")
+    return re.sub(r"\s+", "", sem_acento.lower())
+
+
+def _sequencia(texto: str) -> bool:
+    """'12345678', 'hgfedcba', 'qwertyui': caracteres consecutivos, ou um trecho de uma fileira do teclado."""
+    passos = {ord(b) - ord(a) for a, b in pairwise(texto)}
+    if passos in ({1}, {-1}):
+        return True
+    return any(texto in fileira or texto in fileira[::-1] for fileira in _TECLADO)
+
+
+def _repeticao(texto: str) -> bool:
+    """'aaaaaaaa', 'abababab', 'abcabcab': o mesmo pedaço de até 3 caracteres repetido."""
+    return any(texto == (texto[:n] * len(texto))[: len(texto)] for n in (1, 2, 3))
+
+
+def validar_senha(senha: str, login: str, nome: str) -> None:
+    """Recusa só as muito fracas (DD-83); nenhuma regra de composição. RegraViolada com o motivo."""
+    if not SENHA_MINIMO <= len(senha) <= SENHA_MAXIMO or len(senha.encode()) > SENHA_MAXIMO_BYTES:
+        raise RegraViolada("senha.tamanho", {"minimo": SENHA_MINIMO, "maximo": SENHA_MAXIMO})
+    normalizada = _normalizar(senha)
+    base = re.sub(r"[\W\d_]+$", "", normalizada)  # "Brasil2024!" → "brasil"
+    if (
+        normalizada in _senhas_fracas()
+        or base in _senhas_fracas()
+        or _sequencia(normalizada)
+        or _repeticao(normalizada)
+    ):
+        raise RegraViolada("senha.fraca")
+    partes = [p for p in re.split(r"[^a-z0-9]+", _normalizar(login)) if len(p) >= 3] + [
+        p for p in (_normalizar(n) for n in re.split(r"[\s\W]+", nome)) if len(p) >= 4
+    ]
+    if any(parte in normalizada for parte in partes):
+        raise RegraViolada("senha.contem_nome")
+
+
+def minutos_de_bloqueio(tentativas: int, limite: int, inicial: int, teto: int) -> int | None:
+    """Após `limite` falhas seguidas, bloqueio de `inicial` minutos, que dobra a cada nova falha até o teto
+    (§5.2). None enquanto não chega ao limite."""
+    if tentativas < limite:
+        return None
+    return min(inicial << min(tentativas - limite, 16), teto)  # dobra a cada falha: inicial × 2^n

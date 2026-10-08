@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping
+from dataclasses import dataclass
+from datetime import timedelta
 
 from sar.modulo_01_acesso.contrato import (
     AuditService,
@@ -10,15 +12,30 @@ from sar.modulo_01_acesso.contrato import (
     AvisoSimples,
     CodigoIntegridade,
     Conferencia,
+    CredencialInvalida,
     PermissionGuard,
     ResultadoVerificacao,
+    TermoPendente,
+    TrocaDeSenhaExigida,
+    UsuarioAutenticado,
 )
-from sar.modulo_01_acesso.regras import cinco_anos_antes, codigo_do_hash, normalizar_codigo, verificar_elos
+from sar.modulo_01_acesso.regras import (
+    cinco_anos_antes,
+    codigo_do_hash,
+    minutos_de_bloqueio,
+    normalizar_codigo,
+    validar_senha,
+    verificar_elos,
+)
+from sar.modulo_01_acesso.senhas import Hasher
 from sar.modulo_08_dados.canonico import HASH_INICIAL, serializar_alteracoes
 from sar.modulo_08_dados.interfaces.trilha import RepositorioExpurgo, RepositorioTrilha
-from sar.nucleo.contexto import Contexto
-from sar.nucleo.erros import AcessoNegado, NaoEncontrado, RegraViolada
+from sar.modulo_08_dados.interfaces.usuarios import DadosUsuario, RepositorioUsuario
+from sar.nucleo.contexto import Contexto, Perfil
+from sar.nucleo.erros import AcessoNegado, ErroSAR, NaoEncontrado, RegraViolada
 from sar.nucleo.eventos import CadeiaDivergente
+from sar.nucleo.logs import novo_requisicao_id, requisicao_atual
+from sar.nucleo.parametros import LeitorParametros
 from sar.nucleo.portas import Relogio
 from sar.nucleo.uow import ExecutorDeOperacao, RegistroAuditoria, UnidadeDeTrabalho
 
@@ -222,3 +239,111 @@ class ServicoIntegridade:
             return resultado
 
         return self._executar(operacao)
+
+
+# ------------------------------------------------------------------ autenticação (DDS §5.2, DD-83)
+@dataclass(frozen=True, slots=True)
+class _Desfecho:
+    """O que a operação de entrada decidiu. Falha também é gravada (contador, bloqueio e trilha): por isso a
+    operação confirma e o erro só é levantado depois do commit."""
+
+    usuario: UsuarioAutenticado | None = None
+    erro: type[ErroSAR] | None = None
+
+
+def _inteiro(valor: object) -> int:
+    if not isinstance(valor, int) or isinstance(valor, bool):
+        raise TypeError("parâmetro inteiro esperado")
+    return valor
+
+
+class ServicoAutenticacao:
+    def __init__(
+        self,
+        executar: ExecutorDeOperacao,
+        auditoria: AuditService,
+        parametros: LeitorParametros,
+        relogio: Relogio,
+        hasher: Hasher,
+    ) -> None:
+        self._executar = executar
+        self._auditoria = auditoria
+        self._parametros = parametros
+        self._relogio = relogio
+        self._hasher = hasher
+
+    def entrar(self, login: str, senha: str, origem: str, nova_senha: str | None = None) -> UsuarioAutenticado:
+        """CredencialInvalida (sempre a mesma), TermoPendente, TrocaDeSenhaExigida ou RegraViolada (nova senha
+        fraca). A sessão é criada sobre o usuário autenticado (etapa 5b)."""
+        agora = self._relogio.agora()
+        limite = _inteiro(self._parametros.valor("login_tentativas"))
+        inicial = _inteiro(self._parametros.valor("login_bloqueio_inicial"))
+        teto = _inteiro(self._parametros.valor("login_bloqueio_teto"))
+        requisicao = requisicao_atual() or novo_requisicao_id()
+
+        def falha(uow: UnidadeDeTrabalho, contexto: Contexto, motivo: str, erro: type[ErroSAR]) -> _Desfecho:
+            entidade_id = str(contexto.usuario_id) if contexto.usuario_id else None
+            self._auditoria.registrar(uow, contexto, "acesso.sessao.entrar", "usuario", entidade_id, motivo=motivo)
+            return _Desfecho(erro=erro)
+
+        def operacao(uow: UnidadeDeTrabalho) -> _Desfecho:
+            usuarios = uow.repositorio(RepositorioUsuario)
+            usuario = usuarios.por_login(login.strip())
+            # Uma verificação bcrypt em todo caminho: o tempo não revela se o login existe (§5.2).
+            confere = self._hasher.conferir(senha, usuario.senha_hash if usuario else None)
+            if usuario is None:
+                # O que foi digitado no login não vai para a trilha: pode ser uma senha digitada no campo errado.
+                anonimo = Contexto.sistema(origem, agora, requisicao)
+                return falha(uow, anonimo, "falha.login_inexistente", CredencialInvalida)
+            contexto = Contexto(usuario.id, Perfil(usuario.perfil), None, origem, agora, requisicao)
+            if not usuario.ativo:
+                return falha(uow, contexto, "falha.inativo", CredencialInvalida)
+            if usuario.bloqueado_ate is not None and agora < usuario.bloqueado_ate:
+                return falha(uow, contexto, "falha.bloqueado", CredencialInvalida)  # não conta nova falha
+            if not confere:
+                tentativas = usuarios.incrementar_falhas(usuario.id)
+                minutos = minutos_de_bloqueio(tentativas, limite, inicial, teto)
+                usuarios.definir_bloqueio(usuario.id, agora + timedelta(minutes=minutos) if minutos else None)
+                motivo = f"falha.senha_incorreta; bloqueio de {minutos} min" if minutos else "falha.senha_incorreta"
+                return falha(uow, contexto, motivo, CredencialInvalida)
+            if usuario.tentativas_falhas or usuario.bloqueado_ate:
+                usuarios.zerar_falhas(usuario.id)
+            if usuario.termo_ciencia_em is None:
+                return falha(uow, contexto, "falha.termo_pendente", TermoPendente)  # DEC-47
+            if usuario.deve_trocar_senha:
+                if nova_senha is None:
+                    return falha(uow, contexto, "falha.troca_exigida", TrocaDeSenhaExigida)
+                self._gravar_nova_senha(uow, contexto, usuario, nova_senha)
+            self._auditoria.registrar(uow, contexto, "acesso.sessao.entrar", "usuario", str(usuario.id))
+            return _Desfecho(usuario=UsuarioAutenticado(usuario.id, Perfil(usuario.perfil), usuario.nome))
+
+        desfecho = self._executar(operacao)
+        if desfecho.erro is not None:
+            raise desfecho.erro()
+        if desfecho.usuario is None:  # sem erro, a operação sempre devolve o usuário
+            raise RuntimeError("entrada sem desfecho")
+        return desfecho.usuario
+
+    def trocar_propria_senha(self, contexto: Contexto, senha_atual: str, nova_senha: str) -> None:
+        GUARDA.exigir(contexto, "acesso.senha.trocar_propria")
+        usuario_id = contexto.usuario_id
+        if usuario_id is None:
+            raise AcessoNegado()
+
+        def operacao(uow: UnidadeDeTrabalho) -> bool:
+            usuario = uow.repositorio(RepositorioUsuario).por_id(usuario_id)
+            if usuario is None or not self._hasher.conferir(senha_atual, usuario.senha_hash):
+                return False
+            self._gravar_nova_senha(uow, contexto, usuario, nova_senha)
+            return True
+
+        if not self._executar(operacao):
+            raise CredencialInvalida()
+
+    def _gravar_nova_senha(self, uow: UnidadeDeTrabalho, contexto: Contexto, usuario: DadosUsuario, nova: str) -> None:
+        validar_senha(nova, usuario.login, usuario.nome)  # DD-83
+        if self._hasher.conferir(nova, usuario.senha_hash):
+            raise RegraViolada("senha.igual_a_atual")
+        uow.repositorio(RepositorioUsuario).trocar_senha(usuario.id, self._hasher.gerar(nova), deve_trocar=False)
+        # "Sim, sem valores" (§4.1): nem a senha nem o hash entram na trilha.
+        self._auditoria.registrar(uow, contexto, "acesso.senha.trocar_propria", "usuario", str(usuario.id))

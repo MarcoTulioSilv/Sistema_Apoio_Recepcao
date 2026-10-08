@@ -12,17 +12,25 @@ from enum import Enum
 
 from sqlalchemy import Engine
 
-from sar.modulo_01_acesso.contrato import AuditService, IntegridadeService
-from sar.modulo_01_acesso.servicos import ServicoAuditoria, ServicoIntegridade, manipulador_aviso_integridade
+from sar.modulo_01_acesso.contrato import AuditService, AuthService, IntegridadeService
+from sar.modulo_01_acesso.senhas import Hasher
+from sar.modulo_01_acesso.servicos import (
+    ServicoAuditoria,
+    ServicoAutenticacao,
+    ServicoIntegridade,
+    manipulador_aviso_integridade,
+)
 from sar.modulo_06_configuracao.contrato import ConfiguracaoService
 from sar.modulo_06_configuracao.servicos import LeitorParametrosSQL, ServicoConfiguracao
 from sar.modulo_08_dados.cadeia import gravar_encadeado
 from sar.modulo_08_dados.cifra import CifraAesGcm
 from sar.modulo_08_dados.interfaces.parametros import RepositorioParametro
 from sar.modulo_08_dados.interfaces.trilha import RepositorioExpurgo, RepositorioTrilha
+from sar.modulo_08_dados.interfaces.usuarios import RepositorioUsuario
 from sar.modulo_08_dados.relogio import RelogioSistema
 from sar.modulo_08_dados.repositorios.parametros import RepositorioParametroSQL
 from sar.modulo_08_dados.repositorios.trilha import RepositorioExpurgoSQL, RepositorioTrilhaSQL
+from sar.modulo_08_dados.repositorios.usuarios import RepositorioUsuarioSQL
 from sar.modulo_08_dados.uow import ExecutorSQL, FabricaRepositorio, GravadorAuditoria, UnidadeDeTrabalhoSQL
 from sar.nucleo.eventos import Barramento, CadeiaDivergente
 from sar.nucleo.parametros import LeitorParametros, VerificadorUso
@@ -50,6 +58,7 @@ REPOSITORIOS: dict[type, FabricaRepositorio] = {
     RepositorioTrilha: RepositorioTrilhaSQL,
     RepositorioExpurgo: RepositorioExpurgoSQL,
     RepositorioParametro: RepositorioParametroSQL,
+    RepositorioUsuario: RepositorioUsuarioSQL,
 }
 
 
@@ -88,6 +97,7 @@ class Componentes:
     integridade: IntegridadeService
     parametros: LeitorParametros
     configuracao: ConfiguracaoService
+    autenticacao: AuthService
 
 
 # Verificadores de uso dos parâmetros imutáveis (DD-51). A data de implantação ganha o seu com a sessão
@@ -100,6 +110,7 @@ def compor(engine: Engine, chave_mestra: bytes, gravar_auditoria: GravadorAudito
     barramento = montar_barramento(relogio)
     executar = montar_executor(engine, barramento, gravar_auditoria)
     auditoria = ServicoAuditoria(executar)
+    parametros = LeitorParametrosSQL(executar)
     return Componentes(
         relogio=relogio,
         cifra=CifraAesGcm(chave_mestra),
@@ -107,6 +118,7 @@ def compor(engine: Engine, chave_mestra: bytes, gravar_auditoria: GravadorAudito
         executar=executar,
         auditoria=auditoria,
         integridade=ServicoIntegridade(executar, auditoria),
-        parametros=LeitorParametrosSQL(executar),
+        parametros=parametros,
         configuracao=ServicoConfiguracao(executar, auditoria, VERIFICADORES_USO),
+        autenticacao=ServicoAutenticacao(executar, auditoria, parametros, relogio, Hasher()),
     )
