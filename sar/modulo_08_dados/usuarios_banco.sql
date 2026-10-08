@@ -51,7 +51,6 @@ GRANT INSERT ON sar.emissao_documento  TO 'sar_web'@'%';
 -- Trilha de auditoria: inserção e avanço da cabeça; nunca alteração nem exclusão (RNF-609)
 GRANT INSERT ON sar.auditoria                                       TO 'sar_web'@'%';
 GRANT UPDATE (ultimo_registro_id, ultimo_hash) ON sar.auditoria_cabeca TO 'sar_web'@'%';
-GRANT UPDATE (anotada_em, anotada_por) ON sar.auditoria_ancora      TO 'sar_web'@'%';   -- pendência 20
 GRANT UPDATE (encerrado_em, encerrado_por, explicacao) ON sar.aviso_integridade TO 'sar_web'@'%';
 
 -- Documento imutável (INV-06): arquivo, hash, chave e metadados de captura nunca mudam.

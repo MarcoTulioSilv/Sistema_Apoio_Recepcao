@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime
+from enum import Enum
 from typing import Protocol
 
 from sar.nucleo.contexto import Contexto
@@ -35,6 +36,22 @@ class AvisoDiagnostico(AvisoSimples):
     registro_divergente_id: int
 
 
+@dataclass(frozen=True, slots=True)
+class CodigoIntegridade:
+    """O que sai no rodapé dos relatórios e documentos emitidos (DD-86): o registro da âncora mais recente, o
+    código (16 hexadecimais em quatro blocos) e quando a âncora foi registrada. A data é formatada na borda."""
+
+    registro_id: int
+    codigo: str
+    registrada_em: datetime
+
+
+class Conferencia(str, Enum):
+    CONFERE = "confere"
+    NAO_CONFERE = "nao_confere"  # a trilha atual não é a que existia quando o documento saiu
+    SEM_REGISTRO = "sem_registro"  # nem o registro nem a âncora existem mais (expurgo de 5 anos)
+
+
 class AuditService(Protocol):
     def registrar(
         self,
@@ -56,6 +73,10 @@ class AuditService(Protocol):
         (§13.1). Grava âncora e aviso: roda no processo do worker (DD-58)."""
         ...
 
+    def codigo_vigente(self, uow: UnidadeDeTrabalho) -> CodigoIntegridade | None:
+        """Para o rodapé: chamado pelo MOD-05 dentro da operação de emissão. None antes da primeira âncora."""
+        ...
+
     def expurgar(self, contexto: Contexto) -> int:
         """Sistema. Apaga a trilha com mais de 5 anos (DEC-45) e grava o ponto de corte (RNF-628). Devolve
         quantos registros saíram."""
@@ -71,6 +92,7 @@ class IntegridadeService(Protocol):
         """Só a administração, com a explicação recebida (DEC-43)."""
         ...
 
-    def anotar_ancora(self, contexto: Contexto, ancora_id: int) -> None:
-        """A administração registra que anotou a âncora fora do sistema (§13.2)."""
+    def conferir_codigo(self, contexto: Contexto, registro_id: int, codigo: str) -> Conferencia:
+        """Administração ou TI, numa investigação: o código do rodapé de um documento guardado confere com a
+        trilha atual? (DD-86). Auditada."""
         ...

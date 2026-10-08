@@ -53,14 +53,7 @@ def _elo(linha: Auditoria) -> Elo:
 
 
 def _ancora(linha: AuditoriaAncora) -> Ancora:
-    return Ancora(
-        linha.id,
-        linha.ate_registro_id,
-        linha.hash,
-        _utc(linha.registrada_em),
-        _opcional_utc(linha.anotada_em),
-        linha.anotada_por,
-    )
+    return Ancora(linha.id, linha.ate_registro_id, linha.hash, _utc(linha.registrada_em))
 
 
 def _aviso(linha: AvisoIntegridade) -> Aviso:
@@ -118,8 +111,17 @@ class RepositorioTrilhaSQL:
         )
         return [_ancora(linha) for linha in linhas]
 
-    def ancora(self, id: int) -> Ancora | None:
-        linha = self._s.get(AuditoriaAncora, id)
+    def ancora_mais_recente(self) -> Ancora | None:
+        linha = self._s.scalars(select(AuditoriaAncora).order_by(AuditoriaAncora.id.desc()).limit(1)).first()
+        return _ancora(linha) if linha is not None else None
+
+    def ancora_do_registro(self, registro_id: int) -> Ancora | None:
+        linha = self._s.scalars(
+            select(AuditoriaAncora)
+            .where(AuditoriaAncora.ate_registro_id == registro_id)
+            .order_by(AuditoriaAncora.id.desc())
+            .limit(1)
+        ).first()
         return _ancora(linha) if linha is not None else None
 
     def registrar_ancora(self, ate_registro_id: int, hash: str, em: datetime) -> int:
@@ -127,11 +129,6 @@ class RepositorioTrilhaSQL:
         self._s.add(linha)
         self._s.flush()
         return linha.id
-
-    def anotar_ancora(self, id: int, usuario_id: int, em: datetime) -> None:
-        linha = self._s.get_one(AuditoriaAncora, id)
-        linha.anotada_em, linha.anotada_por = _banco(em), usuario_id
-        self._s.flush()
 
     def avisos_abertos(self) -> list[Aviso]:
         linhas = self._s.scalars(

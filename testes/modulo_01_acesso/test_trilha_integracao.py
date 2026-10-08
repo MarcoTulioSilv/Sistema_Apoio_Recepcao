@@ -10,7 +10,7 @@ from sqlalchemy import Engine, text
 
 from sar.cli import main
 from sar.composicao import compor_auditoria, montar_barramento, montar_executor
-from sar.modulo_01_acesso.contrato import AvisoDiagnostico, AvisoSimples
+from sar.modulo_01_acesso.contrato import AvisoDiagnostico, AvisoSimples, Conferencia
 from sar.modulo_01_acesso.servicos import ServicoAuditoria, ServicoIntegridade
 from sar.modulo_08_dados.relogio import RelogioSistema
 from sar.nucleo.contexto import Contexto, Perfil
@@ -136,24 +136,35 @@ def test_aviso_simples_para_administracao_e_diagnostico_para_ti(
     assert consulta(trilha_zerada, "SELECT encerrado_por FROM aviso_integridade") == [(usuarios["admin"],)]
 
 
-@pytest.mark.requisito("DDS-13.2")
-def test_administracao_anota_a_ancora_uma_vez(
+@pytest.mark.requisito("DD-86", "QAS-13")
+def test_codigo_do_rodape_e_conferido_contra_a_trilha(
     usuarios: dict[str, int], engine_web: Engine, engine_worker: Engine, trilha_zerada: Engine
 ) -> None:
-    gravar(engine_worker, 2)
-    compor_auditoria(engine_worker).verificar_cadeia(SISTEMA)
-    [(ancora_id,)] = consulta(trilha_zerada, "SELECT id FROM auditoria_ancora")
-    integridade = ServicoIntegridade(
-        montar_executor(engine_web, montar_barramento(RelogioSistema())), ServicoAuditoria()
-    )
-    admin = pessoa(usuarios["admin"], Perfil.ADMINISTRACAO)
+    gravar(engine_worker, 3)
+    auditoria = compor_auditoria(engine_worker)
+    executar = montar_executor(engine_web, montar_barramento(RelogioSistema()))
+    assert executar(auditoria.codigo_vigente) is None  # antes da primeira âncora
+    auditoria.verificar_cadeia(SISTEMA)  # âncora até o registro 3
 
+    codigo = executar(auditoria.codigo_vigente)
+    assert codigo is not None and codigo.registro_id == 3
+    integridade = ServicoIntegridade(executar, ServicoAuditoria())
+    admin, ti = pessoa(usuarios["admin"], Perfil.ADMINISTRACAO), pessoa(usuarios["ti"], Perfil.TI)
+    assert integridade.conferir_codigo(admin, 3, codigo.codigo) is Conferencia.CONFERE
+    assert integridade.conferir_codigo(ti, 3, codigo.codigo.replace("-", " ").lower()) is Conferencia.CONFERE
+    assert integridade.conferir_codigo(admin, 999, codigo.codigo) is Conferencia.SEM_REGISTRO
     with pytest.raises(AcessoNegado):
-        integridade.anotar_ancora(pessoa(usuarios["ti"], Perfil.TI), int(str(ancora_id)))
-    integridade.anotar_ancora(admin, int(str(ancora_id)))
+        integridade.conferir_codigo(pessoa(usuarios["recepcao"], Perfil.RECEPCAO), 3, codigo.codigo)
     with pytest.raises(RegraViolada):
-        integridade.anotar_ancora(admin, int(str(ancora_id)))
-    assert consulta(trilha_zerada, "SELECT anotada_por FROM auditoria_ancora") == [(usuarios["admin"],)]
+        integridade.conferir_codigo(admin, 3, "1234")
+
+    # alguém reescreve o registro 3 e recalcula o hash: o papel antigo denuncia
+    with trilha_zerada.begin() as c:
+        c.execute(text("UPDATE auditoria SET hash_registro = REPEAT('e', 64) WHERE id = 3"))
+    assert integridade.conferir_codigo(admin, 3, codigo.codigo) is Conferencia.NAO_CONFERE
+    # As quatro conferências válidas são auditadas; as recusadas (perfil, código inválido) nem abrem a operação.
+    conferencias = "SELECT COUNT(*) FROM auditoria WHERE operacao = 'acesso.ancora.conferir'"
+    assert consulta(trilha_zerada, conferencias) == [(4,)]
 
 
 @pytest.mark.requisito("DDS-12.1")

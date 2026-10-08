@@ -4,8 +4,15 @@ from __future__ import annotations
 
 from collections.abc import Callable, Mapping
 
-from sar.modulo_01_acesso.contrato import AuditService, AvisoDiagnostico, AvisoSimples, ResultadoVerificacao
-from sar.modulo_01_acesso.regras import cinco_anos_antes, verificar_elos
+from sar.modulo_01_acesso.contrato import (
+    AuditService,
+    AvisoDiagnostico,
+    AvisoSimples,
+    CodigoIntegridade,
+    Conferencia,
+    ResultadoVerificacao,
+)
+from sar.modulo_01_acesso.regras import cinco_anos_antes, codigo_do_hash, normalizar_codigo, verificar_elos
 from sar.modulo_08_dados.canonico import HASH_INICIAL, serializar_alteracoes
 from sar.modulo_08_dados.interfaces.trilha import RepositorioExpurgo, RepositorioTrilha
 from sar.nucleo.contexto import Contexto, Perfil
@@ -108,6 +115,12 @@ class ServicoAuditoria:
 
         return _executor(self._executar, "operação")(operacao)
 
+    def codigo_vigente(self, uow: UnidadeDeTrabalho) -> CodigoIntegridade | None:
+        ancora = uow.repositorio(RepositorioTrilha).ancora_mais_recente()
+        if ancora is None:
+            return None
+        return CodigoIntegridade(ancora.ate_registro_id, codigo_do_hash(ancora.hash), ancora.registrada_em)
+
     def expurgar(self, contexto: Contexto) -> int:
         _exigir(contexto, {Perfil.SISTEMA})
         limite = cinco_anos_antes(contexto.instante)  # DEC-45
@@ -184,27 +197,30 @@ class ServicoIntegridade:
 
         self._executar(operacao)
 
-    def anotar_ancora(self, contexto: Contexto, ancora_id: int) -> None:
-        _exigir(contexto, {Perfil.ADMINISTRACAO})
-        usuario_id = contexto.usuario_id
-        if usuario_id is None:
-            raise AcessoNegado()
+    def conferir_codigo(self, contexto: Contexto, registro_id: int, codigo: str) -> Conferencia:
+        _exigir(contexto, {Perfil.ADMINISTRACAO, Perfil.TI})
+        procurado = normalizar_codigo(codigo)
+        if procurado is None:
+            raise RegraViolada("ancora.codigo_invalido")
 
-        def operacao(uow: UnidadeDeTrabalho) -> None:
+        def operacao(uow: UnidadeDeTrabalho) -> Conferencia:
             trilha = uow.repositorio(RepositorioTrilha)
-            ancora = trilha.ancora(ancora_id)
-            if ancora is None:
-                raise NaoEncontrado()
-            if ancora.anotada_em is not None:
-                raise RegraViolada("ancora.ja_anotada")
-            trilha.anotar_ancora(ancora_id, usuario_id, contexto.instante)
+            elo, ancora = trilha.elo(registro_id), trilha.ancora_do_registro(registro_id)
+            hashes = [h for h in (elo.hash_registro if elo else None, ancora.hash if ancora else None) if h]
+            if not hashes:
+                resultado = Conferencia.SEM_REGISTRO
+            elif all(h.startswith(procurado) for h in hashes):
+                resultado = Conferencia.CONFERE
+            else:
+                resultado = Conferencia.NAO_CONFERE
             self._auditoria.registrar(
                 uow,
                 contexto,
-                "acesso.ancora.registrar_anotacao",
-                "auditoria_ancora",
-                str(ancora_id),
-                {"anotada_em": (None, contexto.instante)},
+                "acesso.ancora.conferir",
+                "auditoria",
+                str(registro_id),
+                {"resultado": (None, resultado.value)},
             )
+            return resultado
 
-        self._executar(operacao)
+        return self._executar(operacao)

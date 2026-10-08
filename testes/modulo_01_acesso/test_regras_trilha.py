@@ -7,7 +7,13 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from sar.modulo_01_acesso.regras import cinco_anos_antes, json_do_elo, verificar_elos
+from sar.modulo_01_acesso.regras import (
+    cinco_anos_antes,
+    codigo_do_hash,
+    json_do_elo,
+    normalizar_codigo,
+    verificar_elos,
+)
 from sar.modulo_08_dados.canonico import HASH_INICIAL, calcular_hash
 from sar.modulo_08_dados.interfaces.trilha import Ancora, Cabeca, Elo
 
@@ -71,7 +77,7 @@ def test_alteracao_com_hash_recalculado_quebra_o_elo_seguinte() -> None:
 @pytest.mark.requisito("RNF-615", "CT-AUD-03", "QAS-13")
 def test_reescrita_completa_e_pega_pela_ancora() -> None:
     originais = cadeia(10)
-    ancora = Ancora(1, 8, originais[7].hash_registro, INICIO + timedelta(days=2), None, None)
+    ancora = Ancora(1, 8, originais[7].hash_registro, INICIO + timedelta(days=2))
     adulterados = list(originais)
     adulterados[4] = replace(adulterados[4], motivo="adulterado")
     adulterados = recalcular(adulterados, 4)
@@ -120,3 +126,22 @@ def test_cadeia_vazia_e_integra() -> None:
 )
 def test_limite_de_cinco_anos(instante: datetime, limite: datetime) -> None:
     assert cinco_anos_antes(instante) == limite
+
+
+@pytest.mark.requisito("DD-86")
+def test_codigo_do_rodape_sao_16_hexadecimais_em_quatro_blocos() -> None:
+    assert codigo_do_hash("7f3a91c24d0be58a" + "0" * 48) == "7F3A-91C2-4D0B-E58A"
+
+
+@pytest.mark.requisito("DD-86")
+@pytest.mark.parametrize(
+    ("digitado", "normalizado"),
+    [
+        ("7F3A-91C2-4D0B-E58A", "7f3a91c24d0be58a"),
+        (" 7f3a 91c2 4d0b e58a ", "7f3a91c24d0be58a"),
+        ("7F3A-91C2-4D0B", None),  # incompleto
+        ("7F3A-91C2-4D0B-E58G", None),  # G não é hexadecimal
+    ],
+)
+def test_codigo_digitado_de_um_papel(digitado: str, normalizado: str | None) -> None:
+    assert normalizar_codigo(digitado) == normalizado

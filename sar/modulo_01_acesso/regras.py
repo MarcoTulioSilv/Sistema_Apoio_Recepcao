@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from collections.abc import Iterable, Sequence
 from datetime import datetime
 
@@ -74,3 +75,19 @@ def cinco_anos_antes(instante: datetime) -> datetime:
         return instante.replace(year=instante.year - 5)
     except ValueError:
         return instante.replace(year=instante.year - 5, day=28)
+
+
+TAMANHO_CODIGO = 16  # 64 bits: forjar uma trilha com o mesmo começo de hash é inviável (DD-86)
+
+
+def codigo_do_hash(hash_hex: str) -> str:
+    """'7f3a91c24d0be58a…' → '7F3A-91C2-4D0B-E58A'."""
+    inicio = hash_hex[:TAMANHO_CODIGO].upper()
+    return "-".join(inicio[i : i + 4] for i in range(0, TAMANHO_CODIGO, 4))
+
+
+def normalizar_codigo(texto: str) -> str | None:
+    """O código como digitado de um papel (com ou sem traços e espaços), em minúsculas; None se não tiver
+    exatamente 16 hexadecimais."""
+    limpo = re.sub(r"[\s-]", "", texto).lower()
+    return limpo if re.fullmatch(rf"[0-9a-f]{{{TAMANHO_CODIGO}}}", limpo) else None

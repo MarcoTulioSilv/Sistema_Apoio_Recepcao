@@ -49,8 +49,6 @@ class Ancora:
     ate_registro_id: int
     hash: str
     registrada_em: datetime
-    anotada_em: datetime | None
-    anotada_por: int | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -76,11 +74,11 @@ class RepositorioTrilha(Protocol):
 
     def ancoras(self, a_partir_de_id: int) -> list[Ancora]: ...
 
-    def ancora(self, id: int) -> Ancora | None: ...
+    def ancora_mais_recente(self) -> Ancora | None: ...
+
+    def ancora_do_registro(self, registro_id: int) -> Ancora | None: ...
 
     def registrar_ancora(self, ate_registro_id: int, hash: str, em: datetime) -> int: ...
-
-    def anotar_ancora(self, id: int, usuario_id: int, em: datetime) -> None: ...
 
     def avisos_abertos(self) -> list[Aviso]: ...
 
