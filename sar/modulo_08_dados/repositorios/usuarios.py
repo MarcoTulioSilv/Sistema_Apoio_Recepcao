@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from typing import Any
 
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session
@@ -74,3 +75,49 @@ class RepositorioUsuarioSQL:
             .values(senha_hash=senha_hash, deve_trocar_senha=deve_trocar, versao=Usuario.versao + 1),
             execution_options={"synchronize_session": False},
         )
+
+    def listar(self) -> list[DadosUsuario]:
+        return [_dados(u) for u in self._s.scalars(select(Usuario).order_by(Usuario.nome, Usuario.id))]
+
+    def criar(
+        self, nome: str, login: str, senha_hash: str, perfil: str, em: datetime, termo_em: datetime | None
+    ) -> int:
+        usuario = Usuario(
+            nome=nome,
+            login=login,
+            senha_hash=senha_hash,
+            perfil=perfil,
+            ativo=True,
+            deve_trocar_senha=True,
+            termo_ciencia_em=_banco(termo_em) if termo_em else None,
+            criado_em=_banco(em),
+        )
+        self._s.add(usuario)
+        self._s.flush()
+        return usuario.id
+
+    def _atualizar(self, id: int, versao: int, valores: dict[str, Any]) -> bool:
+        resultado = self._s.execute(
+            update(Usuario)
+            .where(Usuario.id == id, Usuario.versao == versao)
+            .values(**valores, versao=Usuario.versao + 1),
+            execution_options={"synchronize_session": False},
+        )
+        return bool(getattr(resultado, "rowcount", 0) == 1)
+
+    def alterar_perfil(self, id: int, versao: int, perfil: str) -> bool:
+        return self._atualizar(id, versao, {"perfil": perfil})
+
+    def definir_ativo(self, id: int, versao: int, ativo: bool) -> bool:
+        return self._atualizar(id, versao, {"ativo": ativo})
+
+    def redefinir_senha(self, id: int, versao: int, senha_hash: str) -> bool:
+        valores = {"senha_hash": senha_hash, "deve_trocar_senha": True, "tentativas_falhas": 0, "bloqueado_ate": None}
+        return self._atualizar(id, versao, valores)
+
+    def registrar_termo(self, id: int, versao: int, em: datetime) -> bool:
+        return self._atualizar(id, versao, {"termo_ciencia_em": _banco(em)})
+
+
+def _banco(valor: datetime) -> datetime:
+    return valor.astimezone(UTC).replace(tzinfo=None)

@@ -12,13 +12,20 @@ from enum import Enum
 
 from sqlalchemy import Engine
 
-from sar.modulo_01_acesso.contrato import AuditService, AuthService, IntegridadeService, SessionManager
+from sar.modulo_01_acesso.contrato import (
+    AuditService,
+    AuthService,
+    IntegridadeService,
+    SessionManager,
+    UsuarioService,
+)
 from sar.modulo_01_acesso.senhas import Hasher
 from sar.modulo_01_acesso.servicos import (
     GerenciadorSessao,
     ServicoAuditoria,
     ServicoAutenticacao,
     ServicoIntegridade,
+    ServicoUsuarios,
     manipulador_aviso_integridade,
     manipulador_encerrar_sessoes,
 )
@@ -105,6 +112,7 @@ class Componentes:
     configuracao: ConfiguracaoService
     autenticacao: AuthService
     sessoes: SessionManager
+    usuarios: UsuarioService
 
 
 # Verificadores de uso dos parâmetros imutáveis (DD-51). A data de implantação ganha o seu com a sessão
@@ -118,6 +126,7 @@ def compor(engine: Engine, chave_mestra: bytes, gravar_auditoria: GravadorAudito
     executar = montar_executor(engine, barramento, gravar_auditoria)
     auditoria = ServicoAuditoria(executar)
     parametros = LeitorParametrosSQL(executar)
+    hasher = Hasher()
     return Componentes(
         relogio=relogio,
         cifra=CifraAesGcm(chave_mestra),
@@ -127,6 +136,7 @@ def compor(engine: Engine, chave_mestra: bytes, gravar_auditoria: GravadorAudito
         integridade=ServicoIntegridade(executar, auditoria),
         parametros=parametros,
         configuracao=ServicoConfiguracao(executar, auditoria, VERIFICADORES_USO),
-        autenticacao=ServicoAutenticacao(executar, auditoria, parametros, relogio, Hasher()),
+        autenticacao=ServicoAutenticacao(executar, auditoria, parametros, relogio, hasher),
         sessoes=GerenciadorSessao(executar, auditoria, parametros, relogio),
+        usuarios=ServicoUsuarios(executar, auditoria, hasher),
     )

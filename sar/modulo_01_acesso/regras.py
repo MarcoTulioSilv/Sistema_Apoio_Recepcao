@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+import secrets
 import unicodedata
 from collections.abc import Iterable, Sequence
 from datetime import datetime
@@ -153,3 +154,33 @@ def minutos_de_bloqueio(tentativas: int, limite: int, inicial: int, teto: int) -
     if tentativas < limite:
         return None
     return min(inicial << min(tentativas - limite, 16), teto)  # dobra a cada falha: inicial × 2^n
+
+
+# ------------------------------------------------------------------ usuários
+_LOGIN = re.compile(r"[a-z0-9][a-z0-9._-]{2,59}")
+
+
+def validar_login(login: str) -> str:
+    """Minúsculas, de 3 a 60 caracteres: letras, números, ponto, hífen e sublinhado."""
+    normalizado = login.strip().lower()
+    if not _LOGIN.fullmatch(normalizado):
+        raise RegraViolada("usuario.login_formato")
+    return normalizado
+
+
+def validar_nome(nome: str) -> str:
+    limpo = " ".join(nome.split())
+    if not 1 <= len(limpo) <= 120:
+        raise RegraViolada("usuario.nome")
+    return limpo
+
+
+def senha_provisoria(login: str, nome: str) -> str:
+    """12 caracteres aleatórios que já passam na política da DD-83 (sorteia de novo no caso raro de não passar)."""
+    while True:
+        candidata = secrets.token_urlsafe(9)
+        try:
+            validar_senha(candidata, login, nome)
+        except RegraViolada:
+            continue
+        return candidata

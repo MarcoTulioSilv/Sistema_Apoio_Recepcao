@@ -26,6 +26,10 @@ SAR_BANCO_NOME=sar_teste sar migrar && SAR_BANCO_NOME=sar_teste sar criar-usuari
 # Banco
 sar reverter base && sar migrar                    # ida, volta e ida (só antes do go-live, DD-60)
 sar verificar-cadeia                               # trilha de auditoria, como o job diário (§13.1)
+
+# Usuários (DD-85)
+sar criar-usuario-ti --nome "..." --login ... --termo-assinado   # primeiro TI da implantação; mostra a senha provisória
+SAR_AMBIENTE=desenvolvimento sar criar-superusuario --nome "..." --login ...   # só em desenvolvimento
 docker compose exec -T mysql bash -c 'BANCO=sar_teste ADMIN="-uroot -p$(cat /run/secrets/mysql_root)"   WEB_SENHA=$(cat /run/secrets/sar_web) WORKER_SENHA=$(cat /run/secrets/sar_worker)   EXPURGO_SENHA=$(cat /run/secrets/sar_expurgo) bash /sar/scripts/verificar_esquema.sh'
 
 # Qualidade (etapas 1 a 5 do pipeline)

@@ -9,7 +9,7 @@ from enum import Enum
 from typing import Protocol
 
 from sar.modulo_01_acesso.matriz import MATRIZ, Acesso, Celula, Entrada
-from sar.nucleo.contexto import Contexto
+from sar.nucleo.contexto import Contexto, Perfil
 from sar.nucleo.erros import AcessoNegado, ErroSAR
 from sar.nucleo.uow import UnidadeDeTrabalho
 
@@ -171,6 +171,52 @@ class AuthService(Protocol):
     def sair(self, contexto: Contexto) -> None: ...
 
     def trocar_propria_senha(self, contexto: Contexto, senha_atual: str, nova_senha: str) -> None: ...
+
+
+# ------------------------------------------------------------------ usuários (DDS §5.1, §4.1)
+@dataclass(frozen=True, slots=True)
+class UsuarioResumo:
+    """O que a tela do TI vê de um usuário: nunca o hash da senha."""
+
+    id: int
+    nome: str
+    login: str
+    perfil: Perfil
+    ativo: bool
+    termo_ciencia_em: datetime | None
+    deve_trocar_senha: bool
+    bloqueado_ate: datetime | None
+    versao: int
+
+
+@dataclass(frozen=True, slots=True)
+class UsuarioCriado:
+    """A senha provisória é mostrada uma vez, a quem criou; o banco guarda só o hash."""
+
+    id: int
+    senha_provisoria: str
+
+
+class UsuarioService(Protocol):
+    def consultar(self, contexto: Contexto) -> list[UsuarioResumo]: ...
+
+    def criar(self, contexto: Contexto, nome: str, login: str, perfil: Perfil) -> UsuarioCriado: ...
+
+    def alterar_perfil(self, contexto: Contexto, usuario_id: int, versao: int, perfil: Perfil) -> None: ...
+
+    def inativar(self, contexto: Contexto, usuario_id: int, versao: int) -> None:
+        """Nunca exclui (RF-1005); as sessões do usuário acabam na mesma transação (UsuarioInativado)."""
+        ...
+
+    def reativar(self, contexto: Contexto, usuario_id: int, versao: int) -> None: ...
+
+    def redefinir_senha(self, contexto: Contexto, usuario_id: int, versao: int) -> str:
+        """Devolve a senha provisória, com troca obrigatória na próxima entrada."""
+        ...
+
+    def registrar_termo(self, contexto: Contexto, usuario_id: int, versao: int) -> None:
+        """O TI registra que o usuário assinou o termo de ciência de uso (DEC-47)."""
+        ...
 
 
 class SessionManager(Protocol):

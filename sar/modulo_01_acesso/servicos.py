@@ -19,12 +19,17 @@ from sar.modulo_01_acesso.contrato import (
     SessaoEncerrada,
     TermoPendente,
     TrocaDeSenhaExigida,
+    UsuarioCriado,
+    UsuarioResumo,
 )
 from sar.modulo_01_acesso.regras import (
     cinco_anos_antes,
     codigo_do_hash,
     minutos_de_bloqueio,
     normalizar_codigo,
+    senha_provisoria,
+    validar_login,
+    validar_nome,
     validar_senha,
     verificar_elos,
 )
@@ -34,9 +39,9 @@ from sar.modulo_08_dados.interfaces.sessoes import RepositorioSessao
 from sar.modulo_08_dados.interfaces.trilha import RepositorioExpurgo, RepositorioTrilha
 from sar.modulo_08_dados.interfaces.usuarios import DadosUsuario, RepositorioUsuario
 from sar.nucleo.contexto import Contexto, Perfil
-from sar.nucleo.erros import AcessoNegado, ErroSAR, NaoEncontrado, RegraViolada
+from sar.nucleo.erros import AcessoNegado, ConflitoDeVersao, ErroSAR, NaoEncontrado, RegraViolada
 from sar.nucleo.eventos import CadeiaDivergente, UsuarioInativado
-from sar.nucleo.logs import novo_requisicao_id, requisicao_atual
+from sar.nucleo.logs import campos_do_erro, novo_requisicao_id, requisicao_atual
 from sar.nucleo.parametros import LeitorParametros
 from sar.nucleo.portas import Relogio
 from sar.nucleo.uow import ExecutorDeOperacao, RegistroAuditoria, UnidadeDeTrabalho
@@ -443,3 +448,157 @@ def manipulador_encerrar_sessoes(relogio: Relogio) -> Callable[[UnidadeDeTrabalh
         uow.repositorio(RepositorioSessao).encerrar_do_usuario(evento.usuario_id, relogio.agora(), "inativacao")
 
     return encerrar
+
+
+# ------------------------------------------------------------------ usuários (DDS §5.1, §4.1, DD-85)
+PERFIS_DE_PESSOA = frozenset(p for p in Perfil if p is not Perfil.SISTEMA)
+
+
+def _resumo(u: DadosUsuario) -> UsuarioResumo:
+    return UsuarioResumo(
+        u.id, u.nome, u.login, Perfil(u.perfil), u.ativo, u.termo_ciencia_em, u.deve_trocar_senha, u.bloqueado_ate,
+        u.versao,
+    )  # fmt: skip
+
+
+class ServicoUsuarios:
+    def __init__(self, executar: ExecutorDeOperacao, auditoria: AuditService, hasher: Hasher) -> None:
+        self._executar = executar
+        self._auditoria = auditoria
+        self._hasher = hasher
+
+    def consultar(self, contexto: Contexto) -> list[UsuarioResumo]:
+        GUARDA.exigir(contexto, "acesso.usuario.consultar")
+        return self._executar(lambda uow: [_resumo(u) for u in uow.repositorio(RepositorioUsuario).listar()])
+
+    def criar(self, contexto: Contexto, nome: str, login: str, perfil: Perfil) -> UsuarioCriado:
+        GUARDA.exigir(contexto, "acesso.usuario.criar")
+        return self._criar(contexto, nome, login, perfil, com_termo=False)
+
+    def criar_primeiro_ti(self, contexto: Contexto, nome: str, login: str) -> UsuarioCriado:
+        """Linha de comando da implantação (DD-85): só pelo contexto de sistema e só quando não há TI ativo.
+        O termo entra registrado, porque não há outro TI para registrá-lo; quem roda o comando o declara."""
+        if not contexto.e_sistema:
+            raise AcessoNegado()
+
+        def ha_ti_ativo(uow: UnidadeDeTrabalho) -> bool:
+            return any(u.ativo and u.perfil == Perfil.TI.value for u in uow.repositorio(RepositorioUsuario).listar())
+
+        if self._executar(ha_ti_ativo):
+            raise RegraViolada("usuario.ja_existe_ti_ativo")
+        return self._criar(contexto, nome, login, Perfil.TI, com_termo=True)
+
+    def criar_para_desenvolvimento(self, contexto: Contexto, nome: str, login: str) -> UsuarioCriado:
+        """Superusuário de desenvolvimento (DD-85). Quem garante o ambiente é a linha de comando."""
+        if not contexto.e_sistema:
+            raise AcessoNegado()
+        return self._criar(contexto, nome, login, Perfil.ADMINISTRACAO, com_termo=True)
+
+    def _criar(self, contexto: Contexto, nome: str, login: str, perfil: Perfil, com_termo: bool) -> UsuarioCriado:
+        nome, login = validar_nome(nome), validar_login(login)
+        if perfil not in PERFIS_DE_PESSOA:
+            raise RegraViolada("usuario.perfil")
+        provisoria = senha_provisoria(login, nome)
+        senha_hash = self._hasher.gerar(provisoria)
+
+        def operacao(uow: UnidadeDeTrabalho) -> int:
+            usuarios = uow.repositorio(RepositorioUsuario)
+            if usuarios.por_login(login) is not None:
+                raise RegraViolada("usuario.login_repetido")
+            termo = contexto.instante if com_termo else None
+            usuario_id = usuarios.criar(nome, login, senha_hash, perfil.value, contexto.instante, termo)
+            alteracoes: dict[str, tuple[object, object]] = {
+                "nome": (None, nome), "login": (None, login), "perfil": (None, perfil.value)
+            }  # fmt: skip
+            if termo is not None:
+                alteracoes["termo_ciencia_em"] = (None, termo)
+            self._auditoria.registrar(uow, contexto, "acesso.usuario.criar", "usuario", str(usuario_id), alteracoes)
+            return usuario_id
+
+        try:
+            return UsuarioCriado(self._executar(operacao), provisoria)
+        except Exception as erro:
+            if campos_do_erro(erro).get("restricao") == "uq_usuario__login":  # outro TI criou ao mesmo tempo
+                raise RegraViolada("usuario.login_repetido") from None
+            raise
+
+    def _alterar(
+        self,
+        contexto: Contexto,
+        operacao_catalogo: str,
+        usuario_id: int,
+        versao: int,
+        mudar: Callable[[UnidadeDeTrabalho, DadosUsuario], dict[str, tuple[object, object]] | None],
+    ) -> None:
+        """Esqueleto das alterações da tela do TI: permissão, usuário existente, versão (DD-17) e auditoria."""
+        GUARDA.exigir(contexto, operacao_catalogo)
+
+        def operacao(uow: UnidadeDeTrabalho) -> None:
+            usuario = uow.repositorio(RepositorioUsuario).por_id(usuario_id)
+            if usuario is None:
+                raise NaoEncontrado()
+            if usuario.versao != versao:
+                raise ConflitoDeVersao(None, None)
+            alteracoes = mudar(uow, usuario)
+            if alteracoes is None:
+                raise ConflitoDeVersao(None, None)  # a gravação condicionada à versão não pegou nenhuma linha
+            self._auditoria.registrar(uow, contexto, operacao_catalogo, "usuario", str(usuario_id), alteracoes)
+
+        self._executar(operacao)
+
+    def alterar_perfil(self, contexto: Contexto, usuario_id: int, versao: int, perfil: Perfil) -> None:
+        if perfil not in PERFIS_DE_PESSOA:
+            raise RegraViolada("usuario.perfil")
+
+        def mudar(uow: UnidadeDeTrabalho, u: DadosUsuario) -> dict[str, tuple[object, object]] | None:
+            if u.perfil == perfil.value:
+                raise RegraViolada("usuario.perfil_igual")
+            if not uow.repositorio(RepositorioUsuario).alterar_perfil(u.id, versao, perfil.value):
+                return None
+            return {"perfil": (u.perfil, perfil.value)}
+
+        self._alterar(contexto, "acesso.usuario.alterar_perfil", usuario_id, versao, mudar)
+
+    def inativar(self, contexto: Contexto, usuario_id: int, versao: int) -> None:
+        def mudar(uow: UnidadeDeTrabalho, u: DadosUsuario) -> dict[str, tuple[object, object]] | None:
+            if not u.ativo:
+                raise RegraViolada("usuario.ja_inativo")
+            if not uow.repositorio(RepositorioUsuario).definir_ativo(u.id, versao, False):
+                return None
+            uow.publicar(UsuarioInativado(usuario_id=u.id))  # encerra as sessões dele (§3.11)
+            return {"ativo": (True, False)}
+
+        self._alterar(contexto, "acesso.usuario.inativar", usuario_id, versao, mudar)
+
+    def reativar(self, contexto: Contexto, usuario_id: int, versao: int) -> None:
+        def mudar(uow: UnidadeDeTrabalho, u: DadosUsuario) -> dict[str, tuple[object, object]] | None:
+            if u.ativo:
+                raise RegraViolada("usuario.ja_ativo")
+            if not uow.repositorio(RepositorioUsuario).definir_ativo(u.id, versao, True):
+                return None
+            return {"ativo": (False, True)}
+
+        self._alterar(contexto, "acesso.usuario.reativar", usuario_id, versao, mudar)
+
+    def redefinir_senha(self, contexto: Contexto, usuario_id: int, versao: int) -> str:
+        provisoria: list[str] = []
+
+        def mudar(uow: UnidadeDeTrabalho, u: DadosUsuario) -> dict[str, tuple[object, object]] | None:
+            nova = senha_provisoria(u.login, u.nome)
+            if not uow.repositorio(RepositorioUsuario).redefinir_senha(u.id, versao, self._hasher.gerar(nova)):
+                return None
+            provisoria.append(nova)
+            return {"deve_trocar_senha": (u.deve_trocar_senha, True)}  # nem a senha nem o hash entram na trilha
+
+        self._alterar(contexto, "acesso.usuario.redefinir_senha", usuario_id, versao, mudar)
+        return provisoria[-1]
+
+    def registrar_termo(self, contexto: Contexto, usuario_id: int, versao: int) -> None:
+        def mudar(uow: UnidadeDeTrabalho, u: DadosUsuario) -> dict[str, tuple[object, object]] | None:
+            if u.termo_ciencia_em is not None:
+                raise RegraViolada("usuario.termo_ja_registrado")
+            if not uow.repositorio(RepositorioUsuario).registrar_termo(u.id, versao, contexto.instante):
+                return None
+            return {"termo_ciencia_em": (None, contexto.instante)}
+
+        self._alterar(contexto, "acesso.usuario.registrar_termo_ciencia", usuario_id, versao, mudar)
