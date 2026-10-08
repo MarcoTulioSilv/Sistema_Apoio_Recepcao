@@ -13,7 +13,7 @@ Data: 2026-10-06 · Classificação: Confidencial — uso interno
 | **Versão** | **Data** | **Autor** | **Descrição** |
 |---|---|---|---|
 | 1.0 | 2026-09-28 | Equipe de desenvolvimento | Versão inicial aprovada. Drivers arquiteturais, estilo, decisões AD-01 a AD-27, módulos, sequências, modelo de dados, implantação, riscos e avaliação da arquitetura. Baseado na ERS-002 v1.0. |
-| 1.1 | 2026-10-06 | Equipe de desenvolvimento | Incorpora o design detalhado da Macroentrega III (DDS_recepcao, §2.2): núcleo compartilhado e raiz de composição; novo MOD-11; grafo de dependências verificado por máquina; sessão de turno derivada do relógio; emissão por modelos .docx; agente de captura validado no equipamento real (R-34 mitigado); modelo de dados substituído pelo esquema implementado; usuários de banco por processo; agenda de jobs e retenção do backup; retirada do estabelecimento referenciador (DEC-73). |
+| 1.1 | 2026-10-06 | Equipe de desenvolvimento | Incorpora o design detalhado da Macroentrega III (DDS_recepcao, §2.2): núcleo compartilhado e raiz de composição; novo MOD-11; grafo de dependências verificado por máquina; sessão de turno derivada do relógio; emissão por modelos .docx; agente de captura validado no equipamento real (R-34 mitigado); modelo de dados substituído pelo esquema implementado; usuários de banco por processo; agenda de jobs e retenção do backup; retirada do estabelecimento referenciador (DEC-73). Revisão de 2026-10-08: destino da âncora (A.2, item 3) pela DD-86. |
 
 ---
 
@@ -572,9 +572,9 @@ resultado — e conflitos entre atributos.
    tentativa não encontra nada escutando. Para que ela fique registrada, o firewall do host registra
    conexões recusadas nas portas não publicadas.
 3. **Destino da âncora da cadeia (QAS-13).** A âncora é só um hash, sem dado pessoal. Ela é gravada no
-   backup do dia e exibida à administração na tela de pendências uma vez por mês, para anotação fora do
-   sistema. Assim, alterar a trilha e a âncora juntas exige também alterar o que a administração
-   anotou.
+   backup do dia e sai, como código de integridade, no rodapé dos relatórios e dos documentos emitidos
+   (DD-86, DEC-74). Assim, alterar a trilha e a âncora juntas exige também alterar as cópias desses
+   documentos, guardadas e entregues a outras pessoas.
 
 ### A.3 Conflito resolvido: perda máxima de dados
 

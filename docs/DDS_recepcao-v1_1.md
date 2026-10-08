@@ -13,7 +13,7 @@ Data: 2026-10-06 · Classificação: Confidencial — uso interno
 | **Versão** | **Data** | **Autor** | **Descrição** |
 |---|---|---|---|
 | 1.0 | 2026-10-06 | Equipe de desenvolvimento | Versão inicial aprovada. Decisões DD-01 a DD-80, convenções, catálogo de operações e matriz de permissões, design tático de MOD-01 a MOD-11, esquema físico implementado, contratos, protocolo do agente de captura, protótipos e guia de componentes. Baseado na ERS-002 v1.0 e na DAS v1.1. |
-| 1.1 | 2026-10-06 | Equipe de desenvolvimento | DD-81: logs técnicos estruturados e minimizados, correlação entre auditoria e log (migração 0003), buscas por POST, erros sem mensagem nem valor, MySQL sem logs de instrução, guarda de 90 dias e verificação automática do RNF-624. Linhas alternadas em telefones e contatos (componente `lista-zebrada`). DD-82: log binário do MySQL desligado. Emenda à DD-81: campos `erro` e `restricao` na lista permitida. DD-83 (senha), DD-84 (CSRF) e DD-85 (superusuário de desenvolvimento e primeiro TI). |
+| 1.1 | 2026-10-06 | Equipe de desenvolvimento | DD-81: logs técnicos estruturados e minimizados, correlação entre auditoria e log (migração 0003), buscas por POST, erros sem mensagem nem valor, MySQL sem logs de instrução, guarda de 90 dias e verificação automática do RNF-624. Linhas alternadas em telefones e contatos (componente `lista-zebrada`). DD-82: log binário do MySQL desligado. Emenda à DD-81: campos `erro` e `restricao` na lista permitida. DD-83 (senha), DD-84 (CSRF), DD-85 (superusuário de desenvolvimento e primeiro TI) e DD-86 (âncora no rodapé dos documentos, DEC-74). |
 
 ---
 
@@ -153,6 +153,7 @@ da Macroentrega III.
 | DD-83 | **Senha sem complexidade, só contra as muito fracas.** Revisa o item 4 do §5.2: de 8 a 64 caracteres, e no máximo 72 bytes em UTF-8 (limite do bcrypt, que 64 caracteres acentuados podem ultrapassar); sem regra de composição. Recusada se constar de uma lista local curta de senhas comuns, se for sequência ou repetição (`12345678`, `abcdefgh`, `aaaaaaaa`) ou se contiver o login ou uma parte do nome do usuário (`marco123`). Hash bcrypt com custo 12 | Regra de composição atrapalha o uso no balcão e leva a senha anotada ao lado do monitor. O bloqueio progressivo (§5.2) e a rede só local (RF-1007) limitam a adivinhação; o que se bloqueia é o que um atacante tentaria primeiro |
 | DD-84 | **Proteção contra requisição forjada (CSRF) por SameSite e origem.** Cookie de sessão `SameSite=Strict`, e todo POST confere o cabeçalho `Origin` contra a origem configurada do SAR (a mesma da DD-80), recusando com 403 se divergir ou faltar. Ação que muda estado é sempre POST; GET nunca altera nada. Sem token de formulário | O navegador anexa o cookie a requisições vindas de outro site; `Strict` impede isso, e a origem cobre navegador que ignore o atributo. Com navegador atualizado na estação (RNF-616), dá a mesma proteção do token, sem obrigar cada formulário e cada chamada do htmx a carregá-lo |
 | DD-85 | **Superusuário só em desenvolvimento; primeiro TI pela linha de comando.** Em desenvolvimento (`SAR_AMBIENTE=desenvolvimento`), um superusuário escolhe no cabeçalho com qual dos cinco perfis age; cada ação passa pela matriz do §4 com o perfil escolhido, e o log técnico registra o perfil. Fora do desenvolvimento a troca de perfil não existe, a linha de comando recusa criar superusuário e o servidor recusa subir se houver superusuário configurado. O ambiente padrão é produção. Na implantação, o primeiro usuário TI é criado por `sar criar-usuario-ti`, pelo mesmo serviço da tela, com senha provisória, troca obrigatória e auditoria | Acesso a todas as telas durante a construção sem um sexto perfil, que contrariaria o RF-1001 e o RF-1004. Inserir o primeiro usuário direto no banco deixaria a criação fora da trilha e sem a validação do serviço |
+| DD-86 | **Âncora no rodapé dos documentos, sem anotação manual (DEC-74).** Revisa o §13.2 e o item 3 do DAS, A.2. O código de integridade — os 16 primeiros caracteres hexadecimais do hash da âncora mais recente, em quatro blocos, com o número do registro e a data — sai automaticamente no rodapé de todo relatório (tela, PDF e XLSX) e de todo documento emitido (DOC-01 a DOC-07). Não há pendência nem anotação. Numa investigação, o TI ou a administração conferem o código de qualquer documento guardado contra a trilha (`acesso.ancora.conferir`); a conferência é auditada. As colunas `anotada_em` e `anotada_por` ficam sem uso até uma migração as remover, e o `sar_web` perde o `UPDATE` nelas | A anotação mensal era uma tarefa a mais, fácil de esquecer. Os documentos já saem e ficam guardados com outras pessoas — arquivo da administração, convênios, secretaria, pacientes —, fora do alcance de quem controla o servidor: alterar a trilha exigiria alterar todas essas cópias. Com 64 bits, forjar uma trilha reescrita com o mesmo começo de hash é inviável. O backup diário continua levando a âncora |
 
 ### 2.2 Alterações incorporadas ao DAS
 
@@ -368,7 +369,7 @@ automática (§5.3).
 | `acesso.cadeia.verificar` | — | — | — | ✓ | — | ✓ | Sim |
 | `acesso.aviso_integridade.ver` | — | ✓ simples | — | ✓ diagnóstico | — | — | Sim |
 | `acesso.aviso_integridade.encerrar` | — | ✓ | — | — | — | — | Sim (DEC-43) |
-| `acesso.ancora.registrar_anotacao` | — | ✓ | — | — | — | — | Sim |
+| `acesso.ancora.conferir` (código do rodapé, DD-86) | — | ✓ | — | ✓ | — | — | Sim |
 | `acesso.autorizacao.solicitar` | ✓ | ✓ | — | — | ✓ | — | Sim |
 | `acesso.autorizacao.decidir` | — | ✓ | — | — | — | — | Sim, com as duas identidades |
 | `acesso.autorizacao.cancelar_propria` | ✓ | ✓ | — | — | ✓ | — | Sim |
@@ -555,6 +556,8 @@ independentemente de quem a pediu.
 | `PermissionGuard.exigir` | Contexto, operação, recurso opcional | — | `AcessoNegado` |
 | `AuditService.registrar` | unidade de trabalho, Contexto, operação, entidade, id, alterações, motivo, autorizador opcional | — | Propaga falha: a operação é desfeita |
 | `AuditService.verificar_cadeia` | Contexto (T ou S) | resultado com primeiro divergente, se houver | — |
+| `AuditService.codigo_vigente` | unidade de trabalho | código de integridade da âncora mais recente, para o rodapé (DD-86) | — |
+| `IntegridadeService.conferir_codigo` | Contexto (A ou T), número do registro, código | confere, não confere ou sem registro | `AcessoNegado` |
 | `AutorizacaoService.solicitar` | Contexto, tipo, entidade_id, parâmetros, motivo | id da solicitação | `AcessoNegado`, `RegraViolada` |
 | `AutorizacaoService.aprovar` / `recusar` | Contexto (A), id, motivo | estado final | `AcessoNegado`, `RegraViolada` |
 | `AutorizacaoService.registrar_executor` | executor | — | Uso só na raiz de composição |
@@ -1264,7 +1267,7 @@ antiga primeiro, com a contagem por tipo (RNF-408, IU-04).
 | 17 | Job agendado que não rodou no horário (R-38) | MOD-09 | T | U | Execução bem-sucedida |
 | 18 | Assinaturas do antimalware desatualizadas (SEG-21) | MOD-04 | T | U | Assinaturas atualizadas |
 | 19 | Ocupação de disco acima do limite (RNF-621) | MOD-09 | T | A | Ocupação abaixo do limite |
-| 20 | Âncora mensal da cadeia de auditoria para anotação (DAS, A.2) | MOD-01 | A | N | Administração registra a anotação |
+| 20 | *Retirada pela DEC-74 (DD-86): a âncora sai no rodapé dos documentos. O número não é reaproveitado* | — | — | — | — |
 
 ### 11.2 Regras de alcance
 
@@ -1355,7 +1358,7 @@ O esquema está em código, pronto para o repositório:
 | `migracoes/versions/0002_dados_fixos.py` | Escalas (P-14), tipos de documento (§8.2), faixas etárias (DEC-49), municípios do IBGE (arquivo oficial em CSV) e a cabeça da cadeia |
 | `migracoes/env.py` | Ambiente do Alembic; conexão com fuso `+00:00`, usuário `sar_migracao` |
 | `usuarios_banco.sql` | Usuários `sar_web`, `sar_worker` e `sar_expurgo`, com privilégios por tabela e coluna (§12.3) |
-| `verificar_esquema.sh` | 27 verificações: invariantes estruturais, privilégios e configuração de logs do servidor (DD-82) |
+| `verificar_esquema.sh` | 28 verificações: invariantes estruturais, privilégios e configuração de logs do servidor (DD-82) |
 
 Testado do zero em MySQL 8.0: migração, reversão e nova migração; criação dos usuários; as 24
 verificações passaram. A produção usa MySQL 9.7 LTS (AD-09); os recursos usados — `CHECK`, colunas
@@ -1364,7 +1367,7 @@ imagem de produção faz parte do plano de testes.
 
 Refinamentos em relação às tabelas das seções de cada módulo: `ingestao.documento_id` liga a ingestão
 ao documento que ela gerou; `emissao_documento.competencia` apoia o aviso do DOC-07;
-`auditoria_ancora` ganhou `anotada_em` e `anotada_por` (pendência 20); `aviso_integridade` trata só da
+`auditoria_ancora` ganhou `anotada_em` e `anotada_por` (pendência 20, sem uso desde a DD-86); `aviso_integridade` trata só da
 cadeia — o bloqueio de documento fica no próprio documento (P-19); `documento.prova_encadeamento`
 aceita nulo só dentro da transação de incorporação (DD-37).
 
@@ -1399,11 +1402,13 @@ consigo, como pede o DAS (A.2).
 Removidos em relação ao DAS: abertura de sessões e lembrete de confirmação, que passaram a ser
 derivados (DD-23, DD-32).
 
-### 13.2 Âncora mensal para a administração
+### 13.2 Âncora nos documentos (DD-86)
 
-A verificação diária registra a âncora. Uma vez por mês, a âncora mais recente aparece à administração
-como pendência, para anotação fora do sistema (DAS, A.2). A pendência se encerra quando a
-administração registra que anotou. É a pendência 20 do catálogo (§11.1, DEC-72).
+A verificação diária registra a âncora, e o backup das 02:20 a leva. O código de integridade da âncora
+mais recente sai automaticamente no rodapé dos relatórios e dos documentos emitidos; as cópias
+guardadas e entregues são a anotação fora do sistema (DAS, A.2), sem tarefa para ninguém. Numa
+investigação, o código de um documento é conferido contra a trilha (`acesso.ancora.conferir`). A
+pendência 20 deixou de existir (DEC-74).
 
 ### 13.3 Contrato de um job
 
