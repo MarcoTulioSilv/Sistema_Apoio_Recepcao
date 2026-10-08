@@ -1,5 +1,6 @@
-"""Fixtures comuns. Em desenvolvimento, os segredos ficam em segredos/ e o MySQL do compose na porta 3307;
-no CI, as variáveis SAR_SEGREDOS e SAR_BANCO_PORTA vêm do workflow."""
+"""Fixtures comuns. Os testes usam o banco sar_teste, nunca o da aplicação (sar): cada rodada zera a trilha.
+Em desenvolvimento, os segredos ficam em segredos/ e o MySQL do compose na porta 3307; no CI, as variáveis vêm
+do workflow."""
 
 from __future__ import annotations
 
@@ -23,6 +24,7 @@ from testes.apoio.vazamento import ColetorLogs, vazamentos
 RAIZ = Path(__file__).resolve().parent.parent
 os.environ.setdefault("SAR_SEGREDOS", str(RAIZ / "segredos"))
 os.environ.setdefault("SAR_BANCO_PORTA", "3307")
+os.environ.setdefault("SAR_BANCO_NOME", "sar_teste")
 
 
 @pytest.fixture

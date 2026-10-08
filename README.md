@@ -20,11 +20,13 @@ docker compose up -d --wait mysql                  # MySQL 9.7.2 sem binlog nem 
 export SAR_SEGREDOS="$PWD/segredos" SAR_BANCO_PORTA=3307
 sar migrar                                         # migrações até head (usuário sar_migracao)
 sar criar-usuarios-banco                           # sar_web, sar_worker, sar_expurgo (DD-58)
+# Banco de testes (sar_teste), no mesmo contêiner: os testes nunca tocam o banco da aplicação
+SAR_BANCO_NOME=sar_teste sar migrar && SAR_BANCO_NOME=sar_teste sar criar-usuarios-banco
 
 # Banco
 sar reverter base && sar migrar                    # ida, volta e ida (só antes do go-live, DD-60)
 sar verificar-cadeia                               # trilha de auditoria, como o job diário (§13.1)
-docker compose exec -T mysql bash -c 'ADMIN="-uroot -p$(cat /run/secrets/mysql_root)"   WEB_SENHA=$(cat /run/secrets/sar_web) WORKER_SENHA=$(cat /run/secrets/sar_worker)   EXPURGO_SENHA=$(cat /run/secrets/sar_expurgo) bash /sar/scripts/verificar_esquema.sh'
+docker compose exec -T mysql bash -c 'BANCO=sar_teste ADMIN="-uroot -p$(cat /run/secrets/mysql_root)"   WEB_SENHA=$(cat /run/secrets/sar_web) WORKER_SENHA=$(cat /run/secrets/sar_worker)   EXPURGO_SENHA=$(cat /run/secrets/sar_expurgo) bash /sar/scripts/verificar_esquema.sh'
 
 # Qualidade (etapas 1 a 5 do pipeline)
 ruff check . && ruff format --check .
@@ -34,6 +36,7 @@ bandit -q -c pyproject.toml -r sar
 pip-audit --skip-editable
 
 # Testes
+# Os testes usam sar_teste por padrão (testes/conftest.py)
 pytest testes -m "not integracao and not sistema"   # unidade, rápido
 pytest testes -m integracao                         # com MySQL
 pytest testes -m sistema                            # Playwright (playwright install chromium, uma vez)

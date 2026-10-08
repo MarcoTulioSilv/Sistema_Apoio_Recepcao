@@ -41,6 +41,7 @@ def test_configuracao_do_banco_nao_expoe_a_senha(segredos: Path, monkeypatch: py
     (segredos / "sar_web").write_text("Segredo-Do-Web-123", encoding="utf-8")
     monkeypatch.setenv("SAR_BANCO_HOST", "banco")
     monkeypatch.setenv("SAR_BANCO_PORTA", "3310")
+    monkeypatch.delenv("SAR_BANCO_NOME")  # o conftest aponta os testes para sar_teste; aqui vale o padrão
     config = ConfigBanco.do_ambiente("sar_web")
     assert (config.usuario, config.host, config.porta, config.nome) == ("sar_web", "banco", 3310, "sar")
     assert "Segredo-Do-Web-123" not in repr(config)

@@ -39,8 +39,11 @@ def reverter(alvo: str) -> None:
     print(f"Banco revertido até {alvo}.")
 
 
-def comandos_usuarios(sql: str, senhas: dict[str, str]) -> list[str]:
-    """Substitui as senhas no usuarios_banco.sql e devolve os comandos, sem comentários."""
+def comandos_usuarios(sql: str, senhas: dict[str, str], banco: str = "sar") -> list[str]:
+    """Substitui as senhas e o nome do banco no usuarios_banco.sql e devolve os comandos, sem comentários."""
+    if not re.fullmatch(r"[a-z_][a-z0-9_]{0,63}", banco):
+        raise ValueError("nome de banco fora do formato aceito")
+    sql = sql.replace("{{BANCO}}", banco)
     for marcador, senha in senhas.items():
         if not re.fullmatch(r"[A-Za-z0-9_\-.~]{16,}", senha):
             raise ValueError(f"senha de {SENHAS.get(marcador, marcador)} fora do formato aceito")
@@ -62,7 +65,7 @@ def criar_usuarios_banco(admin: str, segredo_admin: str) -> None:
             # Pelo cursor do driver e sem parâmetros: o '%' de 'usuario'@'%' não é marcador de parâmetro.
             cursor = conexao.connection.cursor()
             try:
-                for comando in comandos_usuarios(sql, senhas):
+                for comando in comandos_usuarios(sql, senhas, base.nome):
                     cursor.execute(comando)
             finally:
                 cursor.close()

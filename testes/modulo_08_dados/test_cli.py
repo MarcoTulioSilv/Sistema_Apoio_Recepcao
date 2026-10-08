@@ -66,3 +66,13 @@ def test_falha_mostra_so_tipo_e_restricao_nunca_o_sql(
     assert "erro=IntegrityError" in saida.err
     assert "restricao=uq_usuario__login" in saida.err
     assert "senha-secreta-123" not in saida.out + saida.err
+
+
+@pytest.mark.requisito("DD-58")
+def test_privilegios_vao_para_o_banco_indicado() -> None:
+    comandos = comandos_usuarios(SQL, SENHAS_TESTE, "sar_teste")
+    grants = [c for c in comandos if c.startswith("GRANT")]
+    assert grants and all(" ON sar_teste." in c for c in grants)
+    assert not any("{{BANCO}}" in c for c in comandos)
+    with pytest.raises(ValueError):
+        comandos_usuarios(SQL, SENHAS_TESTE, "sar; DROP DATABASE sar")
