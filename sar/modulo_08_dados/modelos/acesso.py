@@ -116,10 +116,6 @@ class AuditoriaAncora(Base):
     ate_registro_id: Mapped[int] = mapped_column(BIGINT)
     hash: Mapped[str] = mapped_column(_ascii(64))
     registrada_em: Mapped[datetime] = mapped_column(INSTANTE)
-    anotada_em: Mapped[datetime | None] = mapped_column(INSTANTE)
-    anotada_por: Mapped[int | None] = mapped_column(
-        BIGINT, ForeignKey("usuario.id", name="fk_auditoria_ancora__anotada_por")
-    )
 
 
 class AuditoriaCorte(Base):
