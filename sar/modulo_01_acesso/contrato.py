@@ -9,7 +9,7 @@ from enum import Enum
 from typing import Protocol
 
 from sar.modulo_01_acesso.matriz import MATRIZ, Acesso, Celula, Entrada
-from sar.nucleo.contexto import Contexto, Perfil
+from sar.nucleo.contexto import Contexto
 from sar.nucleo.erros import AcessoNegado, ErroSAR
 from sar.nucleo.uow import UnidadeDeTrabalho
 
@@ -28,10 +28,21 @@ class TrocaDeSenhaExigida(ErroSAR):
     """Senha certa e provisória: repetir a entrada informando a nova senha."""
 
 
+class SessaoEncerrada(AcessoNegado):
+    """Token desconhecido ou sessão encerrada. O motivo orienta a tela: "novo_login" mostra o aviso de que
+    houve entrada em outro lugar (P-02); "inatividade" e "limite" pedem nova entrada (DD-19)."""
+
+    def __init__(self, motivo: str | None = None) -> None:
+        super().__init__(motivo or "sessao_desconhecida")
+        self.motivo = motivo
+
+
 @dataclass(frozen=True, slots=True)
-class UsuarioAutenticado:
-    usuario_id: int
-    perfil: Perfil
+class SessaoAberta:
+    """O token vai só para o cookie; o banco guarda o SHA-256 dele (DD-05)."""
+
+    token: str
+    contexto: Contexto
     nome: str
 
 
@@ -151,12 +162,22 @@ class AuditService(Protocol):
 
 
 class AuthService(Protocol):
-    def entrar(self, login: str, senha: str, origem: str, nova_senha: str | None = None) -> UsuarioAutenticado:
+    def entrar(self, login: str, senha: str, origem: str, nova_senha: str | None = None) -> SessaoAberta:
         """CredencialInvalida (mensagem única), TermoPendente, TrocaDeSenhaExigida ou RegraViolada (nova senha
-        fraca, DD-83). Toda tentativa entra na trilha, inclusive as falhas (§4.1)."""
+        fraca, DD-83). Toda tentativa entra na trilha, inclusive as falhas (§4.1). Abre sessão nova e encerra a
+        anterior do mesmo usuário (P-02)."""
         ...
 
+    def sair(self, contexto: Contexto) -> None: ...
+
     def trocar_propria_senha(self, contexto: Contexto, senha_atual: str, nova_senha: str) -> None: ...
+
+
+class SessionManager(Protocol):
+    def validar(self, token: str, origem: str, automatica: bool = False) -> Contexto:
+        """Contexto da requisição, ou SessaoEncerrada. Inatividade e limite absoluto pelos parâmetros; a
+        requisição automática da tela não renova a inatividade (DD-19, DD-57)."""
+        ...
 
 
 class IntegridadeService(Protocol):

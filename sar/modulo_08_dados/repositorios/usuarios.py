@@ -43,6 +43,9 @@ class RepositorioUsuarioSQL:
         u = self._s.get(Usuario, id)
         return _dados(u) if u is not None else None
 
+    def travar(self, id: int) -> None:
+        self._s.execute(select(Usuario.id).where(Usuario.id == id).with_for_update())
+
     def incrementar_falhas(self, id: int) -> int:
         self._s.execute(
             update(Usuario).where(Usuario.id == id).values(tentativas_falhas=Usuario.tentativas_falhas + 1),

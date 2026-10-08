@@ -12,27 +12,31 @@ from enum import Enum
 
 from sqlalchemy import Engine
 
-from sar.modulo_01_acesso.contrato import AuditService, AuthService, IntegridadeService
+from sar.modulo_01_acesso.contrato import AuditService, AuthService, IntegridadeService, SessionManager
 from sar.modulo_01_acesso.senhas import Hasher
 from sar.modulo_01_acesso.servicos import (
+    GerenciadorSessao,
     ServicoAuditoria,
     ServicoAutenticacao,
     ServicoIntegridade,
     manipulador_aviso_integridade,
+    manipulador_encerrar_sessoes,
 )
 from sar.modulo_06_configuracao.contrato import ConfiguracaoService
 from sar.modulo_06_configuracao.servicos import LeitorParametrosSQL, ServicoConfiguracao
 from sar.modulo_08_dados.cadeia import gravar_encadeado
 from sar.modulo_08_dados.cifra import CifraAesGcm
 from sar.modulo_08_dados.interfaces.parametros import RepositorioParametro
+from sar.modulo_08_dados.interfaces.sessoes import RepositorioSessao
 from sar.modulo_08_dados.interfaces.trilha import RepositorioExpurgo, RepositorioTrilha
 from sar.modulo_08_dados.interfaces.usuarios import RepositorioUsuario
 from sar.modulo_08_dados.relogio import RelogioSistema
 from sar.modulo_08_dados.repositorios.parametros import RepositorioParametroSQL
+from sar.modulo_08_dados.repositorios.sessoes import RepositorioSessaoSQL
 from sar.modulo_08_dados.repositorios.trilha import RepositorioExpurgoSQL, RepositorioTrilhaSQL
 from sar.modulo_08_dados.repositorios.usuarios import RepositorioUsuarioSQL
 from sar.modulo_08_dados.uow import ExecutorSQL, FabricaRepositorio, GravadorAuditoria, UnidadeDeTrabalhoSQL
-from sar.nucleo.eventos import Barramento, CadeiaDivergente
+from sar.nucleo.eventos import Barramento, CadeiaDivergente, UsuarioInativado
 from sar.nucleo.parametros import LeitorParametros, VerificadorUso
 from sar.nucleo.portas import Cifra, Relogio
 from sar.nucleo.uow import ExecutorDeOperacao
@@ -59,6 +63,7 @@ REPOSITORIOS: dict[type, FabricaRepositorio] = {
     RepositorioExpurgo: RepositorioExpurgoSQL,
     RepositorioParametro: RepositorioParametroSQL,
     RepositorioUsuario: RepositorioUsuarioSQL,
+    RepositorioSessao: RepositorioSessaoSQL,
 }
 
 
@@ -66,6 +71,7 @@ def montar_barramento(relogio: Relogio) -> Barramento:
     """Consumidores dos eventos de domínio (DDS §3.11)."""
     barramento = Barramento()
     barramento.assinar(CadeiaDivergente, manipulador_aviso_integridade(relogio))
+    barramento.assinar(UsuarioInativado, manipulador_encerrar_sessoes(relogio))
     return barramento
 
 
@@ -98,6 +104,7 @@ class Componentes:
     parametros: LeitorParametros
     configuracao: ConfiguracaoService
     autenticacao: AuthService
+    sessoes: SessionManager
 
 
 # Verificadores de uso dos parâmetros imutáveis (DD-51). A data de implantação ganha o seu com a sessão
@@ -121,4 +128,5 @@ def compor(engine: Engine, chave_mestra: bytes, gravar_auditoria: GravadorAudito
         parametros=parametros,
         configuracao=ServicoConfiguracao(executar, auditoria, VERIFICADORES_USO),
         autenticacao=ServicoAutenticacao(executar, auditoria, parametros, relogio, Hasher()),
+        sessoes=GerenciadorSessao(executar, auditoria, parametros, relogio),
     )

@@ -1,7 +1,8 @@
-"""Hash de senha com bcrypt (AD-19, DD-83). O custo é 12 em produção; os testes podem usar um custo menor."""
+"""Hash de senha com bcrypt (AD-19, DD-83) e token de sessão (DD-05)."""
 
 from __future__ import annotations
 
+import hashlib
 import secrets
 
 import bcrypt
@@ -25,3 +26,13 @@ class Hasher:
         dados = senha.encode()
         confere = bcrypt.checkpw(dados[:_MAXIMO_BYTES], (senha_hash or self._ficticio).encode("ascii"))
         return confere and senha_hash is not None and len(dados) <= _MAXIMO_BYTES
+
+
+def novo_token() -> str:
+    """256 bits aleatórios (DD-05)."""
+    return secrets.token_urlsafe(32)
+
+
+def hash_token(token: str) -> str:
+    """O que o banco guarda: um dump não entrega sessões válidas (DD-05)."""
+    return hashlib.sha256(token.encode()).hexdigest()

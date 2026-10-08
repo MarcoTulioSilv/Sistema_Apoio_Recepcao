@@ -15,6 +15,7 @@ from sqlalchemy import Engine, text
 
 from sar.modulo_08_dados.banco import ConfigBanco, criar_engine
 from sar.nucleo.logs import RUIDOSOS
+from testes.apoio.acesso import HASH, CriarUsuario
 from testes.apoio.fabrica import VALORES_SENSIVEIS, Fabrica
 from testes.apoio.relogio_controlado import RelogioControlado
 from testes.apoio.vazamento import ColetorLogs, vazamentos
@@ -147,3 +148,29 @@ def usuarios(trilha_zerada: Engine) -> Iterator[dict[str, int]]:
         c.execute(text("DELETE FROM sessao_usuario WHERE id = :s"), {"s": ids["sessao"]})
         for chave in perfis:
             c.execute(text("DELETE FROM usuario WHERE id = :u"), {"u": ids[chave]})
+
+
+@pytest.fixture
+def criar_usuario(trilha_zerada: Engine) -> Iterator[CriarUsuario]:
+    criados: list[int] = []
+
+    def criar(login: str, *, perfil: str = "recepcao", ativo: bool = True, termo: bool = True,
+              trocar: bool = False, senha_hash: str = HASH) -> int:  # fmt: skip
+        with trilha_zerada.begin() as c:
+            c.execute(
+                text(
+                    "INSERT INTO usuario (nome, login, senha_hash, perfil, ativo, deve_trocar_senha, termo_ciencia_em,"
+                    " criado_em) VALUES ('Marco Túlio Fictício', :l, :h, :p, :a, :t, IF(:termo, NOW(6), NULL), NOW(6))"
+                ),
+                {"l": login, "h": senha_hash, "p": perfil, "a": ativo, "t": trocar, "termo": termo},
+            )
+            criados.append(c.execute(text("SELECT id FROM usuario WHERE login = :l"), {"l": login}).scalar_one())
+        return criados[-1]
+
+    yield criar
+    with trilha_zerada.begin() as c:
+        for comando in ZERAR_TRILHA:
+            c.execute(text(comando))
+        for id_ in criados:
+            c.execute(text("DELETE FROM sessao_usuario WHERE usuario_id = :u"), {"u": id_})
+            c.execute(text("DELETE FROM usuario WHERE id = :u"), {"u": id_})

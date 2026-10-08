@@ -4,9 +4,8 @@ from __future__ import annotations
 
 import statistics
 import time
-from collections.abc import Callable, Iterator
 from concurrent.futures import ThreadPoolExecutor
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from sqlalchemy import Engine, text
@@ -17,22 +16,10 @@ from sar.modulo_01_acesso.senhas import Hasher
 from sar.modulo_01_acesso.servicos import ServicoAuditoria, ServicoAutenticacao
 from sar.nucleo.contexto import Contexto, Perfil
 from sar.nucleo.erros import RegraViolada
-from sar.nucleo.parametros import PARAMETROS
+from testes.apoio.acesso import HASHER, SENHA, CriarUsuario, ParametrosPadrao
 from testes.apoio.relogio_controlado import RelogioControlado
-from testes.conftest import ZERAR_TRILHA
 
 pytestmark = pytest.mark.integracao
-
-SENHA = "cafe com leite"
-HASHER = Hasher(custo=4)  # rápido nos testes; o custo 12 de produção é conferido no teste de unidade
-HASH = HASHER.gerar(SENHA)
-
-CriarUsuario = Callable[..., int]
-
-
-class ParametrosPadrao:
-    def valor(self, nome: str) -> int | bool | date | None:
-        return PARAMETROS[nome].padrao  # 5 tentativas, 5 min, teto de 60 min
 
 
 class HasherContado(Hasher):
@@ -43,31 +30,6 @@ class HasherContado(Hasher):
     def conferir(self, senha: str, senha_hash: str | None) -> bool:
         self.chamadas += 1
         return super().conferir(senha, senha_hash)
-
-
-@pytest.fixture
-def criar_usuario(trilha_zerada: Engine) -> Iterator[CriarUsuario]:
-    criados: list[int] = []
-
-    def criar(login: str, *, perfil: str = "recepcao", ativo: bool = True, termo: bool = True,
-              trocar: bool = False, senha_hash: str = HASH) -> int:  # fmt: skip
-        with trilha_zerada.begin() as c:
-            c.execute(
-                text(
-                    "INSERT INTO usuario (nome, login, senha_hash, perfil, ativo, deve_trocar_senha, termo_ciencia_em,"
-                    " criado_em) VALUES ('Marco Túlio Fictício', :l, :h, :p, :a, :t, IF(:termo, NOW(6), NULL), NOW(6))"
-                ),
-                {"l": login, "h": senha_hash, "p": perfil, "a": ativo, "t": trocar, "termo": termo},
-            )
-            criados.append(c.execute(text("SELECT id FROM usuario WHERE login = :l"), {"l": login}).scalar_one())
-        return criados[-1]
-
-    yield criar
-    with trilha_zerada.begin() as c:
-        for comando in ZERAR_TRILHA:
-            c.execute(text(comando))
-        for id_ in criados:
-            c.execute(text("DELETE FROM usuario WHERE id = :u"), {"u": id_})
 
 
 @pytest.fixture
@@ -97,8 +59,8 @@ def test_entrada_com_senha_certa_e_auditada(
     criar_usuario: CriarUsuario, engine_web: Engine, relogio: RelogioControlado
 ) -> None:
     uid = criar_usuario("auth_ok", perfil="administracao")
-    autenticado = servico(engine_web, relogio).entrar("auth_ok", SENHA, "10.0.0.5")
-    assert (autenticado.usuario_id, autenticado.perfil) == (uid, Perfil.ADMINISTRACAO)
+    aberta = servico(engine_web, relogio).entrar("auth_ok", SENHA, "10.0.0.5")
+    assert (aberta.contexto.usuario_id, aberta.contexto.perfil) == (uid, Perfil.ADMINISTRACAO)
     assert trilha(engine_web) == [("acesso.sessao.entrar", uid, str(uid), None, None)]
 
 

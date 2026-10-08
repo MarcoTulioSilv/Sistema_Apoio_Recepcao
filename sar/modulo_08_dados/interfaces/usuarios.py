@@ -27,6 +27,10 @@ class RepositorioUsuario(Protocol):
 
     def por_id(self, id: int) -> DadosUsuario | None: ...
 
+    def travar(self, id: int) -> None:
+        """Trava a linha até o commit: duas entradas do mesmo usuário ao mesmo tempo se serializam (P-02)."""
+        ...
+
     def incrementar_falhas(self, id: int) -> int:
         """Soma uma falha no próprio banco e devolve o total: tentativas em paralelo não se perdem, porque a
         linha fica travada até o commit. Os contadores do bloqueio não mudam a versão (DD-17), para uma

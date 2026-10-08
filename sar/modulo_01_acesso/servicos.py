@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import timedelta
 
 from sar.modulo_01_acesso.contrato import (
@@ -15,9 +15,10 @@ from sar.modulo_01_acesso.contrato import (
     CredencialInvalida,
     PermissionGuard,
     ResultadoVerificacao,
+    SessaoAberta,
+    SessaoEncerrada,
     TermoPendente,
     TrocaDeSenhaExigida,
-    UsuarioAutenticado,
 )
 from sar.modulo_01_acesso.regras import (
     cinco_anos_antes,
@@ -27,13 +28,14 @@ from sar.modulo_01_acesso.regras import (
     validar_senha,
     verificar_elos,
 )
-from sar.modulo_01_acesso.senhas import Hasher
+from sar.modulo_01_acesso.senhas import Hasher, hash_token, novo_token
 from sar.modulo_08_dados.canonico import HASH_INICIAL, serializar_alteracoes
+from sar.modulo_08_dados.interfaces.sessoes import RepositorioSessao
 from sar.modulo_08_dados.interfaces.trilha import RepositorioExpurgo, RepositorioTrilha
 from sar.modulo_08_dados.interfaces.usuarios import DadosUsuario, RepositorioUsuario
 from sar.nucleo.contexto import Contexto, Perfil
 from sar.nucleo.erros import AcessoNegado, ErroSAR, NaoEncontrado, RegraViolada
-from sar.nucleo.eventos import CadeiaDivergente
+from sar.nucleo.eventos import CadeiaDivergente, UsuarioInativado
 from sar.nucleo.logs import novo_requisicao_id, requisicao_atual
 from sar.nucleo.parametros import LeitorParametros
 from sar.nucleo.portas import Relogio
@@ -244,10 +246,10 @@ class ServicoIntegridade:
 # ------------------------------------------------------------------ autenticação (DDS §5.2, DD-83)
 @dataclass(frozen=True, slots=True)
 class _Desfecho:
-    """O que a operação de entrada decidiu. Falha também é gravada (contador, bloqueio e trilha): por isso a
-    operação confirma e o erro só é levantado depois do commit."""
+    """O que a operação decidiu. Falha também é gravada (contador, bloqueio, sessão encerrada e trilha): por isso
+    a operação confirma e o erro só é levantado depois do commit."""
 
-    usuario: UsuarioAutenticado | None = None
+    sessao: SessaoAberta | None = None
     erro: type[ErroSAR] | None = None
 
 
@@ -272,9 +274,9 @@ class ServicoAutenticacao:
         self._relogio = relogio
         self._hasher = hasher
 
-    def entrar(self, login: str, senha: str, origem: str, nova_senha: str | None = None) -> UsuarioAutenticado:
+    def entrar(self, login: str, senha: str, origem: str, nova_senha: str | None = None) -> SessaoAberta:
         """CredencialInvalida (sempre a mesma), TermoPendente, TrocaDeSenhaExigida ou RegraViolada (nova senha
-        fraca). A sessão é criada sobre o usuário autenticado (etapa 5b)."""
+        fraca). Abre a sessão na mesma transação e encerra a anterior do usuário (P-02, DEC-63)."""
         agora = self._relogio.agora()
         limite = _inteiro(self._parametros.valor("login_tentativas"))
         inicial = _inteiro(self._parametros.valor("login_bloqueio_inicial"))
@@ -314,15 +316,43 @@ class ServicoAutenticacao:
                 if nova_senha is None:
                     return falha(uow, contexto, "falha.troca_exigida", TrocaDeSenhaExigida)
                 self._gravar_nova_senha(uow, contexto, usuario, nova_senha)
-            self._auditoria.registrar(uow, contexto, "acesso.sessao.entrar", "usuario", str(usuario.id))
-            return _Desfecho(usuario=UsuarioAutenticado(usuario.id, Perfil(usuario.perfil), usuario.nome))
+            return _Desfecho(sessao=self._abrir_sessao(uow, contexto, usuario.nome))
 
         desfecho = self._executar(operacao)
         if desfecho.erro is not None:
             raise desfecho.erro()
-        if desfecho.usuario is None:  # sem erro, a operação sempre devolve o usuário
+        if desfecho.sessao is None:  # sem erro, a operação sempre devolve a sessão
             raise RuntimeError("entrada sem desfecho")
-        return desfecho.usuario
+        return desfecho.sessao
+
+    def _abrir_sessao(self, uow: UnidadeDeTrabalho, contexto: Contexto, nome: str) -> SessaoAberta:
+        usuario_id = contexto.usuario_id
+        if usuario_id is None:
+            raise AcessoNegado()
+        uow.repositorio(RepositorioUsuario).travar(usuario_id)  # duas entradas simultâneas se serializam
+        sessoes = uow.repositorio(RepositorioSessao)
+        for anterior in sessoes.encerrar_do_usuario(usuario_id, contexto.instante, "novo_login"):  # P-02
+            fim = replace(contexto, sessao_id=anterior)
+            self._auditoria.registrar(uow, fim, "acesso.sessao.sair", "usuario", str(usuario_id), motivo="novo_login")
+        token = novo_token()  # identificador novo a cada entrada (DD-19)
+        sessao_id = sessoes.criar(hash_token(token), usuario_id, contexto.origem, contexto.instante)
+        aberto = replace(contexto, sessao_id=sessao_id)
+        self._auditoria.registrar(uow, aberto, "acesso.sessao.entrar", "usuario", str(usuario_id))
+        return SessaoAberta(token, aberto, nome)
+
+    def sair(self, contexto: Contexto) -> None:
+        GUARDA.exigir(contexto, "acesso.sessao.sair")
+        sessao_id = contexto.sessao_id
+        if sessao_id is None:
+            raise AcessoNegado()
+
+        def operacao(uow: UnidadeDeTrabalho) -> None:
+            uow.repositorio(RepositorioSessao).encerrar(sessao_id, contexto.instante, "saida")
+            self._auditoria.registrar(
+                uow, contexto, "acesso.sessao.sair", "usuario", str(contexto.usuario_id), motivo="saida"
+            )
+
+        self._executar(operacao)
 
     def trocar_propria_senha(self, contexto: Contexto, senha_atual: str, nova_senha: str) -> None:
         GUARDA.exigir(contexto, "acesso.senha.trocar_propria")
@@ -347,3 +377,69 @@ class ServicoAutenticacao:
         uow.repositorio(RepositorioUsuario).trocar_senha(usuario.id, self._hasher.gerar(nova), deve_trocar=False)
         # "Sim, sem valores" (§4.1): nem a senha nem o hash entram na trilha.
         self._auditoria.registrar(uow, contexto, "acesso.senha.trocar_propria", "usuario", str(usuario.id))
+
+
+# ------------------------------------------------------------------ sessão (DD-05, DD-19, P-02)
+@dataclass(frozen=True, slots=True)
+class _Validacao:
+    contexto: Contexto | None = None
+    motivo: str | None = None  # por que a sessão não vale; None com contexto None = token desconhecido
+
+
+class GerenciadorSessao:
+    def __init__(
+        self, executar: ExecutorDeOperacao, auditoria: AuditService, parametros: LeitorParametros, relogio: Relogio
+    ) -> None:
+        self._executar = executar
+        self._auditoria = auditoria
+        self._parametros = parametros
+        self._relogio = relogio
+
+    def validar(self, token: str, origem: str, automatica: bool = False) -> Contexto:
+        agora = self._relogio.agora()
+        inatividade = timedelta(minutes=_inteiro(self._parametros.valor("sessao_inatividade")))
+        duracao_maxima = timedelta(hours=_inteiro(self._parametros.valor("sessao_duracao_maxima")))
+        requisicao = requisicao_atual() or novo_requisicao_id()
+
+        def operacao(uow: UnidadeDeTrabalho) -> _Validacao:
+            sessoes = uow.repositorio(RepositorioSessao)
+            sessao = sessoes.por_token_hash(hash_token(token))
+            if sessao is None:
+                return _Validacao()
+            if sessao.encerrada_em is not None:
+                return _Validacao(motivo=sessao.motivo_encerramento)
+            # O usuário é lido a cada requisição: perfil alterado vale na hora, e inativado não age mais.
+            usuario = uow.repositorio(RepositorioUsuario).por_id(sessao.usuario_id)
+            if usuario is None:
+                return _Validacao()
+            contexto = Contexto(usuario.id, Perfil(usuario.perfil), sessao.id, origem, agora, requisicao)
+            motivo = None
+            if not usuario.ativo:
+                motivo = "inativacao"
+            elif agora - sessao.ultimo_acesso > inatividade:
+                motivo = "inatividade"  # DD-19, QAS-09: a próxima ação exige nova entrada
+            elif agora - sessao.criada_em > duracao_maxima:
+                motivo = "limite"
+            if motivo is not None:
+                sessoes.encerrar(sessao.id, agora, motivo)
+                self._auditoria.registrar(
+                    uow, contexto, "acesso.sessao.sair", "usuario", str(usuario.id), motivo=motivo
+                )
+                return _Validacao(motivo=motivo)
+            if not automatica:
+                sessoes.tocar(sessao.id, agora)  # a atualização automática da tela não conta (DD-57)
+            return _Validacao(contexto=contexto)
+
+        validacao = self._executar(operacao)
+        if validacao.contexto is None:
+            raise SessaoEncerrada(validacao.motivo)
+        return validacao.contexto
+
+
+def manipulador_encerrar_sessoes(relogio: Relogio) -> Callable[[UnidadeDeTrabalho, UsuarioInativado], None]:
+    """Consumidor de UsuarioInativado (DDS §3.11): as sessões do usuário acabam na mesma transação."""
+
+    def encerrar(uow: UnidadeDeTrabalho, evento: UsuarioInativado) -> None:
+        uow.repositorio(RepositorioSessao).encerrar_do_usuario(evento.usuario_id, relogio.agora(), "inativacao")
+
+    return encerrar
