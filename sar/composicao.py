@@ -15,6 +15,7 @@ from sqlalchemy import Engine
 from sar.modulo_01_acesso.contrato import (
     AuditService,
     AuthService,
+    AutorizacaoService,
     IntegridadeService,
     SessionManager,
     UsuarioService,
@@ -24,6 +25,7 @@ from sar.modulo_01_acesso.servicos import (
     GerenciadorSessao,
     ServicoAuditoria,
     ServicoAutenticacao,
+    ServicoAutorizacoes,
     ServicoIntegridade,
     ServicoUsuarios,
     manipulador_aviso_integridade,
@@ -33,11 +35,13 @@ from sar.modulo_06_configuracao.contrato import ConfiguracaoService
 from sar.modulo_06_configuracao.servicos import LeitorParametrosSQL, ServicoConfiguracao
 from sar.modulo_08_dados.cadeia import gravar_encadeado
 from sar.modulo_08_dados.cifra import CifraAesGcm
+from sar.modulo_08_dados.interfaces.autorizacoes import RepositorioAutorizacao
 from sar.modulo_08_dados.interfaces.parametros import RepositorioParametro
 from sar.modulo_08_dados.interfaces.sessoes import RepositorioSessao
 from sar.modulo_08_dados.interfaces.trilha import RepositorioExpurgo, RepositorioTrilha
 from sar.modulo_08_dados.interfaces.usuarios import RepositorioUsuario
 from sar.modulo_08_dados.relogio import RelogioSistema
+from sar.modulo_08_dados.repositorios.autorizacoes import RepositorioAutorizacaoSQL
 from sar.modulo_08_dados.repositorios.parametros import RepositorioParametroSQL
 from sar.modulo_08_dados.repositorios.sessoes import RepositorioSessaoSQL
 from sar.modulo_08_dados.repositorios.trilha import RepositorioExpurgoSQL, RepositorioTrilhaSQL
@@ -45,7 +49,7 @@ from sar.modulo_08_dados.repositorios.usuarios import RepositorioUsuarioSQL
 from sar.modulo_08_dados.uow import ExecutorSQL, FabricaRepositorio, GravadorAuditoria, UnidadeDeTrabalhoSQL
 from sar.nucleo.eventos import Barramento, CadeiaDivergente, UsuarioInativado
 from sar.nucleo.parametros import LeitorParametros, VerificadorUso
-from sar.nucleo.portas import Cifra, Relogio
+from sar.nucleo.portas import Cifra, ExecutorAutorizavel, Relogio
 from sar.nucleo.uow import ExecutorDeOperacao
 
 
@@ -71,6 +75,7 @@ REPOSITORIOS: dict[type, FabricaRepositorio] = {
     RepositorioParametro: RepositorioParametroSQL,
     RepositorioUsuario: RepositorioUsuarioSQL,
     RepositorioSessao: RepositorioSessaoSQL,
+    RepositorioAutorizacao: RepositorioAutorizacaoSQL,
 }
 
 
@@ -113,11 +118,15 @@ class Componentes:
     autenticacao: AuthService
     sessoes: SessionManager
     usuarios: UsuarioService
+    autorizacoes: AutorizacaoService
 
 
 # Verificadores de uso dos parâmetros imutáveis (DD-51). A data de implantação ganha o seu com a sessão
 # confirmada, no Incremento 3 (MOD-03); até lá não há sessão confirmada, e ela pode ser definida.
 VERIFICADORES_USO: dict[str, VerificadorUso] = {}
+
+# Executores das operações sujeitas à autorização (DEC-42), por tipo. Chegam com os módulos 02 a 04.
+EXECUTORES_AUTORIZAVEIS: dict[str, ExecutorAutorizavel] = {}
 
 
 def compor(engine: Engine, chave_mestra: bytes, gravar_auditoria: GravadorAuditoria = gravar_encadeado) -> Componentes:
@@ -139,4 +148,5 @@ def compor(engine: Engine, chave_mestra: bytes, gravar_auditoria: GravadorAudito
         autenticacao=ServicoAutenticacao(executar, auditoria, parametros, relogio, hasher),
         sessoes=GerenciadorSessao(executar, auditoria, parametros, relogio),
         usuarios=ServicoUsuarios(executar, auditoria, hasher),
+        autorizacoes=ServicoAutorizacoes(executar, auditoria, EXECUTORES_AUTORIZAVEIS),
     )

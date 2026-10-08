@@ -82,6 +82,16 @@ class PermissionGuard:
         celula = self.celula(contexto, operacao, condicao)
         return celula is not None and celula.acesso is Acesso.SOLICITA
 
+    def solicitavel(self, contexto: Contexto, operacao: str) -> bool:
+        """O perfil pode pedir a operação em alguma das variantes dela ("Aut.", DEC-42)."""
+        variantes = self._por_codigo.get(operacao)
+        if not variantes:
+            raise LookupError(f"operação fora do catálogo do DDS §4: {operacao}")
+        return any(
+            (celula := e.celulas.get(contexto.perfil)) is not None and celula.acesso is Acesso.SOLICITA
+            for e in variantes
+        )
+
     def exigir(self, contexto: Contexto, operacao: str, condicao: str | None = None) -> Celula:
         """Devolve a célula, para o serviço aplicar a nota (ex.: "diagnóstico" para o TI)."""
         celula = self.celula(contexto, operacao, condicao)
@@ -217,6 +227,46 @@ class UsuarioService(Protocol):
     def registrar_termo(self, contexto: Contexto, usuario_id: int, versao: int) -> None:
         """O TI registra que o usuário assinou o termo de ciência de uso (DEC-47)."""
         ...
+
+
+# ------------------------------------------------------------------ autorizações (DDS §5.3, DEC-42)
+@dataclass(frozen=True, slots=True)
+class SolicitacaoResumo:
+    id: str  # 32 hexadecimais; aleatório, mas nunca substitui a verificação de permissão (RNF-623)
+    tipo: str
+    entidade: str
+    entidade_id: str
+    descricao: str  # texto do executor, para a tela de decisão
+    motivo: str
+    solicitante_id: int
+    solicitada_em: datetime
+    estado: str
+    decisor_id: int | None
+    decidida_em: datetime | None
+    motivo_decisao: str | None
+
+
+class AutorizacaoService(Protocol):
+    def solicitar(
+        self, contexto: Contexto, tipo: str, entidade_id: str, parametros: Mapping[str, object], motivo: str
+    ) -> str:
+        """Id da solicitação. Pedida pela administração, nasce executada, com o mesmo usuário nas duas pontas
+        (P-01). Os parâmetros carregam só identificadores e códigos, nunca dado pessoal."""
+        ...
+
+    def aprovar(self, contexto: Contexto, solicitacao_id: str, motivo: str | None = None) -> str:
+        """Pela sessão do próprio autorizador. Estado final: executada, ou invalidada se o alvo mudou."""
+        ...
+
+    def recusar(self, contexto: Contexto, solicitacao_id: str, motivo: str) -> None: ...
+
+    def cancelar(self, contexto: Contexto, solicitacao_id: str) -> None:
+        """Só o próprio solicitante, enquanto pendente."""
+        ...
+
+    def pendentes(self, contexto: Contexto) -> list[SolicitacaoResumo]: ...
+
+    def minhas(self, contexto: Contexto) -> list[SolicitacaoResumo]: ...
 
 
 class SessionManager(Protocol):

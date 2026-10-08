@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import uuid
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, replace
 from datetime import timedelta
@@ -17,6 +18,7 @@ from sar.modulo_01_acesso.contrato import (
     ResultadoVerificacao,
     SessaoAberta,
     SessaoEncerrada,
+    SolicitacaoResumo,
     TermoPendente,
     TrocaDeSenhaExigida,
     UsuarioCriado,
@@ -35,6 +37,7 @@ from sar.modulo_01_acesso.regras import (
 )
 from sar.modulo_01_acesso.senhas import Hasher, hash_token, novo_token
 from sar.modulo_08_dados.canonico import HASH_INICIAL, serializar_alteracoes
+from sar.modulo_08_dados.interfaces.autorizacoes import DadosSolicitacao, RepositorioAutorizacao
 from sar.modulo_08_dados.interfaces.sessoes import RepositorioSessao
 from sar.modulo_08_dados.interfaces.trilha import RepositorioExpurgo, RepositorioTrilha
 from sar.modulo_08_dados.interfaces.usuarios import DadosUsuario, RepositorioUsuario
@@ -43,7 +46,7 @@ from sar.nucleo.erros import AcessoNegado, ConflitoDeVersao, ErroSAR, NaoEncontr
 from sar.nucleo.eventos import CadeiaDivergente, UsuarioInativado
 from sar.nucleo.logs import campos_do_erro, novo_requisicao_id, requisicao_atual
 from sar.nucleo.parametros import LeitorParametros
-from sar.nucleo.portas import Relogio
+from sar.nucleo.portas import ExecutorAutorizavel, Relogio
 from sar.nucleo.uow import ExecutorDeOperacao, RegistroAuditoria, UnidadeDeTrabalho
 
 # Tamanhos das colunas da tabela auditoria (0001): estourar é erro de programação, não de usuário.
@@ -612,3 +615,159 @@ class ServicoUsuarios:
             return {"termo_ciencia_em": (None, contexto.instante)}
 
         self._alterar(contexto, "acesso.usuario.registrar_termo_ciencia", usuario_id, versao, mudar)
+
+
+# ------------------------------------------------------------------ autorizações (DDS §5.3, DEC-42, P-01)
+def _motivo(texto: str, codigo: str) -> str:
+    limpo = " ".join(texto.split())
+    if not 1 <= len(limpo) <= 500:
+        raise RegraViolada(codigo)
+    return limpo
+
+
+class ServicoAutorizacoes:
+    def __init__(
+        self, executar: ExecutorDeOperacao, auditoria: AuditService, executores: Mapping[str, ExecutorAutorizavel]
+    ) -> None:
+        self._executar = executar
+        self._auditoria = auditoria
+        self._executores = dict(executores)
+
+    def _executor(self, tipo: str) -> ExecutorAutorizavel:
+        executor = self._executores.get(tipo)
+        if executor is None:
+            raise RegraViolada("autorizacao.tipo_sem_executor")
+        return executor
+
+    def _resumo(self, uow: UnidadeDeTrabalho, s: DadosSolicitacao) -> SolicitacaoResumo:
+        descricao = self._executor(s.tipo).descrever(uow, s.parametros)
+        return SolicitacaoResumo(
+            s.id, s.tipo, s.entidade, s.entidade_id, descricao, s.motivo, s.solicitante_id, s.solicitada_em,
+            s.estado, s.decisor_id, s.decidida_em, s.motivo_decisao,
+        )  # fmt: skip
+
+    def solicitar(
+        self, contexto: Contexto, tipo: str, entidade_id: str, parametros: Mapping[str, object], motivo: str
+    ) -> str:
+        GUARDA.exigir(contexto, "acesso.autorizacao.solicitar")
+        if not GUARDA.solicitavel(contexto, tipo):
+            raise AcessoNegado()  # o perfil executa direto, ou não alcança a operação
+        executor, texto = self._executor(tipo), _motivo(motivo, "autorizacao.motivo_obrigatorio")
+        usuario_id = contexto.usuario_id
+        if usuario_id is None:
+            raise AcessoNegado()
+        solicitacao_id = uuid.uuid4().hex
+        automatica = contexto.perfil is Perfil.ADMINISTRACAO  # P-01: a administração pede e aprova na hora
+
+        def operacao(uow: UnidadeDeTrabalho) -> None:
+            versao = None if automatica else executor.versao_atual(uow, entidade_id)
+            uow.repositorio(RepositorioAutorizacao).criar(
+                DadosSolicitacao(
+                    id=solicitacao_id,
+                    tipo=tipo,
+                    entidade=tipo.split(".")[1],
+                    entidade_id=entidade_id,
+                    parametros=parametros,
+                    versao_alvo=versao,
+                    motivo=texto,
+                    solicitante_id=usuario_id,
+                    solicitada_em=contexto.instante,
+                    estado="executada" if automatica else "pendente",
+                    decisor_id=usuario_id if automatica else None,
+                    decidida_em=contexto.instante if automatica else None,
+                    motivo_decisao=None,
+                )
+            )
+            self._auditoria.registrar(
+                uow, contexto, "acesso.autorizacao.solicitar", "solicitacao_autorizacao", solicitacao_id,
+                {"tipo": (None, tipo), "estado": (None, "executada" if automatica else "pendente")}, texto,
+                usuario_id if automatica else None,
+            )  # fmt: skip
+            if automatica:
+                executor.executar(uow, contexto, usuario_id, parametros)
+
+        self._executar(operacao)
+        return solicitacao_id
+
+    def aprovar(self, contexto: Contexto, solicitacao_id: str, motivo: str | None = None) -> str:
+        GUARDA.exigir(contexto, "acesso.autorizacao.decidir")
+        decisor_id = contexto.usuario_id
+        if decisor_id is None:
+            raise AcessoNegado()
+        texto = _motivo(motivo, "autorizacao.motivo") if motivo else None
+
+        def operacao(uow: UnidadeDeTrabalho) -> str:
+            solicitacoes = uow.repositorio(RepositorioAutorizacao)
+            s = self._pendente(solicitacoes, solicitacao_id)
+            executor = self._executor(s.tipo)
+            estado = "executada"
+            if executor.versao_atual(uow, s.entidade_id) != s.versao_alvo:
+                estado = "invalidada"  # o alvo mudou desde o pedido (§5.3)
+            else:
+                solicitante = uow.repositorio(RepositorioUsuario).por_id(s.solicitante_id)
+                if solicitante is None:
+                    raise NaoEncontrado()
+                # O autor é o solicitante, que não está logado agora; a origem, o instante e a requisição são os
+                # da aprovação, quando a ação acontece (§5.3). As duas identidades ficam separadas (QAS-10).
+                autor = Contexto(
+                    solicitante.id, Perfil(solicitante.perfil), None, contexto.origem, contexto.instante,
+                    contexto.requisicao_id,
+                )  # fmt: skip
+                executor.executar(uow, autor, decisor_id, s.parametros)
+            solicitacoes.decidir(s.id, estado, decisor_id, contexto.instante, texto)
+            self._auditoria.registrar(
+                uow, contexto, "acesso.autorizacao.decidir", "solicitacao_autorizacao", s.id,
+                {"estado": ("pendente", estado)}, texto,
+            )  # fmt: skip
+            return estado
+
+        return self._executar(operacao)
+
+    def recusar(self, contexto: Contexto, solicitacao_id: str, motivo: str) -> None:
+        GUARDA.exigir(contexto, "acesso.autorizacao.decidir")
+        texto = _motivo(motivo, "autorizacao.motivo_obrigatorio")  # recusa sempre com motivo (§5.3)
+        self._encerrar(contexto, solicitacao_id, "recusada", "acesso.autorizacao.decidir", texto)
+
+    def cancelar(self, contexto: Contexto, solicitacao_id: str) -> None:
+        GUARDA.exigir(contexto, "acesso.autorizacao.cancelar_propria")
+        self._encerrar(contexto, solicitacao_id, "cancelada", "acesso.autorizacao.cancelar_propria", None)
+
+    def _encerrar(
+        self, contexto: Contexto, solicitacao_id: str, estado: str, operacao_catalogo: str, motivo: str | None
+    ) -> None:
+        def operacao(uow: UnidadeDeTrabalho) -> None:
+            solicitacoes = uow.repositorio(RepositorioAutorizacao)
+            s = self._pendente(solicitacoes, solicitacao_id)
+            if estado == "cancelada" and s.solicitante_id != contexto.usuario_id:
+                raise AcessoNegado()  # só a própria
+            solicitacoes.decidir(s.id, estado, contexto.usuario_id, contexto.instante, motivo)
+            self._auditoria.registrar(
+                uow, contexto, operacao_catalogo, "solicitacao_autorizacao", s.id, {"estado": ("pendente", estado)},
+                motivo,
+            )  # fmt: skip
+
+        self._executar(operacao)
+
+    @staticmethod
+    def _pendente(solicitacoes: RepositorioAutorizacao, solicitacao_id: str) -> DadosSolicitacao:
+        s = solicitacoes.travar(solicitacao_id)  # duas decisões da mesma solicitação se serializam
+        if s is None:
+            raise NaoEncontrado()
+        if s.estado != "pendente":
+            raise RegraViolada("autorizacao.ja_decidida")  # executada, invalidada, recusada e cancelada são finais
+        return s
+
+    def pendentes(self, contexto: Contexto) -> list[SolicitacaoResumo]:
+        GUARDA.exigir(contexto, "acesso.autorizacao.decidir")
+        return self._executar(
+            lambda uow: [self._resumo(uow, s) for s in uow.repositorio(RepositorioAutorizacao).listar("pendente")]
+        )
+
+    def minhas(self, contexto: Contexto) -> list[SolicitacaoResumo]:
+        GUARDA.exigir(contexto, "acesso.autorizacao.solicitar")
+        return self._executar(
+            lambda uow: [
+                self._resumo(uow, s)
+                for s in uow.repositorio(RepositorioAutorizacao).listar(solicitante_id=contexto.usuario_id)
+            ]
+        )
