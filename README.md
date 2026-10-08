@@ -53,7 +53,9 @@ bin/tailwindcss -i sar/web/src/sar.css -o sar/web/static/css/sar.css --minify
 python scripts/verificar_rastreabilidade.py --estrito-citacoes
 
 # Aplicação local
-python -m sar.wsgi                                 # Waitress em 127.0.0.1:8080, logs JSON (DD-81)
+# Aplicação local, no banco sar; o superusuário escolhe o perfil pelo cabeçalho (DD-85)
+export SAR_AMBIENTE=desenvolvimento SAR_SUPERUSUARIOS=seu.login
+python -m sar.wsgi                                 # Waitress em http://127.0.0.1:8080, logs JSON (DD-81)
 ```
 
 O pipeline de integração contínua (`.github/workflows/ci.yml`) roda as 11 etapas do plano de testes

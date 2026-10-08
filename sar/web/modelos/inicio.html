@@ -1,0 +1,9 @@
+{% extends "layout.html" %}
+{% block titulo_pagina %}Início{% endblock %}
+{% block subtitulo %}{{ perfil_rotulo }}{% endblock %}
+{% block conteudo %}
+<section class="cartao flex max-w-2xl flex-col gap-2 p-5" aria-labelledby="inicio-t">
+  <h2 id="inicio-t" class="m-0 text-xl">Bem-vindo ao SAR</h2>
+  <p class="m-0 text-[15px] text-suave">As sessões do dia e as pendências chegam a esta tela nos próximos incrementos.</p>
+</section>
+{% endblock %}

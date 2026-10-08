@@ -42,6 +42,7 @@
               <li><a href="#pacientes">Cartão de paciente e quadros</a></li>
               <li><a href="#formularios">Campos de formulário</a></li>
               <li><a href="#avisos">Avisos e contêineres</a></li>
+              <li><a href="#entrada">Tela de entrada</a></li>
               <li><a href="#regras">Regras</a></li>
             </ul>
           </nav>
@@ -360,6 +361,12 @@
                   &lt;button type=&quot;button&quot; class=&quot;btn-secundario self-start&quot; data-acao=&quot;adicionar-telefone&quot;&gt;Adicionar telefone do contato&lt;/button&gt;
                 &lt;/div&gt;&lt;/div&gt;</code></pre>
             </div>
+            <div class="flex flex-col gap-2">
+              <h3 class="m-0 text-base">Seletor de perfil (só em desenvolvimento)</h3>
+              <div class="amostra"><div class=""><form class="flex flex-wrap items-end gap-2" method="post" action="#formularios"><label class="campo"><span class="rotulo">Agir como (desenvolvimento)</span><select class="entrada" name="perfil"><option value="recepcao" selected>Recepção</option><option value="administracao">Administração</option><option value="visualizador">Visualização</option><option value="ti">TI</option><option value="enfermagem">Enfermagem</option></select></label><button class="btn-neutro" type="submit">Trocar perfil</button></form></div></div>
+              <p class="m-0 max-w-[75ch] text-sm text-suave">Fica no cabeçalho, só para o superusuário e só com <code>SAR_AMBIENTE=desenvolvimento</code> (DD-85). Cada ação passa pela matriz com o perfil escolhido. Nunca aparece em produção.</p>
+              <pre class="codigo"><code>&lt;form class=&quot;flex flex-wrap items-end gap-2&quot; method=&quot;post&quot; action=&quot;#formularios&quot;&gt;&lt;label class=&quot;campo&quot;&gt;&lt;span class=&quot;rotulo&quot;&gt;Agir como (desenvolvimento)&lt;/span&gt;&lt;select class=&quot;entrada&quot; name=&quot;perfil&quot;&gt;&lt;option value=&quot;recepcao&quot; selected&gt;Recepção&lt;/option&gt;&lt;option value=&quot;administracao&quot;&gt;Administração&lt;/option&gt;&lt;option value=&quot;visualizador&quot;&gt;Visualização&lt;/option&gt;&lt;option value=&quot;ti&quot;&gt;TI&lt;/option&gt;&lt;option value=&quot;enfermagem&quot;&gt;Enfermagem&lt;/option&gt;&lt;/select&gt;&lt;/label&gt;&lt;button class=&quot;btn-neutro&quot; type=&quot;submit&quot;&gt;Trocar perfil&lt;/button&gt;&lt;/form&gt;</code></pre>
+            </div>
           </section>
           <section id="avisos" aria-labelledby="avisos-t" class="cartao flex flex-col gap-5 p-5">
             <div class="flex flex-col gap-1"><h2 id="avisos-t" class="m-0 text-xl">Avisos e contêineres</h2><p class="m-0 max-w-[75ch] text-[15px] text-suave"></p></div>
@@ -376,10 +383,31 @@
               <pre class="codigo"><code>&lt;p class=&quot;m-0 w-full rounded-lg bg-acao-clara p-3 font-bold text-acao-escura&quot; role=&quot;status&quot;&gt;Primeiro turno confirmado às 09:15.&lt;/p&gt;</code></pre>
             </div>
             <div class="flex flex-col gap-2">
+              <h3 class="m-0 text-base">Aviso de erro</h3>
+              <div class="amostra"><div class="w-full"><p class="m-0 w-full rounded-lg border border-urgencia-borda bg-urgencia-fundo p-3 font-bold text-urgencia" role="alert">Login ou senha incorretos. Confira e tente de novo.</p></div></div>
+              <p class="m-0 max-w-[75ch] text-sm text-suave">Erro de uma ação inteira, como a entrada recusada. Com <code>role="alert"</code>, o leitor de tela anuncia na hora. Diz o que fazer, nunca o motivo técnico; erro de um campo vai junto do campo.</p>
+              <pre class="codigo"><code>&lt;p class=&quot;m-0 w-full rounded-lg border border-urgencia-borda bg-urgencia-fundo p-3 font-bold text-urgencia&quot; role=&quot;alert&quot;&gt;Login ou senha incorretos. Confira e tente de novo.&lt;/p&gt;</code></pre>
+            </div>
+            <div class="flex flex-col gap-2">
+              <h3 class="m-0 text-base">Aviso informativo</h3>
+              <div class="amostra"><div class="w-full"><p class="m-0 w-full rounded-lg bg-normal-fundo p-3 text-normal" role="status">Sua sessão foi encerrada porque houve uma entrada com o seu usuário em outra estação.</p></div></div>
+              <p class="m-0 max-w-[75ch] text-sm text-suave">Informa sem pedir ação: sessão encerrada, saída concluída. Neutro, com <code>role="status"</code>.</p>
+              <pre class="codigo"><code>&lt;p class=&quot;m-0 w-full rounded-lg bg-normal-fundo p-3 text-normal&quot; role=&quot;status&quot;&gt;Sua sessão foi encerrada porque houve uma entrada com o seu usuário em outra estação.&lt;/p&gt;</code></pre>
+            </div>
+            <div class="flex flex-col gap-2">
               <h3 class="m-0 text-base">Cartão de seção</h3>
               <div class="amostra"><section class="cartao flex w-72 flex-col gap-2 p-4"><h3 class="m-0 text-lg">Aniversariantes de hoje</h3><p class="m-0">Divina Aparecida Neves</p></section></div>
               <p class="m-0 max-w-[75ch] text-sm text-suave">Agrupa um assunto. Não é enfeite: se o conteúdo não é um assunto separado, não vai em cartão.</p>
               <pre class="codigo"><code>&lt;section class=&quot;cartao flex w-72 flex-col gap-2 p-4&quot;&gt;&lt;h3 class=&quot;m-0 text-lg&quot;&gt;Aniversariantes de hoje&lt;/h3&gt;&lt;p class=&quot;m-0&quot;&gt;Divina Aparecida Neves&lt;/p&gt;&lt;/section&gt;</code></pre>
+            </div>
+          </section>
+          <section id="entrada" aria-labelledby="entrada-t" class="cartao flex flex-col gap-5 p-5">
+            <div class="flex flex-col gap-1"><h2 id="entrada-t" class="m-0 text-xl">Tela de entrada</h2><p class="m-0 max-w-[75ch] text-[15px] text-suave">Única tela sem o menu. Cartão estreito no centro, com o login e a senha; os avisos de erro e informativo vão acima do formulário. A troca de senha exigida usa o mesmo cartão, com os campos da senha nova.</p></div>
+            <div class="flex flex-col gap-2">
+              <h3 class="m-0 text-base">Entrada</h3>
+              <div class="amostra"><div class="w-full"><main class="flex justify-center bg-fundo p-6"><section class="cartao flex w-full max-w-sm flex-col gap-4 p-6" aria-labelledby="g-entrar-t"><div class="flex flex-col gap-1"><h1 id="g-entrar-t" class="m-0 text-2xl">SAR</h1><p class="m-0 text-[15px] text-suave">Entre com o seu usuário</p></div><form class="flex flex-col gap-3" method="post" action="#entrada"><div class="campo"><label class="rotulo" for="g-login">Login</label><input class="entrada" id="g-login" name="login" type="text" autocomplete="username" required></div><div class="campo"><label class="rotulo" for="g-senha">Senha</label><input class="entrada" id="g-senha" name="senha" type="password" autocomplete="current-password" required></div><button class="btn-primario" type="submit">Entrar</button></form></section></main></div></div>
+              <p class="m-0 max-w-[75ch] text-sm text-suave">Campos com <code>autocomplete</code> certo, para o gerenciador de senhas do navegador. Um só botão primário.</p>
+              <pre class="codigo"><code>&lt;main class=&quot;flex justify-center bg-fundo p-6&quot;&gt;&lt;section class=&quot;cartao flex w-full max-w-sm flex-col gap-4 p-6&quot; aria-labelledby=&quot;g-entrar-t&quot;&gt;&lt;div class=&quot;flex flex-col gap-1&quot;&gt;&lt;h1 id=&quot;g-entrar-t&quot; class=&quot;m-0 text-2xl&quot;&gt;SAR&lt;/h1&gt;&lt;p class=&quot;m-0 text-[15px] text-suave&quot;&gt;Entre com o seu usuário&lt;/p&gt;&lt;/div&gt;&lt;form class=&quot;flex flex-col gap-3&quot; method=&quot;post&quot; action=&quot;#entrada&quot;&gt;&lt;div class=&quot;campo&quot;&gt;&lt;label class=&quot;rotulo&quot; for=&quot;g-login&quot;&gt;Login&lt;/label&gt;&lt;input class=&quot;entrada&quot; id=&quot;g-login&quot; name=&quot;login&quot; type=&quot;text&quot; autocomplete=&quot;username&quot; required&gt;&lt;/div&gt;&lt;div class=&quot;campo&quot;&gt;&lt;label class=&quot;rotulo&quot; for=&quot;g-senha&quot;&gt;Senha&lt;/label&gt;&lt;input class=&quot;entrada&quot; id=&quot;g-senha&quot; name=&quot;senha&quot; type=&quot;password&quot; autocomplete=&quot;current-password&quot; required&gt;&lt;/div&gt;&lt;button class=&quot;btn-primario&quot; type=&quot;submit&quot;&gt;Entrar&lt;/button&gt;&lt;/form&gt;&lt;/section&gt;&lt;/main&gt;</code></pre>
             </div>
           </section>
           <section id="regras" aria-labelledby="regras-t" class="cartao flex flex-col gap-3 p-5">

@@ -1,0 +1,20 @@
+{% extends "layout.html" %}
+{% block titulo_pagina %}Minha senha{% endblock %}
+{% block subtitulo %}Troca da própria senha{% endblock %}
+{% block conteudo %}
+<section class="cartao flex w-full max-w-sm flex-col gap-4 p-6" aria-labelledby="senha-t">
+  <h2 id="senha-t" class="m-0 text-xl">Trocar a senha</h2>
+  {% if erro %}<p class="m-0 w-full rounded-lg border border-urgencia-borda bg-urgencia-fundo p-3 font-bold text-urgencia" role="alert">{{ erro }}</p>{% endif %}
+  {% if resultado %}<p class="m-0 w-full rounded-lg bg-acao-clara p-3 font-bold text-acao-escura" role="status">{{ resultado }}</p>{% endif %}
+  <form class="flex flex-col gap-3" method="post" action="{{ url_for('acesso.senha_enviar') }}">
+    <div class="campo"><label class="rotulo" for="senha_atual">Senha atual</label>
+      <input class="entrada" id="senha_atual" name="senha_atual" type="password" autocomplete="current-password" required></div>
+    <div class="campo"><label class="rotulo" for="nova_senha">Senha nova</label>
+      <input class="entrada" id="nova_senha" name="nova_senha" type="password" autocomplete="new-password" minlength="8" maxlength="64" required aria-describedby="nova_senha_ajuda">
+      <p class="m-0 text-sm text-suave" id="nova_senha_ajuda">De 8 a 64 caracteres. Uma frase serve, como “café com leite”.</p></div>
+    <div class="campo"><label class="rotulo" for="nova_senha_repetida">Repita a senha nova</label>
+      <input class="entrada" id="nova_senha_repetida" name="nova_senha_repetida" type="password" autocomplete="new-password" required></div>
+    <button class="btn-primario" type="submit">Trocar a senha</button>
+  </form>
+</section>
+{% endblock %}

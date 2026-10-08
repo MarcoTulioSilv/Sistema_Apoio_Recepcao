@@ -145,7 +145,8 @@ def test_recusa_exige_motivo_e_cancelamento_so_pelo_proprio(pessoas: dict[str, C
         servico.cancelar(pessoas["admin"], cancelar)  # não é dele
     servico.cancelar(pessoas["recepcao"], cancelar)
     assert estado(engine_web, cancelar)[0] == "cancelada"
-    assert [s.estado for s in servico.minhas(pessoas["recepcao"])] == ["recusada", "cancelada"]
+    # mesmo instante (relógio fixo): a ordem entre as duas não é garantida
+    assert sorted(s.estado for s in servico.minhas(pessoas["recepcao"])) == ["cancelada", "recusada"]
 
 
 @pytest.mark.requisito("CT-ACE-01", "DEC-42")

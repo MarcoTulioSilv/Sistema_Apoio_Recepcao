@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block titulo %}Entrar — SAR{% endblock %}
+{% block corpo %}
+<main class="flex min-h-screen items-center justify-center p-6">
+  <section class="cartao flex w-full max-w-sm flex-col gap-4 p-6" aria-labelledby="entrar-t">
+    <div class="flex flex-col gap-1">
+      <h1 id="entrar-t" class="m-0 text-2xl">SAR</h1>
+      <p class="m-0 text-[15px] text-suave">{% if troca %}Troque a senha provisória{% else %}Entre com o seu usuário{% endif %}</p>
+    </div>
+    {% if erro %}<p class="m-0 w-full rounded-lg border border-urgencia-borda bg-urgencia-fundo p-3 font-bold text-urgencia" role="alert">{{ erro }}</p>{% endif %}
+    {% if aviso %}<p class="m-0 w-full rounded-lg bg-normal-fundo p-3 text-normal" role="status">{{ aviso }}</p>{% endif %}
+    <form class="flex flex-col gap-3" method="post" action="{{ url_for('acesso.entrar_enviar') }}">
+      <div class="campo"><label class="rotulo" for="login">Login</label>
+        <input class="entrada" id="login" name="login" type="text" autocomplete="username" value="{{ login or '' }}" required{% if not login %} autofocus{% endif %}></div>
+      <div class="campo"><label class="rotulo" for="senha">{% if troca %}Senha provisória{% else %}Senha{% endif %}</label>
+        <input class="entrada" id="senha" name="senha" type="password" autocomplete="current-password" required{% if login %} autofocus{% endif %}></div>
+      {% if troca %}
+      <div class="campo"><label class="rotulo" for="nova_senha">Senha nova</label>
+        <input class="entrada" id="nova_senha" name="nova_senha" type="password" autocomplete="new-password" minlength="8" maxlength="64" required aria-describedby="nova_senha_ajuda">
+        <p class="m-0 text-sm text-suave" id="nova_senha_ajuda">De 8 a 64 caracteres. Uma frase serve, como “café com leite”.</p></div>
+      <div class="campo"><label class="rotulo" for="nova_senha_repetida">Repita a senha nova</label>
+        <input class="entrada" id="nova_senha_repetida" name="nova_senha_repetida" type="password" autocomplete="new-password" required></div>
+      {% endif %}
+      <button class="btn-primario" type="submit">{% if troca %}Trocar a senha e entrar{% else %}Entrar{% endif %}</button>
+    </form>
+  </section>
+</main>
+{% endblock %}

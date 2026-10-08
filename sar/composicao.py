@@ -50,7 +50,7 @@ from sar.modulo_08_dados.uow import ExecutorSQL, FabricaRepositorio, GravadorAud
 from sar.nucleo.eventos import Barramento, CadeiaDivergente, UsuarioInativado
 from sar.nucleo.parametros import LeitorParametros, VerificadorUso
 from sar.nucleo.portas import Cifra, ExecutorAutorizavel, Relogio
-from sar.nucleo.uow import ExecutorDeOperacao
+from sar.nucleo.uow import ExecutorDeOperacao, UnidadeDeTrabalho
 
 
 class Ambiente(str, Enum):
@@ -129,13 +129,19 @@ VERIFICADORES_USO: dict[str, VerificadorUso] = {}
 EXECUTORES_AUTORIZAVEIS: dict[str, ExecutorAutorizavel] = {}
 
 
-def compor(engine: Engine, chave_mestra: bytes, gravar_auditoria: GravadorAuditoria = gravar_encadeado) -> Componentes:
+def compor(
+    engine: Engine,
+    chave_mestra: bytes,
+    gravar_auditoria: GravadorAuditoria = gravar_encadeado,
+    hasher: Hasher | None = None,
+) -> Componentes:
+    """O hasher só muda nos testes, que usam um custo menor; em produção é bcrypt com custo 12 (DD-83)."""
     relogio = RelogioSistema()
     barramento = montar_barramento(relogio)
     executar = montar_executor(engine, barramento, gravar_auditoria)
     auditoria = ServicoAuditoria(executar)
     parametros = LeitorParametrosSQL(executar)
-    hasher = Hasher()
+    hasher = hasher or Hasher()
     return Componentes(
         relogio=relogio,
         cifra=CifraAesGcm(chave_mestra),
@@ -150,3 +156,14 @@ def compor(engine: Engine, chave_mestra: bytes, gravar_auditoria: GravadorAudito
         usuarios=ServicoUsuarios(executar, auditoria, hasher),
         autorizacoes=ServicoAutorizacoes(executar, auditoria, EXECUTORES_AUTORIZAVEIS),
     )
+
+
+def ids_dos_logins(executar: ExecutorDeOperacao, logins: list[str]) -> frozenset[int]:
+    """Superusuários de desenvolvimento (DD-85): os ids dos logins de SAR_SUPERUSUARIOS que existem."""
+
+    def operacao(uow: UnidadeDeTrabalho) -> frozenset[int]:
+        usuarios = uow.repositorio(RepositorioUsuario)
+        encontrados = (usuarios.por_login(login) for login in logins)
+        return frozenset(u.id for u in encontrados if u is not None)
+
+    return executar(operacao)
