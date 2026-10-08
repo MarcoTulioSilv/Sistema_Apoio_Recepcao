@@ -60,6 +60,14 @@ def engine_worker() -> Iterator[Engine]:
     engine.dispose()
 
 
+@pytest.fixture(scope="session")
+def engine_expurgo() -> Iterator[Engine]:
+    """O usuário de banco do expurgo da trilha (DD-58)."""
+    engine = criar_engine(ConfigBanco.do_ambiente("sar_expurgo"))
+    yield engine
+    engine.dispose()
+
+
 ZERAR_TRILHA = (
     "DELETE FROM aviso_integridade",
     "DELETE FROM auditoria_ancora",
@@ -103,3 +111,39 @@ def sem_dado_de_paciente_nos_logs() -> Iterator[None]:
             logging.getLogger(nome).setLevel(nivel)
     achados = vazamentos(coletor.linhas, VALORES_SENSIVEIS)
     assert not achados, f"CT-LOG-01: dado fictício de paciente apareceu no log: {achados}"
+
+
+@pytest.fixture
+def usuarios(trilha_zerada: Engine) -> Iterator[dict[str, int]]:
+    """Recepcionista (com uma sessão), administrador e TI, para os campos com chave estrangeira."""
+    perfis = {"recepcao": "recepcao", "admin": "administracao", "ti": "ti"}
+    ids: dict[str, int] = {}
+    with trilha_zerada.begin() as c:
+        for chave, perfil in perfis.items():
+            c.execute(
+                text(
+                    "INSERT INTO usuario (nome, login, senha_hash, perfil, criado_em) "
+                    "VALUES ('Usuário de teste', :l, REPEAT('x', 60), :p, NOW(6))"
+                ),
+                {"l": f"teste_{chave}", "p": perfil},
+            )
+            ids[chave] = c.execute(
+                text("SELECT id FROM usuario WHERE login = :l"), {"l": f"teste_{chave}"}
+            ).scalar_one()
+        c.execute(
+            text(
+                "INSERT INTO sessao_usuario (token_hash, usuario_id, origem, criada_em, ultimo_acesso) "
+                "VALUES (REPEAT('d', 64), :u, '10.0.0.5', NOW(6), NOW(6))"
+            ),
+            {"u": ids["recepcao"]},
+        )
+        ids["sessao"] = c.execute(
+            text("SELECT id FROM sessao_usuario WHERE usuario_id = :u"), {"u": ids["recepcao"]}
+        ).scalar_one()
+    yield ids
+    with trilha_zerada.begin() as c:
+        for comando in ZERAR_TRILHA:  # a trilha aponta para os usuários: sai antes deles
+            c.execute(text(comando))
+        c.execute(text("DELETE FROM sessao_usuario WHERE id = :s"), {"s": ids["sessao"]})
+        for chave in perfis:
+            c.execute(text("DELETE FROM usuario WHERE id = :u"), {"u": ids[chave]})

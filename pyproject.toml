@@ -34,7 +34,7 @@ dev = [
 ]
 
 [project.scripts]
-sar = "sar.modulo_08_dados.cli:main"
+sar = "sar.cli:main"
 
 [tool.setuptools.packages.find]
 include = ["sar*"]
@@ -65,6 +65,9 @@ python_version = "3.14"
 strict = true
 packages = ["sar"]
 exclude = ["sar/modulo_08_dados/migracoes/"]
+# uow.repositorio(Interface) recebe o Protocol do repositório (interfaces/ do MOD-08): é o padrão que mantém
+# o SQLAlchemy fora dos outros módulos, e o mypy recusa Protocol onde a assinatura pede type[R].
+disable_error_code = ["type-abstract"]
 
 [[tool.mypy.overrides]]
 module = ["waitress"]

@@ -1,0 +1,76 @@
+"""Regras puras do MOD-01, sem banco e sem relógio global (DD-12)."""
+
+from __future__ import annotations
+
+from collections.abc import Iterable, Sequence
+from datetime import datetime
+
+from sar.modulo_01_acesso.contrato import ResultadoVerificacao
+from sar.modulo_08_dados.canonico import calcular_hash, json_do_registro
+from sar.modulo_08_dados.interfaces.trilha import Ancora, Cabeca, Elo
+
+
+def json_do_elo(elo: Elo) -> str:
+    return json_do_registro(
+        id=elo.id,
+        instante=elo.instante,
+        usuario_id=elo.usuario_id,
+        autorizador_id=elo.autorizador_id,
+        operacao=elo.operacao,
+        entidade=elo.entidade,
+        entidade_id=elo.entidade_id,
+        alteracoes=elo.alteracoes,
+        motivo=elo.motivo,
+        origem=elo.origem,
+        sessao_id=elo.sessao_id,
+        requisicao_id=elo.requisicao_id,
+        versao_formato=elo.versao_formato,
+    )
+
+
+def verificar_elos(
+    elos: Iterable[Elo],
+    *,
+    primeiro_id: int,
+    hash_inicial: str,
+    cabeca: Cabeca,
+    ancoras: Sequence[Ancora],
+) -> ResultadoVerificacao:
+    """Percorre a cadeia do primeiro elo (ou do ponto de corte) até a cabeça lida no início.
+
+    Aponta o primeiro elo que: falta na sequência; não aponta para o hash do anterior; não confere com o
+    próprio hash; ou diverge de uma âncora já registrada (alteração com o hash recalculado). No fim, a cabeça
+    precisa ser o último elo — senão, registros do fim foram apagados.
+    """
+    por_id = {a.ate_registro_id: a for a in ancoras}
+    esperado, anterior, verificados = primeiro_id, hash_inicial, 0
+    ultimo_instante: dict[int, datetime] = {}
+
+    def divergente(id_: int, motivo: str) -> ResultadoVerificacao:
+        cobrindo = [a.registrada_em for a in ancoras if a.ate_registro_id >= id_]
+        depois_de = max(cobrindo) if cobrindo else ultimo_instante.get(id_)
+        return ResultadoVerificacao(False, verificados, id_, motivo, depois_de)
+
+    for elo in elos:
+        ultimo_instante[elo.id] = elo.instante
+        if elo.id != esperado:
+            return divergente(esperado, "sequencia")
+        if elo.hash_anterior != anterior:
+            return divergente(elo.id, "elo")
+        if calcular_hash(anterior, json_do_elo(elo)) != elo.hash_registro:
+            return divergente(elo.id, "hash")
+        ancora = por_id.get(elo.id)
+        if ancora is not None and ancora.hash != elo.hash_registro:
+            return divergente(elo.id, "ancora")
+        anterior, esperado, verificados = elo.hash_registro, esperado + 1, verificados + 1
+    if esperado - 1 != cabeca.ultimo_id or anterior != cabeca.ultimo_hash:
+        return divergente(esperado, "cabeca")
+    return ResultadoVerificacao(True, verificados)
+
+
+def cinco_anos_antes(instante: datetime) -> datetime:
+    """Limite da guarda da trilha (DEC-45). 29 de fevereiro vira 28, no ano sem o dia."""
+    try:
+        return instante.replace(year=instante.year - 5)
+    except ValueError:
+        return instante.replace(year=instante.year - 5, day=28)

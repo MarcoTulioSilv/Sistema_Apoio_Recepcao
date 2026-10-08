@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, date, datetime
 from decimal import Decimal
@@ -20,7 +19,6 @@ from sar.modulo_08_dados.uow import ExecutorSQL, UnidadeDeTrabalhoSQL
 from sar.nucleo.contexto import Contexto, Perfil
 from sar.nucleo.eventos import Barramento
 from sar.nucleo.uow import UnidadeDeTrabalho
-from testes.conftest import ZERAR_TRILHA
 
 pytestmark = pytest.mark.integracao
 
@@ -52,39 +50,9 @@ def conferir_cadeia(registros: list[Auditoria]) -> str:
     return anterior
 
 
-@pytest.fixture
-def usuarios(trilha_zerada: Engine) -> Iterator[tuple[int, int, int]]:
-    """Recepcionista com sessão e um administrador, para os campos com chave estrangeira."""
-    with trilha_zerada.begin() as c:
-        for login, perfil in (("teste_cadeia_r", "recepcao"), ("teste_cadeia_a", "administracao")):
-            c.execute(
-                text(
-                    "INSERT INTO usuario (nome, login, senha_hash, perfil, criado_em) "
-                    "VALUES ('Usuário de teste', :l, REPEAT('x', 60), :p, NOW(6))"
-                ),
-                {"l": login, "p": perfil},
-            )
-        recepcao = c.execute(text("SELECT id FROM usuario WHERE login = 'teste_cadeia_r'")).scalar_one()
-        admin = c.execute(text("SELECT id FROM usuario WHERE login = 'teste_cadeia_a'")).scalar_one()
-        c.execute(
-            text(
-                "INSERT INTO sessao_usuario (token_hash, usuario_id, origem, criada_em, ultimo_acesso) "
-                "VALUES (REPEAT('d', 64), :u, '10.0.0.5', NOW(6), NOW(6))"
-            ),
-            {"u": recepcao},
-        )
-        sessao = c.execute(text("SELECT id FROM sessao_usuario WHERE usuario_id = :u"), {"u": recepcao}).scalar_one()
-    yield recepcao, admin, sessao
-    with trilha_zerada.begin() as c:
-        for comando in ZERAR_TRILHA:  # a trilha aponta para os usuários: sai antes deles
-            c.execute(text(comando))
-        c.execute(text("DELETE FROM sessao_usuario WHERE id = :s"), {"s": sessao})
-        c.execute(text("DELETE FROM usuario WHERE id IN (:r, :a)"), {"r": recepcao, "a": admin})
-
-
 @pytest.mark.requisito("CT-AUD-01", "DDS-3.10", "DD-71")
-def test_ida_e_volta_ao_banco_recalcula_o_mesmo_hash(engine_web: Engine, usuarios: tuple[int, int, int]) -> None:
-    recepcao, admin, sessao = usuarios
+def test_ida_e_volta_ao_banco_recalcula_o_mesmo_hash(engine_web: Engine, usuarios: dict[str, int]) -> None:
+    recepcao, admin, sessao = usuarios["recepcao"], usuarios["admin"], usuarios["sessao"]
     contexto = Contexto(recepcao, Perfil.RECEPCAO, sessao, "10.0.0.5", INSTANTE, "b" * 32)
     alteracoes = {
         "nome": ("Conceição Fictício", "Conceição da Silva Fictício"),

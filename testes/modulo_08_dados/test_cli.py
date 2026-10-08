@@ -5,7 +5,8 @@ from pathlib import Path
 import pytest
 from sqlalchemy.exc import IntegrityError
 
-from sar.modulo_08_dados import cli
+from sar import cli
+from sar.modulo_08_dados import cli as banco
 from sar.modulo_08_dados.cli import SENHAS, comandos_usuarios
 
 SQL = (Path(__file__).resolve().parents[2] / "sar" / "modulo_08_dados" / "usuarios_banco.sql").read_text(
@@ -59,7 +60,7 @@ def test_falha_mostra_so_tipo_e_restricao_nunca_o_sql(
             ErroDriver(1062, "Duplicate entry 'senha-secreta-123' for key 'usuario.uq_usuario__login'"),
         )
 
-    monkeypatch.setattr(cli, "migrar", falha)
+    monkeypatch.setattr(banco, "migrar", falha)
     assert cli.main(["migrar"]) == 1
     saida = capsys.readouterr()
     assert "erro=IntegrityError" in saida.err
