@@ -23,6 +23,7 @@ sar criar-usuarios-banco                           # sar_web, sar_worker, sar_ex
 
 # Banco
 sar reverter base && sar migrar                    # ida, volta e ida (só antes do go-live, DD-60)
+sar verificar-cadeia                               # trilha de auditoria, como o job diário (§13.1)
 docker compose exec -T mysql bash -c 'ADMIN="-uroot -p$(cat /run/secrets/mysql_root)"   WEB_SENHA=$(cat /run/secrets/sar_web) WORKER_SENHA=$(cat /run/secrets/sar_worker)   EXPURGO_SENHA=$(cat /run/secrets/sar_expurgo) bash /sar/scripts/verificar_esquema.sh'
 
 # Qualidade (etapas 1 a 5 do pipeline)
