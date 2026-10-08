@@ -14,13 +14,18 @@ from sqlalchemy import Engine
 
 from sar.modulo_01_acesso.contrato import AuditService, IntegridadeService
 from sar.modulo_01_acesso.servicos import ServicoAuditoria, ServicoIntegridade, manipulador_aviso_integridade
+from sar.modulo_06_configuracao.contrato import ConfiguracaoService
+from sar.modulo_06_configuracao.servicos import LeitorParametrosSQL, ServicoConfiguracao
 from sar.modulo_08_dados.cadeia import gravar_encadeado
 from sar.modulo_08_dados.cifra import CifraAesGcm
+from sar.modulo_08_dados.interfaces.parametros import RepositorioParametro
 from sar.modulo_08_dados.interfaces.trilha import RepositorioExpurgo, RepositorioTrilha
 from sar.modulo_08_dados.relogio import RelogioSistema
+from sar.modulo_08_dados.repositorios.parametros import RepositorioParametroSQL
 from sar.modulo_08_dados.repositorios.trilha import RepositorioExpurgoSQL, RepositorioTrilhaSQL
 from sar.modulo_08_dados.uow import ExecutorSQL, FabricaRepositorio, GravadorAuditoria, UnidadeDeTrabalhoSQL
 from sar.nucleo.eventos import Barramento, CadeiaDivergente
+from sar.nucleo.parametros import LeitorParametros, VerificadorUso
 from sar.nucleo.portas import Cifra, Relogio
 from sar.nucleo.uow import ExecutorDeOperacao
 
@@ -44,6 +49,7 @@ def ambiente_atual() -> Ambiente:
 REPOSITORIOS: dict[type, FabricaRepositorio] = {
     RepositorioTrilha: RepositorioTrilhaSQL,
     RepositorioExpurgo: RepositorioExpurgoSQL,
+    RepositorioParametro: RepositorioParametroSQL,
 }
 
 
@@ -80,6 +86,13 @@ class Componentes:
     executar: ExecutorDeOperacao
     auditoria: AuditService
     integridade: IntegridadeService
+    parametros: LeitorParametros
+    configuracao: ConfiguracaoService
+
+
+# Verificadores de uso dos parâmetros imutáveis (DD-51). A data de implantação ganha o seu com a sessão
+# confirmada, no Incremento 3 (MOD-03); até lá não há sessão confirmada, e ela pode ser definida.
+VERIFICADORES_USO: dict[str, VerificadorUso] = {}
 
 
 def compor(engine: Engine, chave_mestra: bytes, gravar_auditoria: GravadorAuditoria = gravar_encadeado) -> Componentes:
@@ -94,4 +107,6 @@ def compor(engine: Engine, chave_mestra: bytes, gravar_auditoria: GravadorAudito
         executar=executar,
         auditoria=auditoria,
         integridade=ServicoIntegridade(executar, auditoria),
+        parametros=LeitorParametrosSQL(executar),
+        configuracao=ServicoConfiguracao(executar, auditoria, VERIFICADORES_USO),
     )
