@@ -13,7 +13,7 @@ Data: 2026-10-06 · Classificação: Confidencial — uso interno
 | **Versão** | **Data** | **Autor** | **Descrição** |
 |---|---|---|---|
 | 1.0 | 2026-10-06 | Equipe de desenvolvimento | Versão inicial aprovada. Decisões DD-01 a DD-80, convenções, catálogo de operações e matriz de permissões, design tático de MOD-01 a MOD-11, esquema físico implementado, contratos, protocolo do agente de captura, protótipos e guia de componentes. Baseado na ERS-002 v1.0 e na DAS v1.1. |
-| 1.1 | 2026-10-06 | Equipe de desenvolvimento | DD-81: logs técnicos estruturados e minimizados, correlação entre auditoria e log (migração 0003), buscas por POST, erros sem mensagem nem valor, MySQL sem logs de instrução, guarda de 90 dias e verificação automática do RNF-624. Linhas alternadas em telefones e contatos (componente `lista-zebrada`). DD-82: log binário do MySQL desligado. Emenda à DD-81: campos `erro` e `restricao` na lista permitida. DD-83 (senha), DD-84 (CSRF), DD-85 (superusuário de desenvolvimento e primeiro TI) e DD-86 (âncora no rodapé dos documentos, DEC-74). |
+| 1.1 | 2026-10-06 | Equipe de desenvolvimento | DD-81: logs técnicos estruturados e minimizados, correlação entre auditoria e log (migração 0003), buscas por POST, erros sem mensagem nem valor, MySQL sem logs de instrução, guarda de 90 dias e verificação automática do RNF-624. Linhas alternadas em telefones e contatos (componente `lista-zebrada`). DD-82: log binário do MySQL desligado. Emenda à DD-81: campos `erro` e `restricao` na lista permitida. DD-83 (senha), DD-84 (CSRF), DD-85 (superusuário de desenvolvimento e primeiro TI) e DD-86 (âncora no rodapé dos documentos, DEC-74). Operação `acesso.trilha.expurgar` acrescentada ao §4.1, que não tinha o job de expurgo. |
 
 ---
 
@@ -367,6 +367,7 @@ automática (§5.3).
 | `acesso.usuario.registrar_termo_ciencia` | — | — | — | ✓ | — | — | Sim (DEC-47) |
 | `acesso.auditoria.consultar` | — | ✓ | — | ✓ pseudonimizado | — | — | Sim (RNF-625) |
 | `acesso.cadeia.verificar` | — | — | — | ✓ | — | ✓ | Sim |
+| `acesso.trilha.expurgar` (job de 5 anos, §13.1) | — | — | — | — | — | ✓ | Não: o usuário `sar_expurgo` não escreve na trilha; fica o ponto de corte |
 | `acesso.aviso_integridade.ver` | — | ✓ simples | — | ✓ diagnóstico | — | — | Sim |
 | `acesso.aviso_integridade.encerrar` | — | ✓ | — | — | — | — | Sim (DEC-43) |
 | `acesso.ancora.conferir` (código do rodapé, DD-86) | — | ✓ | — | ✓ | — | — | Sim |

@@ -10,12 +10,13 @@ from sar.modulo_01_acesso.contrato import (
     AvisoSimples,
     CodigoIntegridade,
     Conferencia,
+    PermissionGuard,
     ResultadoVerificacao,
 )
 from sar.modulo_01_acesso.regras import cinco_anos_antes, codigo_do_hash, normalizar_codigo, verificar_elos
 from sar.modulo_08_dados.canonico import HASH_INICIAL, serializar_alteracoes
 from sar.modulo_08_dados.interfaces.trilha import RepositorioExpurgo, RepositorioTrilha
-from sar.nucleo.contexto import Contexto, Perfil
+from sar.nucleo.contexto import Contexto
 from sar.nucleo.erros import AcessoNegado, NaoEncontrado, RegraViolada
 from sar.nucleo.eventos import CadeiaDivergente
 from sar.nucleo.portas import Relogio
@@ -25,10 +26,7 @@ from sar.nucleo.uow import ExecutorDeOperacao, RegistroAuditoria, UnidadeDeTraba
 _LIMITES = {"operacao": 80, "entidade": 60, "entidade_id": 40, "motivo": 500, "origem": 45}
 
 
-def _exigir(contexto: Contexto, perfis: set[Perfil]) -> None:
-    # Provisório: a etapa 3 troca por PermissionGuard.exigir, a partir da matriz única (DDS §4).
-    if contexto.perfil not in perfis:
-        raise AcessoNegado()
+GUARDA = PermissionGuard()
 
 
 def _executor(executar: ExecutorDeOperacao | None, nome: str) -> ExecutorDeOperacao:
@@ -82,7 +80,7 @@ class ServicoAuditoria:
         )
 
     def verificar_cadeia(self, contexto: Contexto) -> ResultadoVerificacao:
-        _exigir(contexto, {Perfil.TI, Perfil.SISTEMA})
+        GUARDA.exigir(contexto, "acesso.cadeia.verificar")
 
         def operacao(uow: UnidadeDeTrabalho) -> ResultadoVerificacao:
             trilha = uow.repositorio(RepositorioTrilha)
@@ -122,7 +120,7 @@ class ServicoAuditoria:
         return CodigoIntegridade(ancora.ate_registro_id, codigo_do_hash(ancora.hash), ancora.registrada_em)
 
     def expurgar(self, contexto: Contexto) -> int:
-        _exigir(contexto, {Perfil.SISTEMA})
+        GUARDA.exigir(contexto, "acesso.trilha.expurgar")
         limite = cinco_anos_antes(contexto.instante)  # DEC-45
 
         def operacao(uow: UnidadeDeTrabalho) -> int:
@@ -158,19 +156,19 @@ class ServicoIntegridade:
         self._auditoria = auditoria
 
     def ver_avisos(self, contexto: Contexto) -> list[AvisoSimples]:
-        _exigir(contexto, {Perfil.ADMINISTRACAO, Perfil.TI})
+        celula = GUARDA.exigir(contexto, "acesso.aviso_integridade.ver")
 
         def operacao(uow: UnidadeDeTrabalho) -> list[AvisoSimples]:
             avisos = uow.repositorio(RepositorioTrilha).avisos_abertos()
             self._auditoria.registrar(uow, contexto, "acesso.aviso_integridade.ver", "aviso_integridade", None)
-            if contexto.perfil is Perfil.TI:
+            if celula.nota == "diagnóstico":  # TI; a administração vê a versão "simples" (RF-1011)
                 return [AvisoDiagnostico(a.id, a.detectado_em, a.registro_divergente_id) for a in avisos]
             return [AvisoSimples(a.id, a.detectado_em) for a in avisos]
 
         return self._executar(operacao)
 
     def encerrar_aviso(self, contexto: Contexto, aviso_id: int, explicacao: str) -> None:
-        _exigir(contexto, {Perfil.ADMINISTRACAO})
+        GUARDA.exigir(contexto, "acesso.aviso_integridade.encerrar")
         texto = explicacao.strip()
         if not texto:
             raise RegraViolada("aviso.explicacao_obrigatoria")  # DEC-43
@@ -198,7 +196,7 @@ class ServicoIntegridade:
         self._executar(operacao)
 
     def conferir_codigo(self, contexto: Contexto, registro_id: int, codigo: str) -> Conferencia:
-        _exigir(contexto, {Perfil.ADMINISTRACAO, Perfil.TI})
+        GUARDA.exigir(contexto, "acesso.ancora.conferir")
         procurado = normalizar_codigo(codigo)
         if procurado is None:
             raise RegraViolada("ancora.codigo_invalido")

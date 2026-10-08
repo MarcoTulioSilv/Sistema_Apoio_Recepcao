@@ -8,8 +8,54 @@ from datetime import datetime
 from enum import Enum
 from typing import Protocol
 
+from sar.modulo_01_acesso.matriz import MATRIZ, Acesso, Celula, Entrada
 from sar.nucleo.contexto import Contexto
+from sar.nucleo.erros import AcessoNegado
 from sar.nucleo.uow import UnidadeDeTrabalho
+
+
+class PermissionGuard:
+    """Decide pelo perfil, a partir da matriz única (DDS §4, AD-20). Toda operação passa por aqui, no serviço;
+    rota nenhuma decide acesso sozinha. Regras de recurso (o próprio rascunho, a visão pseudonimizada) ficam
+    no serviço, guiadas pela nota da célula."""
+
+    def __init__(self, matriz: tuple[Entrada, ...] = MATRIZ) -> None:
+        self._por_chave = {(e.codigo, e.condicao): e for e in matriz}
+        self._por_codigo: dict[str, list[Entrada]] = {}
+        for entrada in matriz:
+            self._por_codigo.setdefault(entrada.codigo, []).append(entrada)
+
+    def _entrada(self, operacao: str, condicao: str | None) -> Entrada:
+        variantes = self._por_codigo.get(operacao)
+        if not variantes:
+            raise LookupError(f"operação fora do catálogo do DDS §4: {operacao}")
+        if condicao is None:
+            if len(variantes) > 1:
+                raise LookupError(f"{operacao} tem variantes: informe a condição")
+            return variantes[0]
+        entrada = self._por_chave.get((operacao, condicao))
+        if entrada is None:
+            raise LookupError(f"condição desconhecida para {operacao}: {condicao}")
+        return entrada
+
+    def celula(self, contexto: Contexto, operacao: str, condicao: str | None = None) -> Celula | None:
+        return self._entrada(operacao, condicao).celulas.get(contexto.perfil)
+
+    def pode(self, contexto: Contexto, operacao: str, condicao: str | None = None) -> bool:
+        celula = self.celula(contexto, operacao, condicao)
+        return celula is not None and celula.acesso is Acesso.EXECUTA
+
+    def pode_solicitar(self, contexto: Contexto, operacao: str, condicao: str | None = None) -> bool:
+        """Operação marcada "Aut.": o perfil pede, a administração aprova (DEC-42)."""
+        celula = self.celula(contexto, operacao, condicao)
+        return celula is not None and celula.acesso is Acesso.SOLICITA
+
+    def exigir(self, contexto: Contexto, operacao: str, condicao: str | None = None) -> Celula:
+        """Devolve a célula, para o serviço aplicar a nota (ex.: "diagnóstico" para o TI)."""
+        celula = self.celula(contexto, operacao, condicao)
+        if celula is None or celula.acesso is not Acesso.EXECUTA:
+            raise AcessoNegado()
+        return celula
 
 
 @dataclass(frozen=True, slots=True)
