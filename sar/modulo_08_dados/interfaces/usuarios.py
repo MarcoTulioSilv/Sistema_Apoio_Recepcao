@@ -47,6 +47,11 @@ class RepositorioUsuario(Protocol):
 
     def listar(self) -> list[DadosUsuario]: ...
 
+    def travar_ti_ativos(self) -> list[int]:
+        """Ids dos TIs ativos, com as linhas travadas até o commit (DD-87): duas operações que poderiam deixar o
+        sistema sem TI se serializam, e a segunda conta de novo."""
+        ...
+
     def criar(
         self, nome: str, login: str, senha_hash: str, perfil: str, em: datetime, termo_em: datetime | None
     ) -> int:

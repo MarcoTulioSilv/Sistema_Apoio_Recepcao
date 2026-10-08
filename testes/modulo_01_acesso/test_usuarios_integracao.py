@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
+from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 
 import pytest
@@ -206,3 +207,68 @@ def test_superusuario_so_em_desenvolvimento(
             for comando in ZERAR_TRILHA:
                 c.execute(text(comando))
             c.execute(text("DELETE FROM usuario WHERE login = 'usr_super'"))
+
+
+def ti_ativos(engine: Engine) -> int:
+    with engine.connect() as c:
+        return int(c.execute(text("SELECT COUNT(*) FROM usuario WHERE perfil = 'ti' AND ativo = 1")).scalar_one())
+
+
+@pytest.mark.requisito("DD-87")
+def test_ultimo_ti_ativo_nao_e_inativado_nem_muda_de_perfil(
+    ti: Contexto, engine_web: Engine, relogio: RelogioControlado
+) -> None:
+    s = Servicos(engine_web, relogio)
+    assert ti.usuario_id is not None and ti_ativos(engine_web) == 1
+    for tentativa in (
+        lambda: s.usuarios.inativar(ti, ti.usuario_id, versao(engine_web, ti.usuario_id)),
+        lambda: s.usuarios.alterar_perfil(ti, ti.usuario_id, versao(engine_web, ti.usuario_id), Perfil.ADMINISTRACAO),
+    ):
+        with pytest.raises(RegraViolada) as erro:
+            tentativa()
+        assert erro.value.codigo == "usuario.ultimo_ti"
+    s.usuarios.redefinir_senha(ti, ti.usuario_id, versao(engine_web, ti.usuario_id))  # a senha ainda pode
+    assert ti_ativos(engine_web) == 1
+
+
+@pytest.mark.requisito("DD-87")
+def test_com_dois_ti_um_sai_e_o_outro_fica_protegido(
+    ti: Contexto, criar_usuario: CriarUsuario, engine_web: Engine, relogio: RelogioControlado
+) -> None:
+    s = Servicos(engine_web, relogio)
+    assert ti.usuario_id is not None
+    inativo = criar_usuario("usr_ti_antigo", perfil="ti", ativo=False)  # TI inativo não conta
+    outro = criar_usuario("usr_ti_novo", perfil="ti")
+    s.usuarios.alterar_perfil(ti, outro, versao(engine_web, outro), Perfil.ADMINISTRACAO)
+    with pytest.raises(RegraViolada):
+        s.usuarios.inativar(ti, ti.usuario_id, versao(engine_web, ti.usuario_id))
+    s.usuarios.reativar(ti, inativo, versao(engine_web, inativo))
+    s.usuarios.inativar(ti, ti.usuario_id, versao(engine_web, ti.usuario_id))  # agora há outro TI ativo
+    assert ti_ativos(engine_web) == 1
+
+
+@pytest.mark.requisito("DD-87")
+def test_dois_ti_inativando_um_ao_outro_ao_mesmo_tempo_deixam_um(
+    ti: Contexto, criar_usuario: CriarUsuario, engine_web: Engine, relogio: RelogioControlado
+) -> None:
+    assert ti.usuario_id is not None
+    outro_id = criar_usuario("usr_ti_par", perfil="ti")
+    outro = Contexto(outro_id, Perfil.TI, None, "10.0.0.8", relogio.agora(), "e" * 32)
+    pares = [(ti, outro_id, versao(engine_web, outro_id)), (outro, ti.usuario_id, versao(engine_web, ti.usuario_id))]
+
+    def inativar(par: tuple[Contexto, int, int]) -> str:
+        quem, alvo, versao_alvo = par
+        try:
+            Servicos(engine_web, relogio).usuarios.inativar(quem, alvo, versao_alvo)
+        except RegraViolada as erro:
+            return erro.codigo
+        return "inativou"
+
+    for _ in range(3):  # repete, para pegar as duas ordens de chegada
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            resultados = sorted(pool.map(inativar, pares))
+        assert resultados == ["inativou", "usuario.ultimo_ti"]
+        assert ti_ativos(engine_web) == 1
+        with engine_web.begin() as c:  # volta ao começo para a próxima rodada (só no banco de testes)
+            c.execute(text("UPDATE usuario SET ativo = 1 WHERE login IN ('usr_ti_da_tela', 'usr_ti_par')"))
+        pares = [(q, a, versao(engine_web, a)) for q, a, _ in pares]

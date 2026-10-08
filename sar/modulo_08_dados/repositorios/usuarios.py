@@ -76,6 +76,10 @@ class RepositorioUsuarioSQL:
             execution_options={"synchronize_session": False},
         )
 
+    def travar_ti_ativos(self) -> list[int]:
+        consulta = select(Usuario.id).where(Usuario.perfil == "ti", Usuario.ativo.is_(True)).order_by(Usuario.id)
+        return list(self._s.scalars(consulta.with_for_update()))
+
     def listar(self) -> list[DadosUsuario]:
         return [_dados(u) for u in self._s.scalars(select(Usuario).order_by(Usuario.nome, Usuario.id))]
 

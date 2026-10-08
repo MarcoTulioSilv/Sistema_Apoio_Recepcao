@@ -454,6 +454,14 @@ def manipulador_encerrar_sessoes(relogio: Relogio) -> Callable[[UnidadeDeTrabalh
 PERFIS_DE_PESSOA = frozenset(p for p in Perfil if p is not Perfil.SISTEMA)
 
 
+def _exigir_outro_ti(uow: UnidadeDeTrabalho, usuario: DadosUsuario) -> None:
+    """DD-87: o último TI ativo não sai do perfil nem é inativado, por ninguém."""
+    if usuario.perfil != Perfil.TI.value or not usuario.ativo:
+        return
+    if uow.repositorio(RepositorioUsuario).travar_ti_ativos() == [usuario.id]:
+        raise RegraViolada("usuario.ultimo_ti")
+
+
 def _resumo(u: DadosUsuario) -> UsuarioResumo:
     return UsuarioResumo(
         u.id, u.nome, u.login, Perfil(u.perfil), u.ativo, u.termo_ciencia_em, u.deve_trocar_senha, u.bloqueado_ate,
@@ -553,6 +561,7 @@ class ServicoUsuarios:
         def mudar(uow: UnidadeDeTrabalho, u: DadosUsuario) -> dict[str, tuple[object, object]] | None:
             if u.perfil == perfil.value:
                 raise RegraViolada("usuario.perfil_igual")
+            _exigir_outro_ti(uow, u)
             if not uow.repositorio(RepositorioUsuario).alterar_perfil(u.id, versao, perfil.value):
                 return None
             return {"perfil": (u.perfil, perfil.value)}
@@ -563,6 +572,7 @@ class ServicoUsuarios:
         def mudar(uow: UnidadeDeTrabalho, u: DadosUsuario) -> dict[str, tuple[object, object]] | None:
             if not u.ativo:
                 raise RegraViolada("usuario.ja_inativo")
+            _exigir_outro_ti(uow, u)
             if not uow.repositorio(RepositorioUsuario).definir_ativo(u.id, versao, False):
                 return None
             uow.publicar(UsuarioInativado(usuario_id=u.id))  # encerra as sessões dele (§3.11)
