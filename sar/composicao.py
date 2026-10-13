@@ -31,8 +31,8 @@ from sar.modulo_01_acesso.servicos import (
     manipulador_aviso_integridade,
     manipulador_encerrar_sessoes,
 )
-from sar.modulo_02_cadastro.contrato import LeituraCadastro, PacienteService
-from sar.modulo_02_cadastro.servicos import ServicoLeituraCadastro, ServicoPacientes
+from sar.modulo_02_cadastro.contrato import ContatoService, LeituraCadastro, PacienteService
+from sar.modulo_02_cadastro.servicos import ServicoContatos, ServicoLeituraCadastro, ServicoPacientes
 from sar.modulo_06_configuracao.contrato import ConfiguracaoService, Referencias
 from sar.modulo_06_configuracao.servicos import LeitorParametrosSQL, ServicoConfiguracao, ServicoReferencias
 from sar.modulo_08_dados.cadeia import gravar_encadeado
@@ -130,6 +130,7 @@ class Componentes:
     usuarios: UsuarioService
     autorizacoes: AutorizacaoService
     pacientes: PacienteService
+    contatos: ContatoService
     leitura_cadastro: LeituraCadastro
 
 
@@ -170,6 +171,7 @@ def compor(
         usuarios=ServicoUsuarios(executar, auditoria, hasher),
         autorizacoes=ServicoAutorizacoes(executar, auditoria, EXECUTORES_AUTORIZAVEIS),
         pacientes=ServicoPacientes(executar, auditoria, referencias),
+        contatos=ServicoContatos(executar, auditoria),
         leitura_cadastro=ServicoLeituraCadastro(),
     )
 

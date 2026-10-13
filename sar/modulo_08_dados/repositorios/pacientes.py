@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import UTC, date, datetime
 from typing import Any
 
-from sqlalchemy import ColumnElement, or_, select, update
+from sqlalchemy import ColumnElement, delete, or_, select, update
 from sqlalchemy.orm import Session
 
 from sar.modulo_08_dados.interfaces.pacientes import (
@@ -48,6 +48,14 @@ def _paciente(p: Paciente) -> PacienteGravado:
 def _periodo(p: PeriodoTratamento) -> PeriodoGravado:
     return PeriodoGravado(p.id, p.paciente_id, p.inicio, p.evento_tipo, p.evento_data, p.evento_local,
                           p.evento_documento_id)  # fmt: skip
+
+
+def _contato(c: Contato) -> ContatoGravado:
+    return ContatoGravado(c.id, c.paciente_id, c.nome, c.parentesco)
+
+
+def _telefone(t: Telefone) -> TelefoneGravado:
+    return TelefoneGravado(t.id, t.paciente_id, t.contato_id, t.ddd, t.numero, t.tipo)
 
 
 class RepositorioPacienteSQL:
@@ -152,7 +160,7 @@ class RepositorioPacienteSQL:
     # ---------------------------------------------------------------- contatos e telefones
     def contatos(self, paciente_id: int) -> list[ContatoGravado]:
         consulta = select(Contato).where(Contato.paciente_id == paciente_id).order_by(Contato.id)
-        return [ContatoGravado(c.id, c.nome, c.parentesco) for c in self._s.scalars(consulta)]
+        return [_contato(c) for c in self._s.scalars(consulta)]
 
     def telefones(self, paciente_id: int) -> list[TelefoneGravado]:
         dos_contatos = select(Contato.id).where(Contato.paciente_id == paciente_id)
@@ -165,3 +173,40 @@ class RepositorioPacienteSQL:
             TelefoneGravado(t.id, t.paciente_id, t.contato_id, t.ddd, t.numero, t.tipo)
             for t in self._s.scalars(consulta)
         ]
+
+    def contato(self, id: int) -> ContatoGravado | None:
+        linha = self._s.get(Contato, id)
+        return _contato(linha) if linha is not None else None
+
+    def criar_contato(self, paciente_id: int, nome: str, parentesco: str | None) -> int:
+        linha = Contato(paciente_id=paciente_id, nome=nome, parentesco=parentesco)
+        self._s.add(linha)
+        self._s.flush()
+        return linha.id
+
+    def alterar_contato(self, id: int, nome: str, parentesco: str | None) -> None:
+        linha = self._s.get_one(Contato, id)
+        linha.nome, linha.parentesco = nome, parentesco
+        self._s.flush()
+
+    def remover_contato(self, id: int) -> None:
+        self._s.execute(delete(Telefone).where(Telefone.contato_id == id))
+        self._s.execute(delete(Contato).where(Contato.id == id))
+
+    def telefone(self, id: int) -> TelefoneGravado | None:
+        linha = self._s.get(Telefone, id)
+        return _telefone(linha) if linha is not None else None
+
+    def criar_telefone(self, paciente_id: int | None, contato_id: int | None, ddd: str, numero: str, tipo: str) -> int:
+        linha = Telefone(paciente_id=paciente_id, contato_id=contato_id, ddd=ddd, numero=numero, tipo=tipo)
+        self._s.add(linha)
+        self._s.flush()
+        return linha.id
+
+    def alterar_telefone(self, id: int, ddd: str, numero: str, tipo: str) -> None:
+        linha = self._s.get_one(Telefone, id)
+        linha.ddd, linha.numero, linha.tipo = ddd, numero, tipo
+        self._s.flush()
+
+    def remover_telefone(self, id: int) -> None:
+        self._s.execute(delete(Telefone).where(Telefone.id == id))

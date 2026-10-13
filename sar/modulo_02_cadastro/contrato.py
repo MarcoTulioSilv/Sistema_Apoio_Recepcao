@@ -175,6 +175,39 @@ class PacienteService(Protocol):
         ...
 
 
+class ContatoService(Protocol):
+    """Contatos e telefones dentro do agregado do paciente (RF-201, RF-202, INV-12). Toda operação trava o
+    paciente; NaoEncontrado se ele, o contato ou o telefone não existir, for de outro paciente ou o paciente
+    estiver anulado. Auditadas."""
+
+    def incluir_contato(self, contexto: Contexto, paciente_id: int, nome: str, parentesco: str | None) -> int: ...
+
+    def alterar_contato(self, contexto: Contexto, contato_id: int, nome: str, parentesco: str | None) -> None: ...
+
+    def remover_contato(self, contexto: Contexto, contato_id: int) -> None:
+        """Os telefones do contato saem com ele."""
+        ...
+
+    def incluir_telefone(
+        self,
+        contexto: Contexto,
+        paciente_id: int,
+        ddd: str,
+        numero: str,
+        tipo: TipoTelefone,
+        contato_id: int | None = None,
+    ) -> int:
+        """Do paciente, ou do contato informado (que precisa ser dele); nunca dos dois (INV-12).
+        RegraViolada("telefone.repetido") se o mesmo dono já tem o número."""
+        ...
+
+    def alterar_telefone(self, contexto: Contexto, telefone_id: int, ddd: str, numero: str, tipo: TipoTelefone) -> None:
+        """Número e tipo; o dono não muda."""
+        ...
+
+    def remover_telefone(self, contexto: Contexto, telefone_id: int) -> None: ...
+
+
 class LeituraCadastro(Protocol):
     """Para os outros módulos, na unidade de trabalho deles (DDS §6.7). Paciente anulado não existe aqui."""
 

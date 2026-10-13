@@ -63,6 +63,7 @@ class CoberturaGravada:
 @dataclass(frozen=True, slots=True)
 class ContatoGravado:
     id: int
+    paciente_id: int
     nome: str
     parentesco: str | None
 
@@ -130,3 +131,25 @@ class RepositorioPaciente(Protocol):
     def telefones(self, paciente_id: int) -> list[TelefoneGravado]:
         """Os do paciente e os dos contatos dele."""
         ...
+
+    def contato(self, id: int) -> ContatoGravado | None: ...
+
+    def criar_contato(self, paciente_id: int, nome: str, parentesco: str | None) -> int: ...
+
+    def alterar_contato(self, id: int, nome: str, parentesco: str | None) -> None: ...
+
+    def remover_contato(self, id: int) -> None:
+        """Remove também os telefones do contato, que não podem ficar sem dono (INV-12)."""
+        ...
+
+    def telefone(self, id: int) -> TelefoneGravado | None: ...
+
+    def criar_telefone(self, paciente_id: int | None, contato_id: int | None, ddd: str, numero: str, tipo: str) -> int:
+        """Exatamente um dos dois donos (INV-12, garantida também pela CHECK do banco)."""
+        ...
+
+    def alterar_telefone(self, id: int, ddd: str, numero: str, tipo: str) -> None:
+        """O dono não muda: telefone de contato não passa para o paciente, nem o contrário."""
+        ...
+
+    def remover_telefone(self, id: int) -> None: ...

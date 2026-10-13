@@ -29,6 +29,8 @@ from sar.modulo_02_cadastro.regras import (
     normalizar,
     pendencias,
     situacao,
+    validar_contato,
+    validar_telefone,
     verificar_inicio,
     verificar_minimo,
 )
@@ -36,9 +38,11 @@ from sar.modulo_06_configuracao.contrato import Municipio, Referencias
 from sar.modulo_08_dados.interfaces.pacientes import (
     CamposPaciente,
     ColunaUnica,
+    ContatoGravado,
     PacienteGravado,
     PeriodoGravado,
     RepositorioPaciente,
+    TelefoneGravado,
 )
 from sar.modulo_08_dados.relogio import FUSO_CLINICA
 from sar.nucleo.contexto import Contexto
@@ -333,6 +337,178 @@ class ServicoPacientes:
 
 def _evento(p: PeriodoGravado) -> TipoEvento | None:
     return TipoEvento(p.evento_tipo) if p.evento_tipo is not None else None
+
+
+def _paciente_vivo(repositorio: RepositorioPaciente, paciente_id: int) -> PacienteGravado:
+    """Trava o agregado; NaoEncontrado se não existir ou estiver anulado."""
+    paciente = repositorio.por_id(paciente_id, travar=True)
+    if paciente is None or paciente.anulado_em is not None:
+        raise NaoEncontrado()
+    return paciente
+
+
+def _mudancas(*trios: tuple[str, object, object]) -> dict[str, tuple[object, object]]:
+    return {campo: (velho, novo) for campo, velho, novo in trios if velho != novo}
+
+
+def _telefone_auditado(t: TelefoneGravado | None, novo: TelefoneGravado | None) -> dict[str, tuple[object, object]]:
+    """Antes e depois de um telefone inteiro: inclusão (t None) ou remoção (novo None)."""
+    campos = ("paciente_id", "contato_id", "ddd", "numero", "tipo")
+    return _mudancas(*((c, getattr(t, c) if t else None, getattr(novo, c) if novo else None) for c in campos))
+
+
+class ServicoContatos:
+    """Implementa o ContatoService do contrato."""
+
+    CONTATO = "cadastro.contato.gerir"
+    TELEFONE = "cadastro.telefone.gerir"
+
+    def __init__(self, executar: ExecutorDeOperacao, auditoria: AuditService) -> None:
+        self._executar = executar
+        self._auditoria = auditoria
+
+    # ---------------------------------------------------------------- contatos
+    def incluir_contato(self, contexto: Contexto, paciente_id: int, nome: str, parentesco: str | None) -> int:
+        GUARDA.exigir(contexto, self.CONTATO)
+        nome_limpo, parentesco_limpo = validar_contato(nome, parentesco)
+
+        def operacao(uow: UnidadeDeTrabalho) -> int:
+            repositorio = uow.repositorio(RepositorioPaciente)
+            _paciente_vivo(repositorio, paciente_id)
+            contato_id = repositorio.criar_contato(paciente_id, nome_limpo, parentesco_limpo)
+            alteracoes = _mudancas(
+                ("paciente_id", None, paciente_id), ("nome", None, nome_limpo), ("parentesco", None, parentesco_limpo)
+            )
+            self._auditoria.registrar(uow, contexto, self.CONTATO, "contato", str(contato_id), alteracoes)
+            return contato_id
+
+        return self._executar(operacao)
+
+    def alterar_contato(self, contexto: Contexto, contato_id: int, nome: str, parentesco: str | None) -> None:
+        GUARDA.exigir(contexto, self.CONTATO)
+        nome_limpo, parentesco_limpo = validar_contato(nome, parentesco)
+
+        def operacao(uow: UnidadeDeTrabalho) -> None:
+            repositorio = uow.repositorio(RepositorioPaciente)
+            contato = _contato_vivo(repositorio, contato_id)
+            alteracoes = _mudancas(
+                ("nome", contato.nome, nome_limpo), ("parentesco", contato.parentesco, parentesco_limpo)
+            )
+            if not alteracoes:
+                return  # DD-10
+            repositorio.alterar_contato(contato_id, nome_limpo, parentesco_limpo)
+            self._auditoria.registrar(uow, contexto, self.CONTATO, "contato", str(contato_id), alteracoes)
+
+        self._executar(operacao)
+
+    def remover_contato(self, contexto: Contexto, contato_id: int) -> None:
+        GUARDA.exigir(contexto, self.CONTATO)
+
+        def operacao(uow: UnidadeDeTrabalho) -> None:
+            repositorio = uow.repositorio(RepositorioPaciente)
+            contato = _contato_vivo(repositorio, contato_id)
+            telefones = [t for t in repositorio.telefones(contato.paciente_id) if t.contato_id == contato_id]
+            repositorio.remover_contato(contato_id)
+            for telefone in telefones:
+                self._auditoria.registrar(
+                    uow, contexto, self.TELEFONE, "telefone", str(telefone.id), _telefone_auditado(telefone, None)
+                )
+            alteracoes = _mudancas(
+                ("paciente_id", contato.paciente_id, None), ("nome", contato.nome, None),
+                ("parentesco", contato.parentesco, None),
+            )  # fmt: skip
+            self._auditoria.registrar(uow, contexto, self.CONTATO, "contato", str(contato_id), alteracoes)
+
+        self._executar(operacao)
+
+    # ---------------------------------------------------------------- telefones
+    def incluir_telefone(
+        self,
+        contexto: Contexto,
+        paciente_id: int,
+        ddd: str,
+        numero: str,
+        tipo: TipoTelefone,
+        contato_id: int | None = None,
+    ) -> int:
+        GUARDA.exigir(contexto, self.TELEFONE)
+        ddd_limpo, numero_limpo = validar_telefone(ddd, numero, tipo)
+        dono_paciente = paciente_id if contato_id is None else None  # INV-12: um dono só
+
+        def operacao(uow: UnidadeDeTrabalho) -> int:
+            repositorio = uow.repositorio(RepositorioPaciente)
+            _paciente_vivo(repositorio, paciente_id)
+            if contato_id is not None:
+                contato = repositorio.contato(contato_id)
+                if contato is None or contato.paciente_id != paciente_id:
+                    raise NaoEncontrado()
+            mesmo_dono = (
+                t
+                for t in repositorio.telefones(paciente_id)
+                if (t.paciente_id, t.contato_id) == (dono_paciente, contato_id)
+            )
+            if any((t.ddd, t.numero) == (ddd_limpo, numero_limpo) for t in mesmo_dono):
+                raise RegraViolada("telefone.repetido")
+            telefone_id = repositorio.criar_telefone(dono_paciente, contato_id, ddd_limpo, numero_limpo, tipo.value)
+            novo = TelefoneGravado(telefone_id, dono_paciente, contato_id, ddd_limpo, numero_limpo, tipo.value)
+            self._auditoria.registrar(
+                uow, contexto, self.TELEFONE, "telefone", str(telefone_id), _telefone_auditado(None, novo)
+            )
+            return telefone_id
+
+        return self._executar(operacao)
+
+    def alterar_telefone(self, contexto: Contexto, telefone_id: int, ddd: str, numero: str, tipo: TipoTelefone) -> None:
+        GUARDA.exigir(contexto, self.TELEFONE)
+        ddd_limpo, numero_limpo = validar_telefone(ddd, numero, tipo)
+
+        def operacao(uow: UnidadeDeTrabalho) -> None:
+            repositorio = uow.repositorio(RepositorioPaciente)
+            telefone = _telefone_vivo(repositorio, telefone_id)
+            alteracoes = _mudancas(
+                ("ddd", telefone.ddd, ddd_limpo), ("numero", telefone.numero, numero_limpo),
+                ("tipo", telefone.tipo, tipo.value),
+            )  # fmt: skip
+            if not alteracoes:
+                return  # DD-10
+            repositorio.alterar_telefone(telefone_id, ddd_limpo, numero_limpo, tipo.value)
+            self._auditoria.registrar(uow, contexto, self.TELEFONE, "telefone", str(telefone_id), alteracoes)
+
+        self._executar(operacao)
+
+    def remover_telefone(self, contexto: Contexto, telefone_id: int) -> None:
+        GUARDA.exigir(contexto, self.TELEFONE)
+
+        def operacao(uow: UnidadeDeTrabalho) -> None:
+            repositorio = uow.repositorio(RepositorioPaciente)
+            telefone = _telefone_vivo(repositorio, telefone_id)
+            repositorio.remover_telefone(telefone_id)
+            self._auditoria.registrar(
+                uow, contexto, self.TELEFONE, "telefone", str(telefone_id), _telefone_auditado(telefone, None)
+            )
+
+        self._executar(operacao)
+
+
+def _contato_vivo(repositorio: RepositorioPaciente, contato_id: int) -> ContatoGravado:
+    """O contato, com o paciente dele travado e vivo."""
+    contato = repositorio.contato(contato_id)
+    if contato is None:
+        raise NaoEncontrado()
+    _paciente_vivo(repositorio, contato.paciente_id)
+    return contato
+
+
+def _telefone_vivo(repositorio: RepositorioPaciente, telefone_id: int) -> TelefoneGravado:
+    """O telefone, com o paciente dono (direto ou pelo contato) travado e vivo."""
+    telefone = repositorio.telefone(telefone_id)
+    if telefone is None:
+        raise NaoEncontrado()
+    if telefone.paciente_id is not None:
+        _paciente_vivo(repositorio, telefone.paciente_id)
+    elif telefone.contato_id is not None:
+        _contato_vivo(repositorio, telefone.contato_id)
+    return telefone
 
 
 class ServicoLeituraCadastro:

@@ -10,7 +10,7 @@ from sqlalchemy import Engine
 from sar.composicao import montar_barramento, montar_executor
 from sar.modulo_01_acesso.servicos import ServicoAuditoria
 from sar.modulo_02_cadastro.contrato import DadosPaciente
-from sar.modulo_02_cadastro.servicos import ServicoLeituraCadastro, ServicoPacientes
+from sar.modulo_02_cadastro.servicos import ServicoContatos, ServicoLeituraCadastro, ServicoPacientes
 from sar.modulo_06_configuracao.servicos import ServicoConfiguracao, ServicoReferencias
 from sar.modulo_08_dados.relogio import RelogioSistema
 from sar.nucleo.contexto import Contexto, Perfil
@@ -26,6 +26,7 @@ JATAI = "5211909"
 class Cadastro:
     executar: ExecutorDeOperacao
     pacientes: ServicoPacientes
+    contatos: ServicoContatos
     leitura: ServicoLeituraCadastro
     configuracao: ServicoConfiguracao
 
@@ -36,6 +37,7 @@ def montar(engine: Engine) -> Cadastro:
     return Cadastro(
         executar,
         ServicoPacientes(executar, auditoria, ServicoReferencias()),
+        ServicoContatos(executar, auditoria),
         ServicoLeituraCadastro(),
         ServicoConfiguracao(executar, auditoria),
     )
