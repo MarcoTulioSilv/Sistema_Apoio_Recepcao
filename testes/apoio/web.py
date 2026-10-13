@@ -18,7 +18,15 @@ ORIGEM = "https://sar.teste"
 
 def servicos_web(engine: Engine) -> ServicosWeb:
     componentes = compor(engine, bytes(32), hasher=HASHER)
-    return ServicosWeb(componentes.autenticacao, componentes.sessoes, componentes.usuarios, componentes.configuracao)
+    return ServicosWeb(
+        componentes.autenticacao,
+        componentes.sessoes,
+        componentes.usuarios,
+        componentes.configuracao,
+        componentes.autorizacoes,
+        componentes.auditoria,
+        componentes.integridade,
+    )
 
 
 def montar(engine: Engine, **config: object) -> Flask:

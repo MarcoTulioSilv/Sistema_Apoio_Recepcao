@@ -1,0 +1,51 @@
+{% extends "layout.html" %}
+{% block titulo_pagina %}Trilha de auditoria{% endblock %}
+{% block subtitulo %}Quem fez o quê, e quando; a consulta também fica registrada{% endblock %}
+{% block conteudo %}
+<div class="flex flex-col gap-4">
+  {% include "_avisos.html" %}
+  <form class="cartao flex flex-wrap items-end gap-3 p-4" method="get" action="{{ url_for('trilha.consulta') }}" aria-label="Filtros da trilha">
+    <label class="campo"><span class="rotulo">De</span><input class="entrada" type="date" name="de" value="{{ filtros.get('de', '') }}"></label>
+    <label class="campo"><span class="rotulo">Até</span><input class="entrada" type="date" name="ate" value="{{ filtros.get('ate', '') }}"></label>
+    <label class="campo"><span class="rotulo">Operação (início do código)</span><input class="entrada" name="operacao" value="{{ filtros.get('operacao', '') }}" placeholder="acesso.sessao"></label>
+    <label class="campo"><span class="rotulo">Entidade</span><input class="entrada" name="entidade" value="{{ filtros.get('entidade', '') }}"></label>
+    <label class="campo"><span class="rotulo">Identificador</span><input class="entrada" name="entidade_id" value="{{ filtros.get('entidade_id', '') }}"></label>
+    <label class="campo"><span class="rotulo">Usuário (id)</span><input class="entrada w-28" name="usuario_id" inputmode="numeric" value="{{ filtros.get('usuario_id', '') }}"></label>
+    <button class="btn-primario" type="submit">Consultar</button>
+  </form>
+
+  {% if pagina %}
+  <div class="cartao overflow-x-auto">
+    <table class="w-full border-collapse text-left">
+      <caption class="sr-only">Registros da trilha de auditoria, do mais novo para o mais antigo</caption>
+      <thead><tr class="text-sm text-suave">
+        <th scope="col" class="px-4 py-2 font-bold">Nº</th>
+        <th scope="col" class="px-4 py-2 font-bold">Quando (UTC)</th>
+        <th scope="col" class="px-4 py-2 font-bold">Quem</th>
+        <th scope="col" class="px-4 py-2 font-bold">Operação</th>
+        <th scope="col" class="px-4 py-2 font-bold">Entidade</th>
+        <th scope="col" class="px-4 py-2 font-bold">Detalhe</th>
+      </tr></thead>
+      <tbody>
+      {% for r in pagina.registros %}
+        <tr class="border-t border-linha align-top" data-registro="{{ r.id }}">
+          <td class="numero px-4 py-2.5">{{ r.id }}</td>
+          <td class="numero px-4 py-2.5">{{ r.instante.strftime("%d/%m/%Y %H:%M:%S") }}</td>
+          <td class="px-4 py-2.5">{{ r.usuario_nome or "Sistema" }}{% if r.autorizador_nome %}<br><span class="text-sm text-suave">autorizado por {{ r.autorizador_nome }}</span>{% endif %}</td>
+          <td class="px-4 py-2.5"><code class="text-sm">{{ r.operacao }}</code></td>
+          <td class="px-4 py-2.5">{{ r.entidade }}{% if r.entidade_id %} {{ r.entidade_id }}{% endif %}</td>
+          <td class="px-4 py-2.5 text-sm">
+            {% if r.pseudonimizado %}<span class="text-suave" data-sobre="pseudonimizado">Detalhe oculto para o TI (RNF-625)</span>
+            {% else %}{% if r.motivo %}<p class="m-0">Motivo: {{ r.motivo }}</p>{% endif %}{% if r.alteracoes %}<code class="break-all">{{ r.alteracoes }}</code>{% endif %}{% endif %}
+          </td>
+        </tr>
+      {% else %}
+        <tr><td class="px-4 py-4 text-suave" colspan="6">Nenhum registro com esses filtros.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% if proxima %}<div><a class="btn-neutro" href="{{ url_for('trilha.consulta', **proxima) }}">Registros mais antigos</a></div>{% endif %}
+  {% endif %}
+</div>
+{% endblock %}

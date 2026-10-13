@@ -6,15 +6,16 @@ from collections.abc import Iterator
 from datetime import UTC, datetime
 
 from sqlalchemy import delete, func, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, aliased
 
-from sar.modulo_08_dados.interfaces.trilha import Ancora, Aviso, Cabeca, Corte, Elo
+from sar.modulo_08_dados.interfaces.trilha import Ancora, Aviso, Cabeca, Corte, Elo, FiltroTrilha, RegistroConsultado
 from sar.modulo_08_dados.modelos.acesso import (
     Auditoria,
     AuditoriaAncora,
     AuditoriaCabeca,
     AuditoriaCorte,
     AvisoIntegridade,
+    Usuario,
 )
 
 LOTE = 1000
@@ -70,6 +71,34 @@ def _aviso(linha: AvisoIntegridade) -> Aviso:
 class RepositorioTrilhaSQL:
     def __init__(self, sessao: Session) -> None:
         self._s = sessao
+
+    def consultar(self, filtro: FiltroTrilha, limite: int) -> list[RegistroConsultado]:
+        autor, autorizador = aliased(Usuario), aliased(Usuario)
+        consulta = (
+            select(Auditoria, autor.nome, autorizador.nome)
+            .outerjoin(autor, autor.id == Auditoria.usuario_id)
+            .outerjoin(autorizador, autorizador.id == Auditoria.autorizador_id)
+            .order_by(Auditoria.id.desc())
+            .limit(limite)
+        )
+        if filtro.desde is not None:
+            consulta = consulta.where(Auditoria.instante >= _banco(filtro.desde))
+        if filtro.ate is not None:
+            consulta = consulta.where(Auditoria.instante < _banco(filtro.ate))
+        if filtro.usuario_id is not None:
+            consulta = consulta.where(Auditoria.usuario_id == filtro.usuario_id)
+        if filtro.operacao_prefixo:
+            consulta = consulta.where(Auditoria.operacao.startswith(filtro.operacao_prefixo, autoescape=True))
+        if filtro.entidade:
+            consulta = consulta.where(Auditoria.entidade == filtro.entidade)
+        if filtro.entidade_id:
+            consulta = consulta.where(Auditoria.entidade_id == filtro.entidade_id)
+        if filtro.antes_de_id is not None:
+            consulta = consulta.where(Auditoria.id < filtro.antes_de_id)
+        return [
+            RegistroConsultado(_elo(linha), nome, nome_autorizador)
+            for linha, nome, nome_autorizador in self._s.execute(consulta)
+        ]
 
     def cabeca(self) -> Cabeca:
         c = self._s.get_one(AuditoriaCabeca, 1)

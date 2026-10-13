@@ -59,6 +59,23 @@ MENU: tuple[ItemMenu, ...] = (
             ("config.parametro.alterar", "técnicos"),
         ),
     ),
+    ItemMenu(
+        "Autorizações",
+        "autorizacoes.lista",
+        (
+            ("acesso.autorizacao.decidir", None),
+            ("acesso.autorizacao.solicitar", None),
+        ),
+    ),
+    ItemMenu("Trilha de auditoria", "trilha.consulta", (("acesso.auditoria.consultar", None),)),
+    ItemMenu(
+        "Integridade",
+        "integridade.painel",
+        (
+            ("acesso.aviso_integridade.ver", None),
+            ("acesso.ancora.conferir", None),
+        ),
+    ),
     ItemMenu("Minha senha", "acesso.senha", (("acesso.senha.trocar_propria", None),)),
 )
 
@@ -83,11 +100,12 @@ def criar_app(servicos: ServicosWeb | None = None, config: ConfigWeb | None = No
     from sar.web.rotas_acesso import bp as acesso
     from sar.web.rotas_parametros import bp as parametros
     from sar.web.rotas_saude import bp as saude
+    from sar.web.rotas_trilha_integridade import autorizacoes, integridade, trilha
     from sar.web.rotas_usuarios import bp as usuarios
 
     app.register_blueprint(saude)
     if servicos is not None:
-        for blueprint in (acesso, usuarios, parametros):
+        for blueprint in (acesso, usuarios, parametros, autorizacoes, trilha, integridade):
             app.register_blueprint(blueprint)
 
     @app.before_request

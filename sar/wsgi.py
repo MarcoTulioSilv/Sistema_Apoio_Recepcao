@@ -51,7 +51,13 @@ def montar() -> Flask:
         proxies_confiaveis=int(os.environ.get("SAR_PROXIES", "0")),
     )
     servicos = ServicosWeb(
-        componentes.autenticacao, componentes.sessoes, componentes.usuarios, componentes.configuracao
+        componentes.autenticacao,
+        componentes.sessoes,
+        componentes.usuarios,
+        componentes.configuracao,
+        componentes.autorizacoes,
+        componentes.auditoria,
+        componentes.integridade,
     )
     return criar_app(servicos, config)
 

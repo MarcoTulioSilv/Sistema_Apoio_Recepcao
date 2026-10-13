@@ -61,7 +61,31 @@ class Aviso:
     explicacao: str | None
 
 
+@dataclass(frozen=True, slots=True)
+class FiltroTrilha:
+    """Instantes em UTC, com fuso. Todos opcionais; a consulta vem do mais novo para o mais antigo."""
+
+    desde: datetime | None = None
+    ate: datetime | None = None  # exclusivo
+    usuario_id: int | None = None
+    operacao_prefixo: str | None = None
+    entidade: str | None = None
+    entidade_id: str | None = None
+    antes_de_id: int | None = None  # paginação: registros com id menor que este
+
+
+@dataclass(frozen=True, slots=True)
+class RegistroConsultado:
+    elo: Elo
+    usuario_nome: str | None
+    autorizador_nome: str | None
+
+
 class RepositorioTrilha(Protocol):
+    def consultar(self, filtro: FiltroTrilha, limite: int) -> list[RegistroConsultado]:
+        """Do mais novo para o mais antigo, com o nome de quem agiu e de quem autorizou."""
+        ...
+
     def cabeca(self) -> Cabeca: ...
 
     def ultimo_corte(self) -> Corte | None: ...

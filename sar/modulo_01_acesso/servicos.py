@@ -5,7 +5,7 @@ from __future__ import annotations
 import uuid
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, replace
-from datetime import timedelta
+from datetime import date, datetime, time, timedelta
 
 from sar.modulo_01_acesso.contrato import (
     AuditService,
@@ -14,7 +14,10 @@ from sar.modulo_01_acesso.contrato import (
     CodigoIntegridade,
     Conferencia,
     CredencialInvalida,
+    FiltroConsulta,
+    PaginaTrilha,
     PermissionGuard,
+    RegistroTrilha,
     ResultadoVerificacao,
     SessaoAberta,
     SessaoEncerrada,
@@ -39,8 +42,9 @@ from sar.modulo_01_acesso.senhas import Hasher, hash_token, novo_token
 from sar.modulo_08_dados.canonico import HASH_INICIAL, serializar_alteracoes
 from sar.modulo_08_dados.interfaces.autorizacoes import DadosSolicitacao, RepositorioAutorizacao
 from sar.modulo_08_dados.interfaces.sessoes import RepositorioSessao
-from sar.modulo_08_dados.interfaces.trilha import RepositorioExpurgo, RepositorioTrilha
+from sar.modulo_08_dados.interfaces.trilha import FiltroTrilha, RepositorioExpurgo, RepositorioTrilha
 from sar.modulo_08_dados.interfaces.usuarios import DadosUsuario, RepositorioUsuario
+from sar.modulo_08_dados.relogio import FUSO_CLINICA
 from sar.nucleo.contexto import Contexto, Perfil
 from sar.nucleo.erros import AcessoNegado, ConflitoDeVersao, ErroSAR, NaoEncontrado, RegraViolada
 from sar.nucleo.eventos import CadeiaDivergente, UsuarioInativado
@@ -48,6 +52,13 @@ from sar.nucleo.logs import campos_do_erro, novo_requisicao_id, requisicao_atual
 from sar.nucleo.parametros import LeitorParametros
 from sar.nucleo.portas import ExecutorAutorizavel, Relogio
 from sar.nucleo.uow import ExecutorDeOperacao, RegistroAuditoria, UnidadeDeTrabalho
+
+# RNF-625: o TI vê alterações e motivo só nestas entidades técnicas. Lista de permissão, e não de bloqueio:
+# entidade nova (de paciente ou não) nasce oculta para o TI até alguém a acrescentar aqui de propósito.
+ENTIDADES_TECNICAS = frozenset(
+    {"usuario", "parametro", "auditoria", "auditoria_ancora", "aviso_integridade", "municipio", "job_execucao"}
+)
+PAGINA_TRILHA = 100
 
 # Tamanhos das colunas da tabela auditoria (0001): estourar é erro de programação, não de usuário.
 _LIMITES = {"operacao": 80, "entidade": 60, "entidade_id": 40, "motivo": 500, "origem": 45}
@@ -137,6 +148,63 @@ class ServicoAuditoria:
                 },
             )
             return resultado
+
+        return _executor(self._executar, "operação")(operacao)
+
+    def consultar(self, contexto: Contexto, filtro: FiltroConsulta) -> PaginaTrilha:
+        celula = GUARDA.exigir(contexto, "acesso.auditoria.consultar")
+        pseudonimizado = celula.nota == "pseudonimizado"  # TI (§4.1)
+
+        def inicio_do_dia(dia: date) -> datetime:  # data local da clínica → instante UTC (§3.7)
+            return datetime.combine(dia, time(), FUSO_CLINICA)
+
+        filtro_banco = FiltroTrilha(
+            desde=inicio_do_dia(filtro.de) if filtro.de else None,
+            ate=inicio_do_dia(filtro.ate + timedelta(days=1)) if filtro.ate else None,
+            usuario_id=filtro.usuario_id,
+            operacao_prefixo=filtro.operacao or None,
+            entidade=filtro.entidade or None,
+            entidade_id=filtro.entidade_id or None,
+            antes_de_id=filtro.antes_de_id,
+        )
+
+        def operacao(uow: UnidadeDeTrabalho) -> PaginaTrilha:
+            linhas = uow.repositorio(RepositorioTrilha).consultar(filtro_banco, PAGINA_TRILHA + 1)
+            pagina, ha_mais = linhas[:PAGINA_TRILHA], len(linhas) > PAGINA_TRILHA
+            registros = []
+            for linha in pagina:
+                elo = linha.elo
+                oculto = pseudonimizado and elo.entidade not in ENTIDADES_TECNICAS
+                registros.append(
+                    RegistroTrilha(
+                        id=elo.id,
+                        instante=elo.instante,
+                        usuario_id=elo.usuario_id,
+                        usuario_nome=linha.usuario_nome,
+                        autorizador_nome=linha.autorizador_nome,
+                        operacao=elo.operacao,
+                        entidade=elo.entidade,
+                        entidade_id=elo.entidade_id,
+                        alteracoes=None if oculto else elo.alteracoes,
+                        motivo=None if oculto else elo.motivo,
+                        origem=elo.origem,
+                        pseudonimizado=oculto,
+                    )
+                )
+            filtros = {
+                chave: valor
+                for chave, valor in (
+                    ("de", filtro.de), ("ate", filtro.ate), ("usuario_id", filtro.usuario_id),
+                    ("operacao", filtro.operacao), ("entidade", filtro.entidade), ("entidade_id", filtro.entidade_id),
+                )
+                if valor
+            }  # fmt: skip
+            # RNF-625: a consulta da trilha também fica na trilha; só a quantidade e os filtros (DD-10).
+            self.registrar(
+                uow, contexto, "acesso.auditoria.consultar", "auditoria", None,
+                {"resultados": (None, len(registros)), "filtros": (None, filtros)},
+            )  # fmt: skip
+            return PaginaTrilha(registros, registros[-1].id if ha_mais and registros else None)
 
         return _executor(self._executar, "operação")(operacao)
 

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime
 from enum import Enum
 from typing import Protocol
 
@@ -140,6 +140,41 @@ class Conferencia(str, Enum):
     SEM_REGISTRO = "sem_registro"  # nem o registro nem a âncora existem mais (expurgo de 5 anos)
 
 
+@dataclass(frozen=True, slots=True)
+class FiltroConsulta:
+    """Datas de calendário locais da clínica; o serviço converte para o intervalo em UTC (§3.7)."""
+
+    de: date | None = None
+    ate: date | None = None  # inclusive
+    usuario_id: int | None = None
+    operacao: str | None = None  # prefixo, ex.: "acesso.sessao"
+    entidade: str | None = None
+    entidade_id: str | None = None
+    antes_de_id: int | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class RegistroTrilha:
+    id: int
+    instante: datetime
+    usuario_id: int | None
+    usuario_nome: str | None
+    autorizador_nome: str | None
+    operacao: str
+    entidade: str
+    entidade_id: str | None
+    alteracoes: str | None  # None também quando ocultado (pseudonimizado)
+    motivo: str | None
+    origem: str | None
+    pseudonimizado: bool  # o TI não vê alterações nem motivo fora das entidades técnicas (RNF-625)
+
+
+@dataclass(frozen=True, slots=True)
+class PaginaTrilha:
+    registros: list[RegistroTrilha]
+    proximo_antes_de_id: int | None  # para a página seguinte, mais antiga; None quando acabou
+
+
 class AuditService(Protocol):
     def registrar(
         self,
@@ -159,6 +194,11 @@ class AuditService(Protocol):
     def verificar_cadeia(self, contexto: Contexto) -> ResultadoVerificacao:
         """TI ou sistema. Divergência abre aviso de integridade (RF-1011); cadeia íntegra registra a âncora
         (§13.1). Grava âncora e aviso: roda no processo do worker (DD-58)."""
+        ...
+
+    def consultar(self, contexto: Contexto, filtro: FiltroConsulta) -> PaginaTrilha:
+        """Administração vê tudo; o TI, pseudonimizado (RNF-625). A consulta é auditada, com a quantidade de
+        resultados e os filtros (DD-10)."""
         ...
 
     def codigo_vigente(self, uow: UnidadeDeTrabalho) -> CodigoIntegridade | None:
