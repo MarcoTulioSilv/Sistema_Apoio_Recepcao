@@ -204,6 +204,32 @@ class PacienteService(Protocol):
         ...
 
 
+class EventoService(Protocol):
+    """Eventos do paciente (RF-601 a RF-606). O registro é direto; correção e remoção só por autorização da
+    administração (DEC-42), que aprova na hora quando é ela quem pede (P-01)."""
+
+    def registrar(self, contexto: Contexto, paciente_id: int, tipo: TipoEvento, data: date, local: str | None) -> None:
+        """Encerra o período aberto. RegraViolada: as regras do evento (§6.2) e "evento.impedimentos", com a
+        lista de Impedimento no detalhe, quando outro módulo tem fato posterior à data (RF-604, DEC-65)."""
+        ...
+
+    def solicitar_correcao(
+        self,
+        contexto: Contexto,
+        periodo_id: int,
+        tipo: TipoEvento,
+        data: date,
+        local: str | None,
+        motivo: str,
+    ) -> str:
+        """Id da solicitação. As regras são conferidas no pedido e de novo na aprovação."""
+        ...
+
+    def solicitar_remocao(self, contexto: Contexto, periodo_id: int, motivo: str) -> str:
+        """Reabre o período. Só o evento do último período (INV-02)."""
+        ...
+
+
 class ContatoService(Protocol):
     """Contatos e telefones dentro do agregado do paciente (RF-201, RF-202, INV-12). Toda operação trava o
     paciente; NaoEncontrado se ele, o contato ou o telefone não existir, for de outro paciente ou o paciente

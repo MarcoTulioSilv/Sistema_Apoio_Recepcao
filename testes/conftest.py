@@ -82,10 +82,12 @@ ZERAR_TRILHA = (
 
 # Cadastro (MOD-02), na ordem das chaves estrangeiras. A aplicação não apaga paciente; só os testes.
 ZERAR_CADASTRO = (
+    "DELETE FROM solicitacao_autorizacao",
     "DELETE FROM telefone",
     "DELETE FROM contato",
     "DELETE FROM cobertura",
     "DELETE FROM periodo_tratamento",
+    "DELETE FROM documento",
     "DELETE FROM duplicidade_descartada",
     "DELETE FROM rascunho_cadastro",
     "DELETE FROM paciente",

@@ -31,7 +31,8 @@ from sar.modulo_01_acesso.servicos import (
     manipulador_aviso_integridade,
     manipulador_encerrar_sessoes,
 )
-from sar.modulo_02_cadastro.contrato import ContatoService, LeituraCadastro, PacienteService
+from sar.modulo_02_cadastro.contrato import ContatoService, EventoService, LeituraCadastro, PacienteService
+from sar.modulo_02_cadastro.eventos import ExecutorCorrigirEvento, ExecutorRemoverEvento, ServicoEventos
 from sar.modulo_02_cadastro.servicos import ServicoContatos, ServicoLeituraCadastro, ServicoPacientes
 from sar.modulo_06_configuracao.contrato import ConfiguracaoService, Referencias
 from sar.modulo_06_configuracao.servicos import LeitorParametrosSQL, ServicoConfiguracao, ServicoReferencias
@@ -55,7 +56,7 @@ from sar.modulo_08_dados.repositorios.usuarios import RepositorioUsuarioSQL
 from sar.modulo_08_dados.uow import ExecutorSQL, FabricaRepositorio, GravadorAuditoria, UnidadeDeTrabalhoSQL
 from sar.nucleo.eventos import Barramento, CadeiaDivergente, UsuarioInativado
 from sar.nucleo.parametros import LeitorParametros, VerificadorUso
-from sar.nucleo.portas import Cifra, ExecutorAutorizavel, Relogio
+from sar.nucleo.portas import Cifra, ExecutorAutorizavel, Relogio, VerificadorImpedimento
 from sar.nucleo.uow import ExecutorDeOperacao, UnidadeDeTrabalho
 
 
@@ -131,6 +132,7 @@ class Componentes:
     autorizacoes: AutorizacaoService
     pacientes: PacienteService
     contatos: ContatoService
+    eventos: EventoService
     leitura_cadastro: LeituraCadastro
 
 
@@ -138,8 +140,12 @@ class Componentes:
 # confirmada, no Incremento 3 (MOD-03); até lá não há sessão confirmada, e ela pode ser definida.
 VERIFICADORES_USO: dict[str, VerificadorUso] = {}
 
-# Executores das operações sujeitas à autorização (DEC-42), por tipo. Chegam com os módulos 02 a 04.
+# Executores das operações sujeitas à autorização (DEC-42), por tipo, além dos que o compor() monta com as
+# dependências de cada módulo. Um tipo registrado aqui prevalece (os testes da web põem um executor falso).
 EXECUTORES_AUTORIZAVEIS: dict[str, ExecutorAutorizavel] = {}
+
+# Quem tem fatos datados que impedem encerrar o período (DD-31, DD-74). O MOD-03 entra no Incremento 3.
+VERIFICADORES_IMPEDIMENTO: list[VerificadorImpedimento] = []
 
 
 def compor(
@@ -156,6 +162,13 @@ def compor(
     parametros = LeitorParametrosSQL(executar)
     hasher = hasher or Hasher()
     referencias = ServicoReferencias()
+    executores = dict(EXECUTORES_AUTORIZAVEIS)
+    for executor in (
+        ExecutorCorrigirEvento(auditoria, VERIFICADORES_IMPEDIMENTO),
+        ExecutorRemoverEvento(auditoria),
+    ):
+        executores.setdefault(executor.tipo, executor)
+    autorizacoes = ServicoAutorizacoes(executar, auditoria, executores)
     return Componentes(
         relogio=relogio,
         cifra=CifraAesGcm(chave_mestra),
@@ -169,9 +182,10 @@ def compor(
         autenticacao=ServicoAutenticacao(executar, auditoria, parametros, relogio, hasher),
         sessoes=GerenciadorSessao(executar, auditoria, parametros, relogio),
         usuarios=ServicoUsuarios(executar, auditoria, hasher),
-        autorizacoes=ServicoAutorizacoes(executar, auditoria, EXECUTORES_AUTORIZAVEIS),
+        autorizacoes=autorizacoes,
         pacientes=ServicoPacientes(executar, auditoria, referencias),
         contatos=ServicoContatos(executar, auditoria),
+        eventos=ServicoEventos(executar, auditoria, autorizacoes, VERIFICADORES_IMPEDIMENTO),
         leitura_cadastro=ServicoLeituraCadastro(),
     )
 

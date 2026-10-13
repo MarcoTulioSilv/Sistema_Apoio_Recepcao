@@ -134,6 +134,21 @@ class RepositorioPacienteSQL:
         linha = self._s.get(PeriodoTratamento, id)
         return _periodo(linha) if linha is not None else None
 
+    def gravar_evento(
+        self,
+        periodo_id: int,
+        tipo: str | None,
+        data: date | None,
+        local: str | None,
+        documento_id: bytes | None,
+        registrado_em: datetime | None,
+    ) -> None:
+        linha = self._s.get_one(PeriodoTratamento, periodo_id)
+        linha.evento_tipo, linha.evento_data, linha.evento_local = tipo, data, local
+        linha.evento_documento_id = documento_id
+        linha.evento_registrado_em = registrado_em.astimezone(UTC).replace(tzinfo=None) if registrado_em else None
+        self._s.flush()
+
     def criar_cobertura(
         self, periodo_id: int, inicio: date, tipo: str, convenio_id: int | None, carteirinha: str | None
     ) -> int:

@@ -119,6 +119,18 @@ class RepositorioPaciente(Protocol):
 
     def periodo(self, id: int) -> PeriodoGravado | None: ...
 
+    def gravar_evento(
+        self,
+        periodo_id: int,
+        tipo: str | None,
+        data: date | None,
+        local: str | None,
+        documento_id: bytes | None,
+        registrado_em: datetime | None,
+    ) -> None:
+        """Registra, corrige ou remove (tudo None) o evento embutido no período (DD-13)."""
+        ...
+
     def criar_cobertura(
         self, periodo_id: int, inicio: date, tipo: str, convenio_id: int | None, carteirinha: str | None
     ) -> int: ...
