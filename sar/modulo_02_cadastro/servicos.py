@@ -10,6 +10,7 @@ from sar.modulo_01_acesso.contrato import AuditService, PermissionGuard
 from sar.modulo_02_cadastro.contrato import (
     CoberturaFicha,
     ContatoFicha,
+    DadosCobertura,
     DadosPaciente,
     Ficha,
     Identificacao,
@@ -29,9 +30,12 @@ from sar.modulo_02_cadastro.regras import (
     normalizar,
     pendencias,
     situacao,
+    validar_cobertura,
     validar_contato,
     validar_telefone,
+    verificar_abertura,
     verificar_inicio,
+    verificar_inicio_cobertura,
     verificar_minimo,
 )
 from sar.modulo_06_configuracao.contrato import Municipio, Referencias
@@ -55,7 +59,11 @@ UF_RESIDENCIA = "GO"  # §6.2: residência só em Goiás
 MINIMO_BUSCA = 2
 LIMITE_BUSCA = 50
 COLUNAS_UNICAS: tuple[ColunaUnica, ...] = ("prontuario", "cpf", "cns")
-_RESTRICOES_UNICAS = {f"uq_paciente__{coluna}": coluna for coluna in COLUNAS_UNICAS}
+_RESTRICOES = {f"uq_paciente__{coluna}": f"{coluna}.repetido" for coluna in COLUNAS_UNICAS} | {
+    "uq_periodo_tratamento__um_aberto": "INV-02",
+    "uq_periodo_tratamento__inicio": "periodo.inicio_repetido",
+    "uq_cobertura__inicio": "INV-09",
+}
 
 
 def hoje_na_clinica(contexto: Contexto) -> date:
@@ -88,13 +96,14 @@ def _triade(c: CamposPaciente | DadosPaciente) -> tuple[str, date, str] | None:
 
 
 def _com_unicidade[R](chamada: Callable[[], R]) -> R:
-    """Duas gravações simultâneas do mesmo número: a restrição do banco barra a segunda (INV-07, INV-15)."""
+    """Duas gravações simultâneas que a verificação prévia não viu: a restrição do banco barra a segunda
+    (INV-02, INV-07, INV-09, INV-15)."""
     try:
         return chamada()
     except Exception as erro:
-        coluna = _RESTRICOES_UNICAS.get(campos_do_erro(erro).get("restricao") or "")
-        if coluna is not None:
-            raise RegraViolada(f"{coluna}.repetido") from None
+        codigo = _RESTRICOES.get(campos_do_erro(erro).get("restricao") or "")
+        if codigo is not None:
+            raise RegraViolada(codigo) from None
         raise
 
 
@@ -152,7 +161,12 @@ class ServicoPacientes:
 
     # ---------------------------------------------------------------- escrita
     def criar(
-        self, contexto: Contexto, dados: DadosPaciente, inicio: date | None, confirmar_duplicidade: bool = False
+        self,
+        contexto: Contexto,
+        dados: DadosPaciente,
+        inicio: date | None,
+        confirmar_duplicidade: bool = False,
+        cobertura: DadosCobertura | None = None,
     ) -> int:
         GUARDA.exigir(contexto, "cadastro.paciente.criar")
         dados = normalizar(dados, hoje_na_clinica(contexto))
@@ -161,6 +175,9 @@ class ServicoPacientes:
             raise RuntimeError("inalcançável: verificar_minimo exige a data de início")
         verificar_inicio(inicio, dados.data_nascimento)
         campos = _campos(dados)
+        carteirinha = (
+            validar_cobertura(cobertura.tipo, cobertura.convenio_id, cobertura.carteirinha) if cobertura else None
+        )
 
         def operacao(uow: UnidadeDeTrabalho) -> int:
             repositorio = uow.repositorio(RepositorioPaciente)
@@ -170,12 +187,14 @@ class ServicoPacientes:
             if candidatos and not confirmar_duplicidade:
                 raise ConfirmacaoNecessaria("triade", {"candidatos": [p.id for p in candidatos]})
             paciente_id = repositorio.criar(campos, cep_verificado=False, em=contexto.instante)
-            repositorio.abrir_periodo(paciente_id, inicio)
+            periodo_id = repositorio.abrir_periodo(paciente_id, inicio)
             alteracoes = campos_alterados(DadosPaciente(), dados)
             alteracoes["periodo_inicio"] = (None, inicio)
             self._auditoria.registrar(
                 uow, contexto, "cadastro.paciente.criar", "paciente", str(paciente_id), alteracoes
             )
+            if cobertura is not None:
+                self._gravar_cobertura(uow, contexto, periodo_id, cobertura, carteirinha, inicio)
             return paciente_id
 
         return _com_unicidade(lambda: self._executar(operacao))
@@ -211,6 +230,81 @@ class ServicoPacientes:
             return versao + 1
 
         return _com_unicidade(lambda: self._executar(operacao))
+
+    def abrir_periodo(
+        self, contexto: Contexto, paciente_id: int, inicio: date, cobertura: DadosCobertura | None = None
+    ) -> int:
+        GUARDA.exigir(contexto, "cadastro.periodo.abrir")
+        carteirinha = (
+            validar_cobertura(cobertura.tipo, cobertura.convenio_id, cobertura.carteirinha) if cobertura else None
+        )
+
+        def operacao(uow: UnidadeDeTrabalho) -> int:
+            repositorio = uow.repositorio(RepositorioPaciente)
+            paciente = _paciente_vivo(repositorio, paciente_id)
+            periodos = repositorio.periodos(paciente_id)
+            obito = next((p.evento_data for p in periodos if p.evento_tipo == TipoEvento.OBITO.value), None)
+            aberto = any(p.evento_tipo is None for p in periodos)
+            fim_anterior = periodos[-1].evento_data if periodos else None
+            verificar_abertura(inicio, aberto, fim_anterior, obito)
+            verificar_inicio(inicio, paciente.campos.data_nascimento)
+            if any(p.inicio == inicio for p in periodos):
+                raise RegraViolada("periodo.inicio_repetido")
+            periodo_id = repositorio.abrir_periodo(paciente_id, inicio)
+            self._auditoria.registrar(
+                uow, contexto, "cadastro.periodo.abrir", "periodo_tratamento", str(periodo_id),
+                {"paciente_id": (None, paciente_id), "inicio": (None, inicio)},
+            )  # fmt: skip
+            if cobertura is not None:
+                self._gravar_cobertura(uow, contexto, periodo_id, cobertura, carteirinha, inicio)
+            return periodo_id
+
+        return _com_unicidade(lambda: self._executar(operacao))
+
+    def registrar_cobertura(self, contexto: Contexto, periodo_id: int, cobertura: DadosCobertura, inicio: date) -> None:
+        GUARDA.exigir(contexto, "cadastro.cobertura.registrar")
+        carteirinha = validar_cobertura(cobertura.tipo, cobertura.convenio_id, cobertura.carteirinha)
+
+        def operacao(uow: UnidadeDeTrabalho) -> None:
+            repositorio = uow.repositorio(RepositorioPaciente)
+            periodo = repositorio.periodo(periodo_id)
+            if periodo is None:
+                raise NaoEncontrado()
+            _paciente_vivo(repositorio, periodo.paciente_id)  # trava o agregado: duas vigências não se cruzam
+            self._gravar_cobertura(uow, contexto, periodo_id, cobertura, carteirinha, inicio)
+
+        _com_unicidade(lambda: self._executar(operacao))
+
+    def _gravar_cobertura(
+        self,
+        uow: UnidadeDeTrabalho,
+        contexto: Contexto,
+        periodo_id: int,
+        cobertura: DadosCobertura,
+        carteirinha: str | None,
+        inicio: date,
+    ) -> None:
+        """Com o agregado já travado: período, convênio ativo, início dentro do período e sem repetir (INV-09)."""
+        repositorio = uow.repositorio(RepositorioPaciente)
+        periodo = repositorio.periodo(periodo_id)
+        if periodo is None:
+            raise NaoEncontrado()
+        if cobertura.convenio_id is not None:
+            convenio = self._referencias.convenio(uow, cobertura.convenio_id)
+            if convenio is None:
+                raise NaoEncontrado()
+            if not convenio.ativo:
+                raise RegraViolada("cobertura.convenio_inativo")  # DD-49: inativo não entra em registro novo
+        inicios = [c.inicio for c in repositorio.coberturas([periodo_id])]
+        verificar_inicio_cobertura(inicio, periodo.inicio, periodo.evento_data, inicios)
+        cobertura_id = repositorio.criar_cobertura(
+            periodo_id, inicio, cobertura.tipo.value, cobertura.convenio_id, carteirinha
+        )
+        self._auditoria.registrar(
+            uow, contexto, "cadastro.cobertura.registrar", "cobertura", str(cobertura_id),
+            {"periodo_id": (None, periodo_id), "inicio": (None, inicio), "tipo": (None, cobertura.tipo.value),
+             "convenio_id": (None, cobertura.convenio_id), "carteirinha": (None, carteirinha)},
+        )  # fmt: skip
 
     def descartar_duplicidade(self, contexto: Contexto, paciente_id: int, outro_id: int) -> None:
         GUARDA.exigir(contexto, "cadastro.paciente.descartar_duplicidade")

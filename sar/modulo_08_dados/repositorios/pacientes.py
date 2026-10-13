@@ -130,6 +130,20 @@ class RepositorioPacienteSQL:
         self._s.flush()
         return linha.id
 
+    def periodo(self, id: int) -> PeriodoGravado | None:
+        linha = self._s.get(PeriodoTratamento, id)
+        return _periodo(linha) if linha is not None else None
+
+    def criar_cobertura(
+        self, periodo_id: int, inicio: date, tipo: str, convenio_id: int | None, carteirinha: str | None
+    ) -> int:
+        linha = Cobertura(
+            periodo_id=periodo_id, vigencia_inicio=inicio, tipo=tipo, convenio_id=convenio_id, carteirinha=carteirinha
+        )
+        self._s.add(linha)
+        self._s.flush()
+        return linha.id
+
     def coberturas(self, periodo_ids: list[int]) -> list[CoberturaGravada]:
         if not periodo_ids:
             return []

@@ -68,6 +68,15 @@ class TipoCobertura(str, Enum):  # RF-301
     CONVENIO = "convenio"
 
 
+@dataclass(frozen=True, slots=True)
+class DadosCobertura:
+    """SUS ou convênio ativo, com a carteirinha só no convênio (RF-301)."""
+
+    tipo: TipoCobertura
+    convenio_id: int | None = None
+    carteirinha: str | None = None
+
+
 # ------------------------------------------------------------------ saídas
 @dataclass(frozen=True, slots=True)
 class Identificacao:
@@ -144,9 +153,15 @@ class Ficha:
 # ------------------------------------------------------------------ serviços
 class PacienteService(Protocol):
     def criar(
-        self, contexto: Contexto, dados: DadosPaciente, inicio: date | None, confirmar_duplicidade: bool = False
+        self,
+        contexto: Contexto,
+        dados: DadosPaciente,
+        inicio: date | None,
+        confirmar_duplicidade: bool = False,
+        cobertura: DadosCobertura | None = None,
     ) -> int:
-        """Cria o paciente com o período aberto desde o início do tratamento (P-03).
+        """Cria o paciente com o período aberto desde o início do tratamento (P-03) e, se informada, a cobertura
+        vigente desde o mesmo dia. As RegraViolada da cobertura são as do registrar_cobertura.
 
         RegraViolada: mínimo da P-03 ("P-03.minimo", com os faltantes), campo inválido, residência fora de Goiás
         ("municipio.fora_de_goias"), município inexistente, prontuário, CPF ou CNS repetido ("prontuario.repetido",
@@ -167,6 +182,20 @@ class PacienteService(Protocol):
 
     def ver_ficha(self, contexto: Contexto, paciente_id: int) -> Ficha:
         """NaoEncontrado se não existir ou estiver anulado."""
+        ...
+
+    def abrir_periodo(
+        self, contexto: Contexto, paciente_id: int, inicio: date, cobertura: DadosCobertura | None = None
+    ) -> int:
+        """Retorno do paciente (RF-605). RegraViolada: "INV-02" (já há período aberto), "INV-01" (falecido),
+        "periodo.antes_do_fim_anterior", "inicio.antes_do_nascimento", "periodo.inicio_repetido". NaoEncontrado."""
+        ...
+
+    def registrar_cobertura(self, contexto: Contexto, periodo_id: int, cobertura: DadosCobertura, inicio: date) -> None:
+        """Nova vigência no período; a anterior termina na véspera (DD-70, RF-302). RegraViolada: "INV-09" (início
+        repetido), "cobertura.antes_do_periodo", "cobertura.depois_do_fim", "cobertura.convenio",
+        "cobertura.sus_sem_convenio", "cobertura.convenio_inativo". NaoEncontrado (período, convênio ou paciente
+        anulado)."""
         ...
 
     def descartar_duplicidade(self, contexto: Contexto, paciente_id: int, outro_id: int) -> None:
