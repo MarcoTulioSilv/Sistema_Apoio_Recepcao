@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block titulo %}{% block titulo_pagina %}{% endblock %} — SAR{% endblock %}
+{% block corpo %}
+<div class="flex min-h-screen">
+  <nav aria-label="Navegação principal" class="hidden w-52 shrink-0 flex-col gap-1.5 bg-menu px-4 py-6 text-white lg:flex">
+    <div class="px-3 pb-5 text-2xl font-bold tracking-wide">SAR</div>
+    {% for item in menu %}
+    <a class="menu-link" href="{{ url_for(item.endpoint) }}"{% if request.endpoint == item.endpoint %} aria-current="page"{% endif %}>{{ item.rotulo }}</a>
+    {% endfor %}
+    <div class="grow"></div>
+    <div class="border-t border-white/15 px-3 pt-3 text-sm text-menu-texto">{{ perfil_rotulo }}</div>
+  </nav>
+  <div class="flex min-w-0 grow flex-col">
+    <header class="flex flex-wrap items-center justify-between gap-4 border-b border-borda bg-superficie px-6 py-5 lg:px-8">
+      <div class="flex flex-col gap-0.5">
+        <h1 class="m-0 text-[26px] leading-tight">{{ self.titulo_pagina() }}</h1>
+        <p class="m-0 text-[15px] text-suave">{% block subtitulo %}{% endblock %}</p>
+      </div>
+      <div class="flex flex-wrap items-end gap-4 text-[15px] text-suave">
+        {% if superusuario %}
+        <form class="flex flex-wrap items-end gap-2" method="post" action="{{ url_for('acesso.trocar_perfil') }}">
+          <label class="campo"><span class="rotulo">Agir como (desenvolvimento)</span>
+            <select class="entrada" name="perfil">
+              {% for perfil, rotulo in perfis.items() %}
+              <option value="{{ perfil.value }}"{% if perfil == perfil_atual %} selected{% endif %}>{{ rotulo }}</option>
+              {% endfor %}
+            </select>
+          </label>
+          <button class="btn-neutro" type="submit">Trocar perfil</button>
+        </form>
+        {% endif %}
+        <span class="flex min-h-11 items-center" data-sobre="perfil">{{ perfil_rotulo }}</span>
+        <form method="post" action="{{ url_for('acesso.sair') }}"><button class="btn-neutro" type="submit">Sair</button></form>
+      </div>
+    </header>
+    <main class="grow p-6 lg:p-8">
+      {% block conteudo %}{% endblock %}
+    </main>
+  </div>
+</div>
+{% endblock %}

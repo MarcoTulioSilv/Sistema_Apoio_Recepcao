@@ -1,0 +1,31 @@
+{% extends "layout.html" %}
+{% block titulo_pagina %}Usuários{% endblock %}
+{% block subtitulo %}Quem acessa o SAR e com qual perfil{% endblock %}
+{% block conteudo %}
+<div class="flex flex-col gap-4">
+  <div><a class="btn-primario" href="{{ url_for('usuarios.novo') }}">Novo usuário</a></div>
+  <div class="cartao overflow-x-auto">
+    <table class="w-full border-collapse text-left">
+      <caption class="sr-only">Usuários do sistema</caption>
+      <thead><tr class="text-sm text-suave">
+        <th scope="col" class="px-4 py-2 font-bold">Nome</th>
+        <th scope="col" class="px-4 py-2 font-bold">Login</th>
+        <th scope="col" class="px-4 py-2 font-bold">Perfil</th>
+        <th scope="col" class="px-4 py-2 font-bold">Situação</th>
+        <th scope="col" class="px-4 py-2 font-bold"><span class="sr-only">Ações</span></th>
+      </tr></thead>
+      <tbody>
+      {% for u in usuarios %}
+        <tr class="border-t border-linha" data-login="{{ u.login }}">
+          <td class="px-4 py-2.5">{{ u.nome }}</td>
+          <td class="px-4 py-2.5">{{ u.login }}</td>
+          <td class="px-4 py-2.5">{{ perfis[u.perfil] }}</td>
+          <td class="px-4 py-2.5">{% include "_situacao.html" %}</td>
+          <td class="px-4 py-2.5 text-right"><a href="{{ url_for('usuarios.detalhe', usuario_id=u.id) }}">Abrir<span class="sr-only"> {{ u.nome }}</span></a></td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

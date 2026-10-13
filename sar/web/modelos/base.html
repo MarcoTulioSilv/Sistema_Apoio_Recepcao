@@ -6,9 +6,11 @@
   <title>{% block titulo %}SAR{% endblock %}</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='css/sar.css') }}">
 </head>
-<body>
-  <main>
+<body class="bg-fundo text-tinta">
+  {% block corpo %}
+  <main class="p-6">
     {% block conteudo %}{% endblock %}
   </main>
+  {% endblock %}
 </body>
 </html>

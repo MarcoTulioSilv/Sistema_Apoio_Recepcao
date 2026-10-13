@@ -79,6 +79,7 @@ espera_erro "web: excluir paciente" "$(sql_como sar_web "$WEB_SENHA" "DELETE FRO
 espera_erro "web: alterar município" "$(sql_como sar_web "$WEB_SENHA" "UPDATE municipio SET nome='x'")" "denied"
 espera_valor "web: travar a cabeça da cadeia" "$(sql_como sar_web "$WEB_SENHA" "START TRANSACTION;
      SELECT ultimo_registro_id FROM auditoria_cabeca WHERE id=1 FOR UPDATE; ROLLBACK; SELECT 'ok'")" "ok"
+espera_erro "web: alterar âncora (DD-86)" "$(sql_como sar_web "$WEB_SENHA" "UPDATE auditoria_ancora SET hash=REPEAT('f',64)")" "denied"
 espera_erro "worker: excluir auditoria" "$(sql_como sar_worker "$WORKER_SENHA" "DELETE FROM auditoria WHERE id=999999999")" "denied"
 espera_erro "worker: alterar hash do documento" "$(sql_como sar_worker "$WORKER_SENHA" "UPDATE documento SET hash_sha256=REPEAT('d',64)")" "denied"
 espera_valor "worker: fila com SKIP LOCKED" "$(sql_como sar_worker "$WORKER_SENHA" "START TRANSACTION;

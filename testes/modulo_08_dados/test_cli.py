@@ -5,7 +5,8 @@ from pathlib import Path
 import pytest
 from sqlalchemy.exc import IntegrityError
 
-from sar.modulo_08_dados import cli
+from sar import cli
+from sar.modulo_08_dados import cli as banco
 from sar.modulo_08_dados.cli import SENHAS, comandos_usuarios
 
 SQL = (Path(__file__).resolve().parents[2] / "sar" / "modulo_08_dados" / "usuarios_banco.sql").read_text(
@@ -59,9 +60,19 @@ def test_falha_mostra_so_tipo_e_restricao_nunca_o_sql(
             ErroDriver(1062, "Duplicate entry 'senha-secreta-123' for key 'usuario.uq_usuario__login'"),
         )
 
-    monkeypatch.setattr(cli, "migrar", falha)
+    monkeypatch.setattr(banco, "migrar", falha)
     assert cli.main(["migrar"]) == 1
     saida = capsys.readouterr()
     assert "erro=IntegrityError" in saida.err
     assert "restricao=uq_usuario__login" in saida.err
     assert "senha-secreta-123" not in saida.out + saida.err
+
+
+@pytest.mark.requisito("DD-58")
+def test_privilegios_vao_para_o_banco_indicado() -> None:
+    comandos = comandos_usuarios(SQL, SENHAS_TESTE, "sar_teste")
+    grants = [c for c in comandos if c.startswith("GRANT")]
+    assert grants and all(" ON sar_teste." in c for c in grants)
+    assert not any("{{BANCO}}" in c for c in comandos)
+    with pytest.raises(ValueError):
+        comandos_usuarios(SQL, SENHAS_TESTE, "sar; DROP DATABASE sar")

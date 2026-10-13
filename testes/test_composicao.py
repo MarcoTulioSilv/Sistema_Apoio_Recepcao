@@ -7,7 +7,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
 
-from sar.composicao import compor
+from sar.composicao import Ambiente, ambiente_atual, compor
 from sar.nucleo.contexto import Contexto
 from sar.nucleo.portas import Finalidade
 from sar.nucleo.uow import RegistroAuditoria, UnidadeDeTrabalho
@@ -32,3 +32,18 @@ def test_componentes_ligados_e_auditoria_passa_pelo_gravador() -> None:
     nonce, cifrado = componentes.cifra.cifrar(Finalidade.RASCUNHOS, b"x", b"1")
     assert componentes.cifra.decifrar(Finalidade.RASCUNHOS, nonce, cifrado, b"1") == b"x"
     engine.dispose()
+
+
+@pytest.mark.requisito("DD-85")
+def test_ambiente_padrao_e_producao(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("SAR_AMBIENTE", raising=False)
+    assert ambiente_atual() is Ambiente.PRODUCAO
+    monkeypatch.setenv("SAR_AMBIENTE", "desenvolvimento")
+    assert ambiente_atual() is Ambiente.DESENVOLVIMENTO
+
+
+@pytest.mark.requisito("DD-85")
+def test_ambiente_desconhecido_e_recusado(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("SAR_AMBIENTE", "dev")
+    with pytest.raises(RuntimeError):
+        ambiente_atual()

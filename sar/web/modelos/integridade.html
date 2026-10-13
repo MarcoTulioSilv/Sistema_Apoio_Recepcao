@@ -1,0 +1,43 @@
+{% extends "layout.html" %}
+{% block titulo_pagina %}Integridade{% endblock %}
+{% block subtitulo %}Avisos da verificação da trilha e conferência do código dos documentos{% endblock %}
+{% block conteudo %}
+<div class="flex max-w-3xl flex-col gap-6">
+  {% include "_avisos.html" %}
+
+  <section class="flex flex-col gap-3" aria-labelledby="avisos-t">
+    <h2 id="avisos-t" class="m-0 text-xl">Avisos abertos</h2>
+    {% if not avisos %}<p class="m-0 text-[15px] text-suave">Nenhum aviso aberto: a última verificação da trilha não encontrou divergência.</p>{% endif %}
+    {% for aviso in avisos %}
+    <div class="flex w-full flex-col gap-3 rounded-xl border border-urgencia-borda bg-urgencia-fundo px-5 py-4" data-aviso="{{ aviso.id }}">
+      <div class="flex flex-col gap-1">
+        <strong class="text-lg text-urgencia">A verificação da trilha de auditoria encontrou divergência</strong>
+        <span class="text-[15px] text-urgencia-texto">Detectada em {{ aviso.detectado_em.strftime("%d/%m/%Y %H:%M") }} UTC.
+          {% if diagnostico %}Primeiro registro divergente: nº {{ aviso.registro_divergente_id }}
+          (<a href="{{ url_for('trilha.consulta', antes_de_id=aviso.registro_divergente_id + 1) }}">ver na trilha</a>).
+          {% else %}O TI já tem o diagnóstico; quando ele explicar o que houve, registre a explicação abaixo.{% endif %}</span>
+      </div>
+      {% if encerra %}
+      <form class="flex flex-col gap-2" method="post" action="{{ url_for('integridade.encerrar', aviso_id=aviso.id) }}">
+        <div class="campo"><label class="rotulo" for="explicacao-{{ aviso.id }}">Explicação recebida do TI</label>
+          <textarea class="entrada min-h-24 py-2" id="explicacao-{{ aviso.id }}" name="explicacao" required></textarea></div>
+        <div><button class="btn-urgente" type="submit">Encerrar o aviso</button></div>
+      </form>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </section>
+
+  {% if confere %}
+  <section class="cartao flex flex-col gap-3 p-5" aria-labelledby="conferir-t">
+    <h2 id="conferir-t" class="m-0 text-xl">Conferir o código de um documento</h2>
+    <p class="m-0 text-[15px] text-suave">O rodapé de relatórios e documentos traz o número do registro e o código de integridade (DD-86). Digite os dois para saber se a trilha atual é a mesma de quando o documento saiu.</p>
+    <form class="flex flex-wrap items-end gap-3" method="post" action="{{ url_for('integridade.conferir') }}">
+      <label class="campo"><span class="rotulo">Número do registro</span><input class="entrada w-36" name="registro" inputmode="numeric" required></label>
+      <label class="campo"><span class="rotulo">Código</span><input class="entrada w-56" name="codigo" placeholder="7F3A-91C2-4D0B-E58A" required></label>
+      <button class="btn-primario" type="submit">Conferir</button>
+    </form>
+  </section>
+  {% endif %}
+</div>
+{% endblock %}

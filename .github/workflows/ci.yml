@@ -11,11 +11,12 @@ permissions:
 env:
   TAILWIND_VERSAO: v4.3.3
   GITLEAKS_VERSAO: 8.30.1
-  # Banco descartável do serviço abaixo; a senha só existe durante o job.
+  # Banco descartável do contêiner iniciado no job; a senha só existe durante ele.
   MYSQL_RAIZ: raiz-somente-ci
   SAR_SEGREDOS: ${{ github.workspace }}/segredos
   SAR_BANCO_HOST: 127.0.0.1
   SAR_BANCO_PORTA: "3306"
+  SAR_BANCO_NOME: sar_teste  # o mesmo banco de testes do desenvolvimento
   MYSQL_HOST: 127.0.0.1
   MYSQL_TCP_PORT: "3306"
 
@@ -80,7 +81,7 @@ jobs:
           sar migrar
           sar criar-usuarios-banco
           ADMIN="-uroot -p$MYSQL_RAIZ" WEB_SENHA="$(cat segredos/sar_web)" WORKER_SENHA="$(cat segredos/sar_worker)" \
-            EXPURGO_SENHA="$(cat segredos/sar_expurgo)" bash scripts/verificar_esquema.sh
+            EXPURGO_SENHA="$(cat segredos/sar_expurgo)" BANCO=sar_teste bash scripts/verificar_esquema.sh
 
       - name: 8. Integração
         run: pytest testes -m integracao --cov --cov-append --cov-report=

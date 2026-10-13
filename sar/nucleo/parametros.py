@@ -8,9 +8,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date
 from enum import Enum
-from typing import Protocol
+from typing import TYPE_CHECKING, Protocol
 
 from sar.nucleo.contexto import Perfil
+
+if TYPE_CHECKING:
+    from sar.nucleo.uow import UnidadeDeTrabalho
 
 
 class Unidade(str, Enum):
@@ -59,3 +62,12 @@ class LeitorParametros(Protocol):
     def valor(self, nome: str) -> int | bool | date | None:
         """Valor vigente, sempre dentro dos limites declarados; lido por operação, sem cache (DD-48)."""
         ...
+
+
+class VerificadorUso(Protocol):
+    """Diz se um parâmetro imutável após o uso já foi usado (DD-51: a data de implantação trava na primeira
+    sessão confirmada). Implementado pelo módulo dono do uso e ligado na raiz de composição (DD-02)."""
+
+    parametro: str
+
+    def em_uso(self, uow: UnidadeDeTrabalho) -> bool: ...

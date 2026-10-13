@@ -1,0 +1,53 @@
+"""Apoio dos testes da web: os serviços montados como o sar/wsgi.py monta, e um cliente que já manda a origem
+do SAR em todo POST (DD-84)."""
+
+from __future__ import annotations
+
+from flask import Flask
+from flask.testing import FlaskClient
+from sqlalchemy import Engine
+from werkzeug.test import TestResponse
+
+from sar.composicao import compor
+from sar.web import criar_app
+from sar.web.configuracao import ConfigWeb, ServicosWeb
+from testes.apoio.acesso import HASHER, SENHA
+
+ORIGEM = "https://sar.teste"
+
+
+def servicos_web(engine: Engine) -> ServicosWeb:
+    componentes = compor(engine, bytes(32), hasher=HASHER)
+    return ServicosWeb(
+        componentes.autenticacao,
+        componentes.sessoes,
+        componentes.usuarios,
+        componentes.configuracao,
+        componentes.autorizacoes,
+        componentes.auditoria,
+        componentes.integridade,
+    )
+
+
+def montar(engine: Engine, **config: object) -> Flask:
+    return criar_app(servicos_web(engine), ConfigWeb(origem=ORIGEM, **config))  # type: ignore[arg-type]
+
+
+def get(c: FlaskClient, caminho: str) -> TestResponse:
+    return c.get(caminho, base_url=ORIGEM)
+
+
+def post(c: FlaskClient, caminho: str, dados: dict[str, str], origem: str | None = ORIGEM) -> TestResponse:
+    cabecalhos = {"Origin": origem} if origem else {}
+    return c.post(caminho, data=dados, base_url=ORIGEM, headers=cabecalhos)
+
+
+def entrar(c: FlaskClient, login: str, senha: str = SENHA) -> TestResponse:
+    return post(c, "/entrar", {"login": login, "senha": senha})
+
+
+def logado(app: Flask, login: str) -> FlaskClient:
+    cliente = app.test_client()
+    resposta = entrar(cliente, login)
+    assert resposta.status_code == 302, resposta.get_data(as_text=True)
+    return cliente

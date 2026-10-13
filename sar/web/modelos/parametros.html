@@ -1,0 +1,48 @@
+{% extends "layout.html" %}
+{% block titulo_pagina %}Parâmetros{% endblock %}
+{% block subtitulo %}A administração altera os operacionais; o TI, os técnicos{% endblock %}
+{% block conteudo %}
+<div class="flex flex-col gap-4">
+  {% include "_avisos.html" %}
+  <div class="cartao overflow-x-auto">
+    <table class="w-full border-collapse text-left">
+      <caption class="sr-only">Parâmetros do sistema</caption>
+      <thead><tr class="text-sm text-suave">
+        <th scope="col" class="px-4 py-2 font-bold">Parâmetro</th>
+        <th scope="col" class="px-4 py-2 font-bold">Valor</th>
+        <th scope="col" class="px-4 py-2 font-bold">Padrão</th>
+        <th scope="col" class="px-4 py-2 font-bold">Limites</th>
+        <th scope="col" class="px-4 py-2 font-bold">Quem altera</th>
+      </tr></thead>
+      <tbody>
+      {% for linha in linhas %}{% set p = linha.parametro %}
+        <tr class="border-t border-linha" data-parametro="{{ p.nome }}">
+          <th scope="row" class="px-4 py-2.5 font-normal">{{ linha.rotulo }}</th>
+          <td class="px-4 py-2.5">
+            {% if linha.editavel %}
+            <form class="flex flex-wrap items-center gap-2" method="post" action="{{ url_for('parametros.alterar', nome=p.nome) }}">
+              {% if p.unidade == "bool" %}
+              <select class="entrada w-28" name="valor" aria-label="{{ linha.rotulo }}">
+                <option value="sim"{% if p.valor %} selected{% endif %}>Sim</option>
+                <option value="nao"{% if not p.valor %} selected{% endif %}>Não</option>
+              </select>
+              {% elif p.unidade == "data" %}
+              <input class="entrada w-44" type="date" name="valor" value="{{ p.valor.isoformat() if p.valor else '' }}" aria-label="{{ linha.rotulo }}">
+              {% else %}
+              <input class="entrada w-28" type="number" name="valor" value="{{ p.valor }}" min="{{ p.minimo }}" max="{{ p.maximo }}" required aria-label="{{ linha.rotulo }}">
+              <span class="text-[15px] text-suave">{{ linha.unidade }}</span>
+              {% endif %}
+              <button class="btn-secundario" type="submit">Salvar<span class="sr-only"> {{ linha.rotulo }}</span></button>
+            </form>
+            {% else %}{{ linha.valor_exibido }}{% endif %}
+          </td>
+          <td class="px-4 py-2.5">{{ linha.padrao_exibido }}</td>
+          <td class="px-4 py-2.5">{{ linha.limites }}</td>
+          <td class="px-4 py-2.5">{{ linha.editor }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

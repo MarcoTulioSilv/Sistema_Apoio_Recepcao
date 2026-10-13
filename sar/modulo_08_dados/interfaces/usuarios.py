@@ -1,0 +1,70 @@
+"""Usuários do sistema (DDS §5.1). Nunca excluídos (RF-1005)."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from datetime import datetime
+from typing import Protocol
+
+
+@dataclass(frozen=True, slots=True)
+class DadosUsuario:
+    id: int
+    nome: str
+    login: str
+    senha_hash: str
+    perfil: str
+    ativo: bool
+    deve_trocar_senha: bool
+    termo_ciencia_em: datetime | None
+    tentativas_falhas: int
+    bloqueado_ate: datetime | None
+    versao: int
+
+
+class RepositorioUsuario(Protocol):
+    def por_login(self, login: str) -> DadosUsuario | None: ...
+
+    def por_id(self, id: int) -> DadosUsuario | None: ...
+
+    def travar(self, id: int) -> None:
+        """Trava a linha até o commit: duas entradas do mesmo usuário ao mesmo tempo se serializam (P-02)."""
+        ...
+
+    def incrementar_falhas(self, id: int) -> int:
+        """Soma uma falha no próprio banco e devolve o total: tentativas em paralelo não se perdem, porque a
+        linha fica travada até o commit. Os contadores do bloqueio não mudam a versão (DD-17), para uma
+        tentativa de login não conflitar com a tela do TI."""
+        ...
+
+    def definir_bloqueio(self, id: int, ate: datetime | None) -> None: ...
+
+    def zerar_falhas(self, id: int) -> None: ...
+
+    def trocar_senha(self, id: int, senha_hash: str, deve_trocar: bool) -> None:
+        """Muda a versão (DD-17)."""
+        ...
+
+    def listar(self) -> list[DadosUsuario]: ...
+
+    def travar_ti_ativos(self) -> list[int]:
+        """Ids dos TIs ativos, com as linhas travadas até o commit (DD-87): duas operações que poderiam deixar o
+        sistema sem TI se serializam, e a segunda conta de novo."""
+        ...
+
+    def criar(
+        self, nome: str, login: str, senha_hash: str, perfil: str, em: datetime, termo_em: datetime | None
+    ) -> int:
+        """Nasce ativo e com troca de senha obrigatória."""
+        ...
+
+    # Alterações da tela do TI: só gravam se a versão lida ainda for a atual (DD-17); False = conflito.
+    def alterar_perfil(self, id: int, versao: int, perfil: str) -> bool: ...
+
+    def definir_ativo(self, id: int, versao: int, ativo: bool) -> bool: ...
+
+    def redefinir_senha(self, id: int, versao: int, senha_hash: str) -> bool:
+        """Senha provisória: troca obrigatória e bloqueio zerado."""
+        ...
+
+    def registrar_termo(self, id: int, versao: int, em: datetime) -> bool: ...

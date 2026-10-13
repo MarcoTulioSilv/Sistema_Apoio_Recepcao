@@ -245,7 +245,7 @@ ainda listado. Servem para provar o critério de aceitação da carga antes de e
 | Controles de ingestão SEG-01 a SEG-31 | Casos CT-DOC e corpus hostil | Integração contínua |
 | CSP estrita (DD-09) | Teste de sistema confere o cabeçalho e ausência de código inline nos modelos | Integração contínua |
 | Fronteiras e acesso ao banco e à internet | import-linter, 25 contratos | Integração contínua |
-| Privilégios de banco | `verificar_esquema.sh`, 24 verificações | Integração contínua e na imagem de produção |
+| Privilégios de banco | `verificar_esquema.sh`, 28 verificações | Integração contínua e na imagem de produção |
 | Análise estática e de dependências | bandit, pip-audit | Integração contínua |
 | Segredos no repositório | gitleaks | A cada envio |
 | Varredura dinâmica | OWASP ZAP em modo básico contra a homologação | Antes do go-live |

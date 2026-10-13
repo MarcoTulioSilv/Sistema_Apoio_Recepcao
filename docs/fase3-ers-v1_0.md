@@ -471,10 +471,9 @@ Referenciada por RF-1010. Cada linha é uma pendência; cada coluna, o perfil qu
 | **Job agendado que não rodou no horário** | — | — | — | ✓ | — |
 | **Assinaturas do antimalware desatualizadas (SEG-21)** | — | — | — | ✓ | — |
 | **Ocupação de disco acima do limite (RNF-621)** | — | — | — | ✓ | — |
-| **Âncora mensal da cadeia de auditoria, para anotação fora do sistema** | — | ✓ | — | — | — |
 
 A coluna da administração nas linhas operacionais decorre da definição do perfil: "tudo da
-recepção" (§1.5). As linhas em negrito foram acrescentadas por DEC-48; as seis seguintes, por DEC-70; a última, por DEC-72. Cadastro incompleto,
+recepção" (§1.5). As linhas em negrito foram acrescentadas por DEC-48; as seis seguintes, por DEC-70. A âncora mensal da cadeia de auditoria, acrescentada por DEC-72, saiu da matriz por DEC-74: vai automaticamente no rodapé dos relatórios e dos documentos emitidos, sem tarefa para a administração. Cadastro incompleto,
 documento do checklist faltante e paciente sem alocação só valem para paciente em tratamento; após o
 evento de saída, permanece apenas a pendência do evento sem documento comprobatório (DEC-71). A pendência de termo aparece também para a enfermagem, que
 acompanha o que gerou. A assinatura e o carimbo da enfermeira na declaração de troca de turno são
@@ -986,6 +985,7 @@ Detalhamentos que não mudam o escopo aprovado, mas mudam texto de requisito ou 
 | §3.2.13, RF-109 | Pendências de cadastro, checklist e alocação só para paciente em tratamento | DEC-71 |
 | §3.2.13 | Âncora mensal da cadeia de auditoria para a administração | DEC-72 |
 | RF-303 | Removido: registro da instituição que encaminhou o paciente | DEC-73 |
+| §3.2.13 | Âncora da cadeia retirada da matriz de pendências; passa a sair automaticamente no rodapé dos relatórios e documentos emitidos | DEC-74 |
 
 ## Apêndice B — Decisões registradas após a Fase 2
 
@@ -1026,6 +1026,7 @@ As decisões DEC-01 a DEC-40 estão nos documentos das Fases 0 a 2. As posterior
 | DEC-71 | Pendências de cadastro incompleto, checklist e sem alocação valem só para paciente em tratamento |
 | DEC-72 | A âncora mensal da cadeia de auditoria aparece como pendência da administração, para anotação fora do sistema |
 | DEC-73 | A instituição que encaminhou o paciente deixa de ser registrada no sistema |
+| DEC-74 | A âncora da cadeia de auditoria deixa de ser pendência da administração (substitui DEC-72): um código de integridade sai automaticamente no rodapé dos relatórios e dos documentos emitidos, e as cópias guardadas e entregues fazem o papel da anotação fora do sistema |
 
 ## Apêndice C — Rastreabilidade
 

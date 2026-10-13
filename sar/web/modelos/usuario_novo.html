@@ -1,0 +1,25 @@
+{% extends "layout.html" %}
+{% block titulo_pagina %}Novo usuário{% endblock %}
+{% block subtitulo %}A senha provisória aparece uma vez, depois de criar{% endblock %}
+{% block conteudo %}
+<section class="cartao flex w-full max-w-md flex-col gap-4 p-6" aria-labelledby="novo-t">
+  <h2 id="novo-t" class="m-0 text-xl">Dados do usuário</h2>
+  {% include "_avisos.html" %}
+  <form class="flex flex-col gap-3" method="post" action="{{ url_for('usuarios.novo_enviar') }}">
+    <div class="campo"><label class="rotulo" for="nome">Nome</label>
+      <input class="entrada" id="nome" name="nome" type="text" maxlength="120" value="{{ dados.nome or '' }}" required></div>
+    <div class="campo"><label class="rotulo" for="login">Login</label>
+      <input class="entrada" id="login" name="login" type="text" maxlength="60" value="{{ dados.login or '' }}" required aria-describedby="login-ajuda">
+      <p class="m-0 text-sm text-suave" id="login-ajuda">Minúsculas, de 3 a 60 caracteres: letras, números, ponto, hífen e sublinhado.</p></div>
+    <div class="campo"><label class="rotulo" for="perfil">Perfil</label>
+      <select class="entrada" id="perfil" name="perfil" required>
+        <option value="">Selecione…</option>
+        {% for perfil, rotulo in perfis.items() %}<option value="{{ perfil.value }}"{% if dados.perfil == perfil.value %} selected{% endif %}>{{ rotulo }}</option>{% endfor %}
+      </select></div>
+    <div class="flex flex-wrap gap-2">
+      <button class="btn-primario" type="submit">Criar usuário</button>
+      <a class="btn-neutro" href="{{ url_for('usuarios.lista') }}">Voltar</a>
+    </div>
+  </form>
+</section>
+{% endblock %}
