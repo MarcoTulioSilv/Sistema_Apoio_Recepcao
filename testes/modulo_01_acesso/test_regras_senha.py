@@ -83,3 +83,11 @@ def test_conferir_nunca_falha_com_erro() -> None:
     senha_hash = hasher.gerar("cafe com leite")
     assert not hasher.conferir("x" * 500, senha_hash)  # acima de 72 bytes: o bcrypt 5 levantaria erro
     assert not hasher.conferir("cafe com leite", None)  # login inexistente: confere contra o fictício
+
+
+@pytest.mark.requisito("DD-83")
+@pytest.mark.parametrize("senha", ["jabuticaba123", "rua123azul", "Quintal2026"])
+def test_numero_na_senha_e_aceito_se_ela_nao_cair_nas_regras_da_dd83(senha: str) -> None:
+    """Decisão confirmada em 2026-10-13: a DD-83 não proíbe "123" em si. Só recusa a lista de senhas comuns (também
+    com número no fim), sequência ou repetição na senha inteira, e senha com o nome ou o login."""
+    validar_senha(senha, LOGIN, NOME)
