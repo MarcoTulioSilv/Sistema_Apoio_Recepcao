@@ -1,0 +1,132 @@
+"""Agregado do paciente (DDS §6.1): paciente, períodos com evento e coberturas, contatos e telefones. Os campos
+têm os mesmos nomes do DadosPaciente do MOD-02; o repositório faz a ponte com as colunas."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from datetime import date, datetime
+from typing import Literal, Protocol
+
+ColunaUnica = Literal["prontuario", "cpf", "cns"]
+
+
+@dataclass(frozen=True, slots=True)
+class CamposPaciente:
+    prontuario: str
+    nome: str
+    data_nascimento: date | None
+    sexo: str | None
+    nome_mae: str | None
+    cpf: str | None
+    cns: str | None
+    rg: str | None
+    rg_orgao: str | None
+    naturalidade_municipio: str | None
+    logradouro: str | None
+    numero: str | None
+    complemento: str | None
+    bairro: str | None
+    municipio: str | None
+    cep: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class PacienteGravado:
+    id: int
+    versao: int
+    campos: CamposPaciente
+    cep_verificado: bool
+    anulado_em: datetime | None
+
+
+@dataclass(frozen=True, slots=True)
+class PeriodoGravado:
+    id: int
+    paciente_id: int
+    inicio: date
+    evento_tipo: str | None
+    evento_data: date | None
+    evento_local: str | None
+    evento_documento_id: bytes | None
+
+
+@dataclass(frozen=True, slots=True)
+class CoberturaGravada:
+    id: int
+    periodo_id: int
+    inicio: date
+    tipo: str
+    convenio_id: int | None
+    carteirinha: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class ContatoGravado:
+    id: int
+    nome: str
+    parentesco: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class TelefoneGravado:
+    id: int
+    paciente_id: int | None
+    contato_id: int | None
+    ddd: str
+    numero: str
+    tipo: str
+
+
+class RepositorioPaciente(Protocol):
+    # ---------------------------------------------------------------- paciente
+    def criar(self, campos: CamposPaciente, cep_verificado: bool, em: datetime) -> int: ...
+
+    def por_id(self, id: int, travar: bool = False) -> PacienteGravado | None:
+        """Inclusive anulado; quem chama decide. Com travar, a linha fica presa até o fim da transação: é a
+        trava do agregado inteiro."""
+        ...
+
+    def atualizar(self, id: int, versao: int, campos: CamposPaciente, cep_verificado: bool) -> bool:
+        """Grava se a versão ainda for a informada, e avança a versão (DD-17). False se outra tela gravou antes."""
+        ...
+
+    def quem_usa(self, coluna: ColunaUnica, valor: str) -> int | None:
+        """Id do paciente que já tem o valor, anulado ou não: a restrição do banco vale para todos."""
+        ...
+
+    def por_nascimento(self, data: date) -> list[PacienteGravado]:
+        """Não anulados, para a comparação da tríade (INV-08), que é feita no serviço."""
+        ...
+
+    def buscar(self, nome: str | None, exato: str | None, limite: int) -> list[PacienteGravado]:
+        """Não anulados cujo nome contém o termo (sem distinção de caixa e de acento, pela collation), ou cujo
+        prontuário, CPF ou CNS é igual ao termo exato. Em ordem de nome."""
+        ...
+
+    def duplicidade_descartada(self, a: int, b: int) -> bool: ...
+
+    def descartar_duplicidade(self, a: int, b: int, por: int, em: datetime) -> None:
+        """Par gravado com o menor id primeiro (restrição da 0001)."""
+        ...
+
+    # ---------------------------------------------------------------- períodos e coberturas
+    def periodos(self, paciente_id: int) -> list[PeriodoGravado]:
+        """Em ordem de início."""
+        ...
+
+    def abrir_periodo(self, paciente_id: int, inicio: date) -> int: ...
+
+    def coberturas(self, periodo_ids: list[int]) -> list[CoberturaGravada]:
+        """Em ordem de período e de início."""
+        ...
+
+    def pacientes_com_periodo_em(self, data: date) -> list[int]:
+        """Não anulados com período que cobre a data: início até a data e evento, se houver, nela ou depois."""
+        ...
+
+    # ---------------------------------------------------------------- contatos e telefones
+    def contatos(self, paciente_id: int) -> list[ContatoGravado]: ...
+
+    def telefones(self, paciente_id: int) -> list[TelefoneGravado]:
+        """Os do paciente e os dos contatos dele."""
+        ...

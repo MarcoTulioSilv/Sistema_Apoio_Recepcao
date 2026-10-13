@@ -31,11 +31,14 @@ from sar.modulo_01_acesso.servicos import (
     manipulador_aviso_integridade,
     manipulador_encerrar_sessoes,
 )
+from sar.modulo_02_cadastro.contrato import LeituraCadastro, PacienteService
+from sar.modulo_02_cadastro.servicos import ServicoLeituraCadastro, ServicoPacientes
 from sar.modulo_06_configuracao.contrato import ConfiguracaoService, Referencias
 from sar.modulo_06_configuracao.servicos import LeitorParametrosSQL, ServicoConfiguracao, ServicoReferencias
 from sar.modulo_08_dados.cadeia import gravar_encadeado
 from sar.modulo_08_dados.cifra import CifraAesGcm
 from sar.modulo_08_dados.interfaces.autorizacoes import RepositorioAutorizacao
+from sar.modulo_08_dados.interfaces.pacientes import RepositorioPaciente
 from sar.modulo_08_dados.interfaces.parametros import RepositorioParametro
 from sar.modulo_08_dados.interfaces.referencias import RepositorioConvenio, RepositorioMunicipio
 from sar.modulo_08_dados.interfaces.sessoes import RepositorioSessao
@@ -43,6 +46,7 @@ from sar.modulo_08_dados.interfaces.trilha import RepositorioExpurgo, Repositori
 from sar.modulo_08_dados.interfaces.usuarios import RepositorioUsuario
 from sar.modulo_08_dados.relogio import RelogioSistema
 from sar.modulo_08_dados.repositorios.autorizacoes import RepositorioAutorizacaoSQL
+from sar.modulo_08_dados.repositorios.pacientes import RepositorioPacienteSQL
 from sar.modulo_08_dados.repositorios.parametros import RepositorioParametroSQL
 from sar.modulo_08_dados.repositorios.referencias import RepositorioConvenioSQL, RepositorioMunicipioSQL
 from sar.modulo_08_dados.repositorios.sessoes import RepositorioSessaoSQL
@@ -80,6 +84,7 @@ REPOSITORIOS: dict[type, FabricaRepositorio] = {
     RepositorioUsuario: RepositorioUsuarioSQL,
     RepositorioSessao: RepositorioSessaoSQL,
     RepositorioAutorizacao: RepositorioAutorizacaoSQL,
+    RepositorioPaciente: RepositorioPacienteSQL,
 }
 
 
@@ -124,6 +129,8 @@ class Componentes:
     sessoes: SessionManager
     usuarios: UsuarioService
     autorizacoes: AutorizacaoService
+    pacientes: PacienteService
+    leitura_cadastro: LeituraCadastro
 
 
 # Verificadores de uso dos parâmetros imutáveis (DD-51). A data de implantação ganha o seu com a sessão
@@ -147,6 +154,7 @@ def compor(
     auditoria = ServicoAuditoria(executar)
     parametros = LeitorParametrosSQL(executar)
     hasher = hasher or Hasher()
+    referencias = ServicoReferencias()
     return Componentes(
         relogio=relogio,
         cifra=CifraAesGcm(chave_mestra),
@@ -156,11 +164,13 @@ def compor(
         integridade=ServicoIntegridade(executar, auditoria),
         parametros=parametros,
         configuracao=ServicoConfiguracao(executar, auditoria, VERIFICADORES_USO),
-        referencias=ServicoReferencias(),
+        referencias=referencias,
         autenticacao=ServicoAutenticacao(executar, auditoria, parametros, relogio, hasher),
         sessoes=GerenciadorSessao(executar, auditoria, parametros, relogio),
         usuarios=ServicoUsuarios(executar, auditoria, hasher),
         autorizacoes=ServicoAutorizacoes(executar, auditoria, EXECUTORES_AUTORIZAVEIS),
+        pacientes=ServicoPacientes(executar, auditoria, referencias),
+        leitura_cadastro=ServicoLeituraCadastro(),
     )
 
 
