@@ -1,0 +1,4 @@
+{% if not u.ativo %}<span class="etiqueta-n">Inativo</span>{% else %}Ativo{% endif %}
+{% if u.ativo and u.bloqueado_ate %} <span class="etiqueta-a">Bloqueado</span>{% endif %}
+{% if u.termo_ciencia_em is none %} <span class="etiqueta-a">Sem termo</span>{% endif %}
+{% if u.deve_trocar_senha %} <span class="etiqueta-a">Senha provisória</span>{% endif %}

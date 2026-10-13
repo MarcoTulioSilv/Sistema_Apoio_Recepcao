@@ -1,0 +1,64 @@
+"""Servidor e navegador dos testes de sistema da web (Playwright), com o banco de testes."""
+
+from __future__ import annotations
+
+import threading
+from collections.abc import Iterator
+
+import pytest
+from axe_playwright_python.sync_playwright import Axe
+from playwright.sync_api import Browser, Page, sync_playwright
+from sqlalchemy import Engine
+from werkzeug.serving import WSGIRequestHandler, make_server
+
+from sar.web import criar_app
+from sar.web.configuracao import ConfigWeb
+from testes.apoio.acesso import SENHA
+from testes.apoio.web import servicos_web
+
+PORTA = 18765
+
+
+class SemLogDeAcesso(WSGIRequestHandler):
+    """Em produção o acesso é registrado pelo Caddy, sem a query (DD-81); o servidor de teste não registra."""
+
+    def log_request(self, code: int | str = "-", size: int | str = "-") -> None:
+        pass
+
+
+@pytest.fixture
+def endereco(engine_web: Engine) -> Iterator[str]:
+    origem = f"http://127.0.0.1:{PORTA}"  # HTTP só em desenvolvimento (DD-80); o cookie é Secure mesmo assim
+    app = criar_app(servicos_web(engine_web), ConfigWeb(origem=origem, desenvolvimento=True))
+    servidor = make_server("127.0.0.1", PORTA, app, request_handler=SemLogDeAcesso)
+    linha = threading.Thread(target=servidor.serve_forever, daemon=True)
+    linha.start()
+    yield origem
+    servidor.shutdown()
+
+
+@pytest.fixture(scope="module")
+def navegador() -> Iterator[Browser]:
+    with sync_playwright() as p:
+        navegador = p.chromium.launch()
+        yield navegador
+        navegador.close()
+
+
+@pytest.fixture
+def page(navegador: Browser) -> Iterator[Page]:
+    contexto = navegador.new_context()
+    yield contexto.new_page()
+    contexto.close()
+
+
+def sem_violacao(page: Page) -> None:
+    resultado = Axe().run(page)
+    assert resultado.violations_count == 0, resultado.generate_report()
+
+
+def entrar_no_navegador(page: Page, endereco: str, login: str, senha: str = SENHA) -> None:
+    page.goto(f"{endereco}/entrar")
+    page.get_by_label("Login").fill(login)
+    page.get_by_label("Senha").fill(senha)
+    page.get_by_role("button", name="Entrar").click()

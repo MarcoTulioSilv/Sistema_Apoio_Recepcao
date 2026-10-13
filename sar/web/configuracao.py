@@ -6,7 +6,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from urllib.parse import urlsplit
 
-from sar.modulo_01_acesso.contrato import AuthService, SessionManager
+from sar.modulo_01_acesso.contrato import AuthService, SessionManager, UsuarioService
+from sar.modulo_06_configuracao.contrato import ConfiguracaoService
 
 
 @dataclass(frozen=True, slots=True)
@@ -34,3 +35,5 @@ class ConfigWeb:
 class ServicosWeb:
     autenticacao: AuthService
     sessoes: SessionManager
+    usuarios: UsuarioService
+    configuracao: ConfiguracaoService

@@ -41,7 +41,10 @@ def montar() -> Flask:
         superusuarios=ids_dos_logins(componentes.executar, logins) if logins else frozenset(),
         proxies_confiaveis=int(os.environ.get("SAR_PROXIES", "0")),
     )
-    return criar_app(ServicosWeb(componentes.autenticacao, componentes.sessoes), config)
+    servicos = ServicosWeb(
+        componentes.autenticacao, componentes.sessoes, componentes.usuarios, componentes.configuracao
+    )
+    return criar_app(servicos, config)
 
 
 def main() -> None:

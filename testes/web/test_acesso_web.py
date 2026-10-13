@@ -8,38 +8,16 @@ import pytest
 from flask import Flask
 from flask.testing import FlaskClient
 from sqlalchemy import Engine
-from werkzeug.test import TestResponse
 
-from sar.composicao import compor
-from sar.web import COOKIE_SESSAO, criar_app
-from sar.web.configuracao import ConfigWeb, ServicosWeb
-from testes.apoio.acesso import HASHER, SENHA, CriarUsuario
+from sar.web import COOKIE_SESSAO
+from testes.apoio.acesso import SENHA, CriarUsuario
+from testes.apoio.web import entrar, get, montar, post
 
 pytestmark = pytest.mark.integracao
-
-ORIGEM = "https://sar.teste"
-
-
-def montar(engine: Engine, **config: object) -> Flask:
-    componentes = compor(engine, bytes(32), hasher=HASHER)
-    return criar_app(ServicosWeb(componentes.autenticacao, componentes.sessoes), ConfigWeb(origem=ORIGEM, **config))  # type: ignore[arg-type]
 
 
 def cliente(app: Flask) -> FlaskClient:
     return app.test_client()
-
-
-def get(c: FlaskClient, caminho: str) -> TestResponse:
-    return c.get(caminho, base_url=ORIGEM)
-
-
-def post(c: FlaskClient, caminho: str, dados: dict[str, str], origem: str | None = ORIGEM) -> TestResponse:
-    cabecalhos = {"Origin": origem} if origem else {}
-    return c.post(caminho, data=dados, base_url=ORIGEM, headers=cabecalhos)
-
-
-def entrar(c: FlaskClient, login: str, senha: str = SENHA) -> TestResponse:
-    return post(c, "/entrar", {"login": login, "senha": senha})
 
 
 @pytest.mark.requisito("RF-1002")

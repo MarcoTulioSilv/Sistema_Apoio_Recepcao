@@ -17,6 +17,7 @@ from sar.nucleo.contexto import Contexto, Perfil
 from sar.nucleo.erros import AcessoNegado, NaoEncontrado
 from sar.nucleo.logs import campos_do_erro, encerrar_requisicao, identificar_usuario, iniciar_requisicao
 from sar.web.configuracao import ConfigWeb, ServicosWeb
+from sar.web.rotulos import PERFIS
 
 # DD-09: nenhum recurso de fora do servidor, nenhum código ou estilo inline.
 POLITICA_CONTEUDO = (
@@ -30,13 +31,7 @@ COOKIE_PERFIL_DEV = "__Host-sar_perfil_dev"  # só vale para o superusuário, em
 METODOS_QUE_ALTERAM = frozenset({"POST", "PUT", "PATCH", "DELETE"})
 PUBLICOS = frozenset({"saude.saude", "static", "acesso.entrar", "acesso.entrar_enviar"})
 
-ROTULOS_PERFIL = {
-    Perfil.RECEPCAO: "Recepção",
-    Perfil.ADMINISTRACAO: "Administração",
-    Perfil.VISUALIZADOR: "Visualização",
-    Perfil.TI: "TI",
-    Perfil.ENFERMAGEM: "Enfermagem",
-}
+ROTULOS_PERFIL = PERFIS
 
 GUARDA = PermissionGuard()
 log = logging.getLogger(__name__)
@@ -46,13 +41,25 @@ log = logging.getLogger(__name__)
 class ItemMenu:
     rotulo: str
     endpoint: str
-    operacao: str | None  # None: todo perfil autenticado vê
+    permissoes: tuple[tuple[str, str | None], ...] = ()  # (operação, condição); vazio: todo perfil autenticado
+
+    def visivel(self, contexto: Contexto) -> bool:
+        return not self.permissoes or any(GUARDA.pode(contexto, op, cond) for op, cond in self.permissoes)
 
 
 # Cada item aparece só para quem pode a operação da tela (AD-20). As telas dos incrementos seguintes entram aqui.
 MENU: tuple[ItemMenu, ...] = (
-    ItemMenu("Início", "acesso.inicio", None),
-    ItemMenu("Minha senha", "acesso.senha", "acesso.senha.trocar_propria"),
+    ItemMenu("Início", "acesso.inicio"),
+    ItemMenu("Usuários", "usuarios.lista", (("acesso.usuario.consultar", None),)),
+    ItemMenu(
+        "Parâmetros",
+        "parametros.lista",
+        (
+            ("config.parametro.alterar", "operacionais"),
+            ("config.parametro.alterar", "técnicos"),
+        ),
+    ),
+    ItemMenu("Minha senha", "acesso.senha", (("acesso.senha.trocar_propria", None),)),
 )
 
 
@@ -74,11 +81,14 @@ def criar_app(servicos: ServicosWeb | None = None, config: ConfigWeb | None = No
         app.wsgi_app = ProxyFix(app.wsgi_app, x_for=n, x_proto=n, x_host=n)  # type: ignore[method-assign]
 
     from sar.web.rotas_acesso import bp as acesso
+    from sar.web.rotas_parametros import bp as parametros
     from sar.web.rotas_saude import bp as saude
+    from sar.web.rotas_usuarios import bp as usuarios
 
     app.register_blueprint(saude)
     if servicos is not None:
-        app.register_blueprint(acesso)
+        for blueprint in (acesso, usuarios, parametros):
+            app.register_blueprint(blueprint)
 
     @app.before_request
     def abrir_requisicao() -> None:
@@ -120,7 +130,7 @@ def criar_app(servicos: ServicosWeb | None = None, config: ConfigWeb | None = No
         contexto: Contexto | None = g.get("contexto")
         if contexto is None:
             return {}
-        itens = [i for i in MENU if i.operacao is None or GUARDA.pode(contexto, i.operacao)]
+        itens = [i for i in MENU if i.visivel(contexto)]
         return {
             "menu": itens,
             "perfil_rotulo": ROTULOS_PERFIL.get(contexto.perfil, contexto.perfil.value),
