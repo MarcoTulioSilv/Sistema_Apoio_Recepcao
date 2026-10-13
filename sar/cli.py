@@ -84,7 +84,9 @@ def criar_superusuario(nome: str, login: str) -> int:
     criado = _criar_usuario("criar_superusuario", nome, login)
     print(f"Superusuário criado (id {criado.id}).")
     print(f"Senha provisória, a trocar na primeira entrada: {criado.senha_provisoria}")
-    print(f"Para trocar de perfil pela tela, acrescente {login} a SAR_SUPERUSUARIOS.")
+    gravado = login.strip().lower()  # o login fica em minúsculas, como a tela grava
+    print(f"Login gravado: {gravado}. Para trocar de perfil pela tela, inclua-o em SAR_SUPERUSUARIOS antes de")
+    print(f'subir o servidor, exatamente assim. PowerShell: $env:SAR_SUPERUSUARIOS = "{gravado}"')
     return 0
 
 

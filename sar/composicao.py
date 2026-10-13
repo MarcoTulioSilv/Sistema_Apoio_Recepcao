@@ -158,12 +158,13 @@ def compor(
     )
 
 
-def ids_dos_logins(executar: ExecutorDeOperacao, logins: list[str]) -> frozenset[int]:
-    """Superusuários de desenvolvimento (DD-85): os ids dos logins de SAR_SUPERUSUARIOS que existem."""
+def ids_dos_logins(executar: ExecutorDeOperacao, logins: list[str]) -> dict[str, int]:
+    """Superusuários de desenvolvimento (DD-85): o id de cada login de SAR_SUPERUSUARIOS que existe. Quem chama
+    decide o que fazer com os que faltaram."""
 
-    def operacao(uow: UnidadeDeTrabalho) -> frozenset[int]:
+    def operacao(uow: UnidadeDeTrabalho) -> dict[str, int]:
         usuarios = uow.repositorio(RepositorioUsuario)
-        encontrados = (usuarios.por_login(login) for login in logins)
-        return frozenset(u.id for u in encontrados if u is not None)
+        encontrados = {login: usuarios.por_login(login) for login in logins}
+        return {login: u.id for login, u in encontrados.items() if u is not None}
 
     return executar(operacao)

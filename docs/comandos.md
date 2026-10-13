@@ -96,7 +96,7 @@ Por fim, o seu usuário de desenvolvimento (seção 5) e o CSS (seção 7).
 
 ```powershell
 docker compose up -d --wait mysql            # garante o banco no ar (Docker Desktop aberto)
-$env:SAR_SUPERUSUARIOS = "seu.login"         # além das variáveis da seção 1
+$env:SAR_SUPERUSUARIOS = "seu.login"         # o login exato que o criar-superusuario mostrou; vários: "a,b"
 python -m sar.wsgi
 ```
 
@@ -228,4 +228,7 @@ python scripts\gerar_municipios_ibge.py
 | Formulário dá "Forbidden" (403) | Página aberta como `localhost`. Use `http://127.0.0.1:8080` |
 | Tela sem estilo | Falta gerar o CSS (seção 7) |
 | `login_repetido` ao criar superusuário | O usuário já existe; entre com ele. Esqueceu a senha: um usuário TI a redefine na tela de usuários |
+| Servidor não sobe: `SAR_SUPERUSUARIOS cita login que não existe` | A grafia na variável é diferente da gravada (ponto e sublinhado contam). Use o login que o `criar-superusuario` mostrou como "Login gravado" |
+| O seletor "Agir como" não aparece | O login não está em `SAR_SUPERUSUARIOS`, ou o servidor foi iniciado antes de mudar a variável: pare com Ctrl+C e suba de novo no mesmo terminal |
+| Esqueci a senha e não há outro TI | Crie outro superusuário, entre com ele, escolha TI no seletor e redefina a senha na tela de Usuários |
 | `Activate.ps1 não pode ser carregado` | Política de execução do PowerShell: `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`, uma vez |

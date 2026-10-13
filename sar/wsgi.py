@@ -3,7 +3,8 @@ ambiente: banco pelo usuário sar_web (DD-58), chave mestra do segredo, origem e
 
   SAR_AMBIENTE        desenvolvimento ou producao (padrão: producao, DD-85)
   SAR_ORIGEM          esquema://servidor[:porta] exato da página do SAR (DD-80, DD-84); em produção, HTTPS
-  SAR_SUPERUSUARIOS   logins separados por vírgula; só em desenvolvimento, senão o servidor não sobe (DD-85)
+  SAR_SUPERUSUARIOS   logins separados por vírgula; só em desenvolvimento, senão o servidor não sobe (DD-85).
+                      Login que não existe também impede a subida, com o nome dele na mensagem.
   SAR_PROXIES         quantos proxies confiáveis na frente (Caddy: 1); padrão 0
 """
 
@@ -35,10 +36,18 @@ def montar() -> Flask:
         raise RuntimeError("SAR_SUPERUSUARIOS só vale em desenvolvimento: o servidor não sobe assim (DD-85)")
     engine = criar_engine(ConfigBanco.do_ambiente("sar_web"))
     componentes = compor(engine, carregar_chave_mestra())
+    superusuarios = ids_dos_logins(componentes.executar, logins) if logins else {}
+    faltando = sorted(set(logins) - superusuarios.keys())
+    if faltando:
+        # Ignorar em silêncio deixaria a pessoa sem o seletor de perfil e sem saber por quê.
+        raise RuntimeError(
+            f"SAR_SUPERUSUARIOS cita login que não existe no banco: {', '.join(faltando)}. "
+            "Confira a grafia (ponto e sublinhado contam) ou crie com sar criar-superusuario."
+        )
     config = ConfigWeb(
         origem=origem,
         desenvolvimento=desenvolvimento,
-        superusuarios=ids_dos_logins(componentes.executar, logins) if logins else frozenset(),
+        superusuarios=frozenset(superusuarios.values()),
         proxies_confiaveis=int(os.environ.get("SAR_PROXIES", "0")),
     )
     servicos = ServicosWeb(
