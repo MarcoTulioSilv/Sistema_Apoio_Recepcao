@@ -59,6 +59,7 @@ MENU: tuple[ItemMenu, ...] = (
             ("config.parametro.alterar", "técnicos"),
         ),
     ),
+    ItemMenu("Convênios", "convenios.lista", (("config.convenio.gerir", None),)),
     ItemMenu(
         "Autorizações",
         "autorizacoes.lista",
@@ -98,6 +99,7 @@ def criar_app(servicos: ServicosWeb | None = None, config: ConfigWeb | None = No
         app.wsgi_app = ProxyFix(app.wsgi_app, x_for=n, x_proto=n, x_host=n)  # type: ignore[method-assign]
 
     from sar.web.rotas_acesso import bp as acesso
+    from sar.web.rotas_convenios import bp as convenios
     from sar.web.rotas_parametros import bp as parametros
     from sar.web.rotas_saude import bp as saude
     from sar.web.rotas_trilha_integridade import autorizacoes, integridade, trilha
@@ -105,7 +107,7 @@ def criar_app(servicos: ServicosWeb | None = None, config: ConfigWeb | None = No
 
     app.register_blueprint(saude)
     if servicos is not None:
-        for blueprint in (acesso, usuarios, parametros, autorizacoes, trilha, integridade):
+        for blueprint in (acesso, usuarios, parametros, convenios, autorizacoes, trilha, integridade):
             app.register_blueprint(blueprint)
 
     @app.before_request

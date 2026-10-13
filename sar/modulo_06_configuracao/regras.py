@@ -1,4 +1,5 @@
-"""Regras puras dos parâmetros (DD-48): tipo, limites e a forma de texto gravada no banco."""
+"""Regras puras do MOD-06: parâmetros (DD-48: tipo, limites e a forma de texto gravada no banco) e dados de
+referência (DDS §10.2)."""
 
 from __future__ import annotations
 
@@ -48,3 +49,32 @@ def de_texto(parametro: Parametro, texto: str) -> Valor:
     if parametro.unidade is Unidade.DATA:
         return validar(parametro, date.fromisoformat(texto))
     return validar(parametro, int(texto))
+
+
+UFS = frozenset(
+    {"AC", "AL", "AM", "AP", "BA", "CE", "DF", "ES", "GO", "MA", "MG", "MS", "MT", "PA", "PB", "PE", "PI", "PR",
+     "RJ", "RN", "RO", "RR", "RS", "SC", "SE", "SP", "TO"}
+)  # fmt: skip
+MINIMO_BUSCA_MUNICIPIO = 2
+LIMITE_BUSCA_MUNICIPIO = 20
+
+
+def validar_nome_convenio(nome: str) -> str:
+    """Espaços repetidos e das pontas saem; de 2 a 100 caracteres (coluna da 0001)."""
+    limpo = " ".join(nome.split())
+    if not 2 <= len(limpo) <= 100:
+        raise RegraViolada("convenio.nome")
+    return limpo
+
+
+def validar_uf(uf: str) -> str:
+    sigla = uf.strip().upper()
+    if sigla not in UFS:
+        raise RegraViolada("municipio.uf")
+    return sigla
+
+
+def termo_de_busca(termo: str) -> str | None:
+    """O termo sem espaços repetidos; None se curto demais para buscar."""
+    limpo = " ".join(termo.split())
+    return limpo if len(limpo) >= MINIMO_BUSCA_MUNICIPIO else None

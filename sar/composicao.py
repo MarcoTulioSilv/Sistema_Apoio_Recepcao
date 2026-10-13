@@ -31,18 +31,20 @@ from sar.modulo_01_acesso.servicos import (
     manipulador_aviso_integridade,
     manipulador_encerrar_sessoes,
 )
-from sar.modulo_06_configuracao.contrato import ConfiguracaoService
-from sar.modulo_06_configuracao.servicos import LeitorParametrosSQL, ServicoConfiguracao
+from sar.modulo_06_configuracao.contrato import ConfiguracaoService, Referencias
+from sar.modulo_06_configuracao.servicos import LeitorParametrosSQL, ServicoConfiguracao, ServicoReferencias
 from sar.modulo_08_dados.cadeia import gravar_encadeado
 from sar.modulo_08_dados.cifra import CifraAesGcm
 from sar.modulo_08_dados.interfaces.autorizacoes import RepositorioAutorizacao
 from sar.modulo_08_dados.interfaces.parametros import RepositorioParametro
+from sar.modulo_08_dados.interfaces.referencias import RepositorioConvenio, RepositorioMunicipio
 from sar.modulo_08_dados.interfaces.sessoes import RepositorioSessao
 from sar.modulo_08_dados.interfaces.trilha import RepositorioExpurgo, RepositorioTrilha
 from sar.modulo_08_dados.interfaces.usuarios import RepositorioUsuario
 from sar.modulo_08_dados.relogio import RelogioSistema
 from sar.modulo_08_dados.repositorios.autorizacoes import RepositorioAutorizacaoSQL
 from sar.modulo_08_dados.repositorios.parametros import RepositorioParametroSQL
+from sar.modulo_08_dados.repositorios.referencias import RepositorioConvenioSQL, RepositorioMunicipioSQL
 from sar.modulo_08_dados.repositorios.sessoes import RepositorioSessaoSQL
 from sar.modulo_08_dados.repositorios.trilha import RepositorioExpurgoSQL, RepositorioTrilhaSQL
 from sar.modulo_08_dados.repositorios.usuarios import RepositorioUsuarioSQL
@@ -73,6 +75,8 @@ REPOSITORIOS: dict[type, FabricaRepositorio] = {
     RepositorioTrilha: RepositorioTrilhaSQL,
     RepositorioExpurgo: RepositorioExpurgoSQL,
     RepositorioParametro: RepositorioParametroSQL,
+    RepositorioConvenio: RepositorioConvenioSQL,
+    RepositorioMunicipio: RepositorioMunicipioSQL,
     RepositorioUsuario: RepositorioUsuarioSQL,
     RepositorioSessao: RepositorioSessaoSQL,
     RepositorioAutorizacao: RepositorioAutorizacaoSQL,
@@ -115,6 +119,7 @@ class Componentes:
     integridade: IntegridadeService
     parametros: LeitorParametros
     configuracao: ConfiguracaoService
+    referencias: Referencias
     autenticacao: AuthService
     sessoes: SessionManager
     usuarios: UsuarioService
@@ -151,6 +156,7 @@ def compor(
         integridade=ServicoIntegridade(executar, auditoria),
         parametros=parametros,
         configuracao=ServicoConfiguracao(executar, auditoria, VERIFICADORES_USO),
+        referencias=ServicoReferencias(),
         autenticacao=ServicoAutenticacao(executar, auditoria, parametros, relogio, hasher),
         sessoes=GerenciadorSessao(executar, auditoria, parametros, relogio),
         usuarios=ServicoUsuarios(executar, auditoria, hasher),

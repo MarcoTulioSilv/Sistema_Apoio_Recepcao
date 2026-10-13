@@ -56,7 +56,16 @@ from sar.nucleo.uow import ExecutorDeOperacao, RegistroAuditoria, UnidadeDeTraba
 # RNF-625: o TI vê alterações e motivo só nestas entidades técnicas. Lista de permissão, e não de bloqueio:
 # entidade nova (de paciente ou não) nasce oculta para o TI até alguém a acrescentar aqui de propósito.
 ENTIDADES_TECNICAS = frozenset(
-    {"usuario", "parametro", "auditoria", "auditoria_ancora", "aviso_integridade", "municipio", "job_execucao"}
+    {
+        "usuario",
+        "parametro",
+        "auditoria",
+        "auditoria_ancora",
+        "aviso_integridade",
+        "municipio",
+        "convenio",
+        "job_execucao",
+    }
 )
 PAGINA_TRILHA = 100
 

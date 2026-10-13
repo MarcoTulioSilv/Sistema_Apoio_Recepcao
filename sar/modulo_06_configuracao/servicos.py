@@ -1,16 +1,31 @@
-"""Serviços do MOD-06 (DDS §10): leitura e alteração dos parâmetros declarados no núcleo (DD-48, DD-73)."""
+"""Serviços do MOD-06 (DDS §10): parâmetros declarados no núcleo (DD-48, DD-73), convênios e municípios."""
 
 from __future__ import annotations
 
 import logging
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 
 from sar.modulo_01_acesso.contrato import AuditService, PermissionGuard
-from sar.modulo_06_configuracao.contrato import ParametroVigente, Valor
-from sar.modulo_06_configuracao.regras import de_texto, para_texto, validar
+from sar.modulo_06_configuracao.contrato import Convenio, Municipio, ParametroVigente, Valor
+from sar.modulo_06_configuracao.regras import (
+    LIMITE_BUSCA_MUNICIPIO,
+    de_texto,
+    para_texto,
+    termo_de_busca,
+    validar,
+    validar_nome_convenio,
+    validar_uf,
+)
 from sar.modulo_08_dados.interfaces.parametros import RepositorioParametro, ValorGravado
+from sar.modulo_08_dados.interfaces.referencias import (
+    DadosConvenio,
+    DadosMunicipio,
+    RepositorioConvenio,
+    RepositorioMunicipio,
+)
 from sar.nucleo.contexto import Contexto, Perfil
-from sar.nucleo.erros import AcessoNegado, RegraViolada
+from sar.nucleo.erros import AcessoNegado, NaoEncontrado, RegraViolada
+from sar.nucleo.logs import campos_do_erro
 from sar.nucleo.parametros import PARAMETROS, Parametro, VerificadorUso
 from sar.nucleo.uow import ExecutorDeOperacao, UnidadeDeTrabalho
 
@@ -37,6 +52,41 @@ def _vigente(parametro: Parametro, gravado: ValorGravado | None) -> Valor:
     except ValueError, RegraViolada:
         log.warning("config.parametro.valor_invalido", extra={"resultado": parametro.nome})
         return parametro.padrao
+
+
+def _convenio(dados: DadosConvenio) -> Convenio:
+    return Convenio(dados.id, dados.nome, dados.ativo)
+
+
+def _municipio(dados: DadosMunicipio) -> Municipio:
+    return Municipio(dados.codigo, dados.nome, dados.uf)
+
+
+def _buscar_municipios(uow: UnidadeDeTrabalho, termo: str, uf: str | None) -> list[Municipio]:
+    sigla = validar_uf(uf) if uf is not None else None
+    limpo = termo_de_busca(termo)
+    if limpo is None:
+        return []
+    achados = uow.repositorio(RepositorioMunicipio).buscar(limpo, sigla, LIMITE_BUSCA_MUNICIPIO)
+    return [_municipio(m) for m in achados]
+
+
+class ServicoReferencias:
+    """Implementa o Referencias do contrato: leitura na unidade de trabalho de quem chama."""
+
+    def convenios_ativos(self, uow: UnidadeDeTrabalho) -> list[Convenio]:
+        return [_convenio(c) for c in uow.repositorio(RepositorioConvenio).listar() if c.ativo]
+
+    def convenio(self, uow: UnidadeDeTrabalho, id: int) -> Convenio | None:
+        dados = uow.repositorio(RepositorioConvenio).por_id(id)
+        return _convenio(dados) if dados is not None else None
+
+    def municipio(self, uow: UnidadeDeTrabalho, codigo: str) -> Municipio | None:
+        dados = uow.repositorio(RepositorioMunicipio).por_codigo(codigo)
+        return _municipio(dados) if dados is not None else None
+
+    def buscar_municipios(self, uow: UnidadeDeTrabalho, termo: str, uf: str | None = None) -> list[Municipio]:
+        return _buscar_municipios(uow, termo, uf)
 
 
 class LeitorParametrosSQL:
@@ -110,3 +160,85 @@ class ServicoConfiguracao:
             )
 
         self._executar(operacao)
+
+    # ---------------------------------------------------------------- dados de referência (DDS §10.2)
+    def listar_convenios(self, contexto: Contexto) -> list[Convenio]:
+        GUARDA.exigir(contexto, "config.consultar")
+        return self._executar(lambda uow: [_convenio(c) for c in uow.repositorio(RepositorioConvenio).listar()])
+
+    def buscar_municipios(self, contexto: Contexto, termo: str, uf: str | None = None) -> list[Municipio]:
+        GUARDA.exigir(contexto, "config.consultar")
+        return self._executar(lambda uow: _buscar_municipios(uow, termo, uf))
+
+    def incluir_convenio(self, contexto: Contexto, nome: str) -> int:
+        GUARDA.exigir(contexto, "config.convenio.gerir")
+        limpo = validar_nome_convenio(nome)
+
+        def operacao(uow: UnidadeDeTrabalho) -> int:
+            convenios = uow.repositorio(RepositorioConvenio)
+            if convenios.por_nome(limpo) is not None:
+                raise RegraViolada("convenio.nome_repetido")
+            convenio_id = convenios.criar(limpo)
+            self._auditoria.registrar(
+                uow, contexto, "config.convenio.gerir", "convenio", str(convenio_id),
+                {"nome": (None, limpo), "ativo": (None, True)},
+            )  # fmt: skip
+            return convenio_id
+
+        return self._com_nome_unico(lambda: self._executar(operacao))
+
+    def renomear_convenio(self, contexto: Contexto, convenio_id: int, nome: str) -> None:
+        GUARDA.exigir(contexto, "config.convenio.gerir")
+        limpo = validar_nome_convenio(nome)
+
+        def mudar(uow: UnidadeDeTrabalho, atual: DadosConvenio) -> DadosConvenio:
+            outro = uow.repositorio(RepositorioConvenio).por_nome(limpo)
+            if outro is not None and outro.id != atual.id:
+                raise RegraViolada("convenio.nome_repetido")
+            return DadosConvenio(atual.id, limpo, atual.ativo)
+
+        self._com_nome_unico(lambda: self._alterar_convenio(contexto, convenio_id, mudar))
+
+    def inativar_convenio(self, contexto: Contexto, convenio_id: int) -> None:
+        GUARDA.exigir(contexto, "config.convenio.gerir")
+        self._alterar_convenio(contexto, convenio_id, lambda _, c: DadosConvenio(c.id, c.nome, False))
+
+    def reativar_convenio(self, contexto: Contexto, convenio_id: int) -> None:
+        GUARDA.exigir(contexto, "config.convenio.gerir")
+        self._alterar_convenio(contexto, convenio_id, lambda _, c: DadosConvenio(c.id, c.nome, True))
+
+    def _alterar_convenio(
+        self,
+        contexto: Contexto,
+        convenio_id: int,
+        mudar: Callable[[UnidadeDeTrabalho, DadosConvenio], DadosConvenio],
+    ) -> None:
+        """Trava a linha, aplica a mudança e audita só o que mudou; sem mudança, nada é gravado (DD-10)."""
+
+        def operacao(uow: UnidadeDeTrabalho) -> None:
+            convenios = uow.repositorio(RepositorioConvenio)
+            atual = convenios.por_id(convenio_id, travar=True)
+            if atual is None:
+                raise NaoEncontrado()
+            novo = mudar(uow, atual)
+            alteracoes: dict[str, tuple[object, object]] = {}
+            if novo.nome != atual.nome:
+                alteracoes["nome"] = (atual.nome, novo.nome)
+            if novo.ativo != atual.ativo:
+                alteracoes["ativo"] = (atual.ativo, novo.ativo)
+            if not alteracoes:
+                return
+            convenios.alterar(convenio_id, novo.nome, novo.ativo)
+            self._auditoria.registrar(uow, contexto, "config.convenio.gerir", "convenio", str(convenio_id), alteracoes)
+
+        self._executar(operacao)
+
+    @staticmethod
+    def _com_nome_unico[R](chamada: Callable[[], R]) -> R:
+        """Duas inclusões simultâneas do mesmo nome: a restrição do banco barra a segunda."""
+        try:
+            return chamada()
+        except Exception as erro:
+            if campos_do_erro(erro).get("restricao") == "uq_convenio__nome":
+                raise RegraViolada("convenio.nome_repetido") from None
+            raise
