@@ -50,6 +50,12 @@ def test_da_busca_a_ficha_e_aos_pedidos(
     page.get_by_label("Nome do contato").fill(fabrica.nome())
     page.get_by_role("button", name="Incluir contato").click()
     expect(page.get_by_role("status")).to_contain_text("Contato incluído.")
+    page.locator("summary", has_text="Editar o contato").click()
+    contato = page.locator("[data-contato]")
+    contato.get_by_label("Parentesco").fill("Filha")
+    contato.get_by_role("button", name="Salvar contato").click()
+    expect(page.get_by_role("status")).to_contain_text("Contato alterado.")
+    expect(page.locator("[data-contato]")).to_contain_text("Filha")
     sem_violacao(page)
 
     page.get_by_role("link", name="Editar dados").click()

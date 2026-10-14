@@ -41,6 +41,8 @@ RESULTADOS = {
     "duplicidade": "Registrado: não é a mesma pessoa.",
     "telefone": "Telefone incluído.",
     "telefone_removido": "Telefone removido.",
+    "telefone_alterado": "Telefone alterado.",
+    "contato_alterado": "Contato alterado.",
     "contato": "Contato incluído.",
     "contato_removido": "Contato removido, com os telefones dele.",
     "periodo": "Novo período de tratamento aberto.",
@@ -246,6 +248,19 @@ def incluir_telefone(paciente_id: int) -> Response | str:
     return _acao(paciente_id, acao)
 
 
+@bp.post("/<int:paciente_id>/telefones/<int:telefone_id>/alterar")
+def alterar_telefone(paciente_id: int, telefone_id: int) -> Response | str:
+    """Número e tipo; o dono continua o mesmo (INV-12)."""
+    f = _form()
+
+    def acao(c: Contexto) -> str:
+        tipo = TipoTelefone(f["tipo"]) if f.get("tipo") in TELEFONES_VALORES else TipoTelefone.CELULAR
+        _servicos().contatos.alterar_telefone(c, telefone_id, f.get("ddd", ""), f.get("numero", ""), tipo)
+        return "telefone_alterado"
+
+    return _acao(paciente_id, acao)
+
+
 @bp.post("/<int:paciente_id>/telefones/<int:telefone_id>/remover")
 def remover_telefone(paciente_id: int, telefone_id: int) -> Response | str:
     def acao(c: Contexto) -> str:
@@ -262,6 +277,17 @@ def incluir_contato(paciente_id: int) -> Response | str:
     def acao(c: Contexto) -> str:
         _servicos().contatos.incluir_contato(c, paciente_id, f.get("nome", ""), f.get("parentesco") or None)
         return "contato"
+
+    return _acao(paciente_id, acao)
+
+
+@bp.post("/<int:paciente_id>/contatos/<int:contato_id>/alterar")
+def alterar_contato(paciente_id: int, contato_id: int) -> Response | str:
+    f = _form()
+
+    def acao(c: Contexto) -> str:
+        _servicos().contatos.alterar_contato(c, contato_id, f.get("nome", ""), f.get("parentesco") or None)
+        return "contato_alterado"
 
     return _acao(paciente_id, acao)
 

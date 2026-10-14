@@ -8,10 +8,26 @@
   <select class="entrada" name="convenio"><option value="">Selecione…</option>{% for c in convenios %}<option value="{{ c.id }}">{{ c.nome }}</option>{% endfor %}</select></label>
 <label class="campo"><span class="rotulo">Carteirinha (se for convênio)</span><input class="entrada" type="text" name="carteirinha"></label>
 {% endmacro %}
-{% macro campos_telefone() %}
-<label class="campo"><span class="rotulo">DDD</span><input class="entrada w-20" type="text" inputmode="numeric" name="ddd" required></label>
-<label class="campo"><span class="rotulo">Número</span><input class="entrada" type="tel" inputmode="numeric" name="numero" required></label>
-<label class="campo"><span class="rotulo">Tipo</span><select class="entrada" name="tipo"><option value="celular">Celular</option><option value="fixo">Fixo</option><option value="recado">Recado</option></select></label>
+{% macro campos_telefone(t=none) %}
+<label class="campo"><span class="rotulo">DDD</span><input class="entrada w-20" type="text" inputmode="numeric" name="ddd" value="{{ t.ddd if t else '' }}" required></label>
+<label class="campo"><span class="rotulo">Número</span><input class="entrada" type="tel" inputmode="numeric" name="numero" value="{{ t.numero if t else '' }}" required></label>
+<label class="campo"><span class="rotulo">Tipo</span><select class="entrada" name="tipo">{% for valor, nome in [("celular", "Celular"), ("fixo", "Fixo"), ("recado", "Recado")] %}<option value="{{ valor }}"{% if t and t.tipo.value == valor %} selected{% endif %}>{{ nome }}</option>{% endfor %}</select></label>
+{% endmacro %}
+{# Um telefone na ficha: o número, o tipo e, para quem gere contatos, editar e remover. O dono não muda (INV-12). #}
+{% macro item_telefone(ficha, t, tipos, pode_gerir, de="") %}
+<div class="flex flex-col gap-2" data-telefone="{{ t.id }}">
+  <form class="flex flex-wrap items-center gap-3" method="post" action="{{ url_for('pacientes.remover_telefone', paciente_id=ficha.paciente_id, telefone_id=t.id) }}">
+    <span class="numero">{{ fone(t) }}</span> <span class="text-suave">{{ tipos[t.tipo] }}</span>
+    {% if pode_gerir %}<button class="btn-neutro" type="submit">Remover<span class="sr-only"> o telefone {{ fone(t) }}{{ de }}</span></button>{% endif %}
+  </form>
+  {% if pode_gerir %}
+  <details><summary class="cursor-pointer font-bold text-acao">Editar<span class="sr-only"> o telefone {{ fone(t) }}{{ de }}</span></summary>
+    <form class="mt-2 flex flex-wrap items-end gap-3" method="post" action="{{ url_for('pacientes.alterar_telefone', paciente_id=ficha.paciente_id, telefone_id=t.id) }}">
+      {{ campos_telefone(t) }}<button class="btn-secundario" type="submit">Salvar telefone</button>
+    </form>
+  </details>
+  {% endif %}
+</div>
 {% endmacro %}
 {% set d = ficha.dados %}
 {% block titulo_pagina %}{{ d.nome }}{% endblock %}
@@ -152,10 +168,7 @@
   <section class="cartao flex flex-col gap-3 p-5" aria-labelledby="tel-t">
     <h2 id="tel-t" class="m-0 text-xl">Telefones do paciente</h2>
     {% for t in ficha.telefones %}
-    <form class="flex flex-wrap items-center gap-3" method="post" action="{{ url_for('pacientes.remover_telefone', paciente_id=ficha.paciente_id, telefone_id=t.id) }}">
-      <span class="numero">{{ fone(t) }}</span> <span class="text-suave">{{ telefones[t.tipo] }}</span>
-      {% if pode.contatos %}<button class="btn-neutro" type="submit">Remover<span class="sr-only"> o telefone {{ fone(t) }}</span></button>{% endif %}
-    </form>
+    {{ item_telefone(ficha, t, telefones, pode.contatos) }}
     {% else %}<p class="m-0 text-suave">Nenhum telefone do paciente.</p>
     {% endfor %}
     {% if pode.contatos %}
@@ -175,11 +188,17 @@
         <h3 class="m-0 text-lg">{{ c.nome }}{% if c.parentesco %} <span class="text-base font-normal text-suave">· {{ c.parentesco }}</span>{% endif %}</h3>
         {% if pode.contatos %}<button class="btn-neutro" type="submit">Remover contato<span class="sr-only"> {{ c.nome }}</span></button>{% endif %}
       </form>
+      {% if pode.contatos %}
+      <details><summary class="cursor-pointer font-bold text-acao">Editar o contato<span class="sr-only"> {{ c.nome }}</span></summary>
+        <form class="mt-2 flex flex-wrap items-end gap-3" method="post" action="{{ url_for('pacientes.alterar_contato', paciente_id=ficha.paciente_id, contato_id=c.id) }}">
+          <label class="campo"><span class="rotulo">Nome do contato</span><input class="entrada w-72" type="text" name="nome" value="{{ c.nome }}" maxlength="150" required></label>
+          <label class="campo"><span class="rotulo">Parentesco</span><input class="entrada" type="text" name="parentesco" value="{{ c.parentesco or '' }}" maxlength="40"></label>
+          <button class="btn-secundario" type="submit">Salvar contato</button>
+        </form>
+      </details>
+      {% endif %}
       {% for t in c.telefones %}
-      <form class="flex flex-wrap items-center gap-3" method="post" action="{{ url_for('pacientes.remover_telefone', paciente_id=ficha.paciente_id, telefone_id=t.id) }}">
-        <span class="numero">{{ fone(t) }}</span> <span class="text-suave">{{ telefones[t.tipo] }}</span>
-        {% if pode.contatos %}<button class="btn-neutro" type="submit">Remover<span class="sr-only"> o telefone {{ fone(t) }} de {{ c.nome }}</span></button>{% endif %}
-      </form>
+      {{ item_telefone(ficha, t, telefones, pode.contatos, " de " ~ c.nome) }}
       {% endfor %}
       {% if pode.contatos %}
       <details><summary class="cursor-pointer font-bold text-acao">Incluir telefone de {{ c.nome }}</summary>

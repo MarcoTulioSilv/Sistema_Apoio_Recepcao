@@ -208,3 +208,52 @@ def test_cep_verificado_de_novo_e_duplicidade_descartada_pela_ficha(
     assert "Possível duplicidade" in get(recepcao, f"/pacientes/{outro}").get_data(as_text=True)
     descarte = post(recepcao, f"/pacientes/{outro}/duplicidade/{pid}", {})
     assert "Possível duplicidade" not in get(recepcao, descarte.headers["Location"]).get_data(as_text=True)
+
+
+@pytest.mark.requisito("RF-201", "RF-202", "INV-12", "RNF-605")
+def test_edicao_de_telefone_e_contato_pela_ficha(
+    criar_usuario: CriarUsuario, cadastro_zerado: dict[str, int], engine_web: Engine, fabrica: Fabrica
+) -> None:
+    recepcao = cliente(engine_web, criar_usuario, "recepcao")
+    pid, _ = novo_paciente(recepcao, fabrica)
+    post(recepcao, f"/pacientes/{pid}/contatos", {"nome": fabrica.nome(), "parentesco": "Filha"})
+    with engine_web.connect() as c:
+        contato = c.execute(text("SELECT id FROM contato")).scalar_one()
+    post(recepcao, f"/pacientes/{pid}/telefones", {"ddd": "64", "numero": "3631-0002", "tipo": "fixo",
+                                                  "contato_id": str(contato)})  # fmt: skip
+    with engine_web.connect() as c:
+        telefone = c.execute(text("SELECT id FROM telefone")).scalar_one()
+    ficha = get(recepcao, f"/pacientes/{pid}").get_data(as_text=True)
+    assert f'action="/pacientes/{pid}/telefones/{telefone}/alterar"' in ficha and 'value="36310002"' in ficha
+
+    resposta = post(recepcao, f"/pacientes/{pid}/telefones/{telefone}/alterar",
+                    {"ddd": "64", "numero": "99999-0003", "tipo": "celular"})  # fmt: skip
+    assert "Telefone alterado." in get(recepcao, resposta.headers["Location"]).get_data(as_text=True)
+    invalido = post(recepcao, f"/pacientes/{pid}/telefones/{telefone}/alterar",
+                    {"ddd": "64", "numero": "3631-0002", "tipo": "celular"})  # fmt: skip
+    assert "Celular tem 9 dígitos" in invalido.get_data(as_text=True)
+
+    novo_nome = fabrica.nome()
+    resposta = post(recepcao, f"/pacientes/{pid}/contatos/{contato}/alterar", {"nome": novo_nome, "parentesco": "Neta"})
+    ficha = get(recepcao, resposta.headers["Location"]).get_data(as_text=True)
+    assert "Contato alterado." in ficha and novo_nome in ficha and "Neta" in ficha
+    vazio = post(recepcao, f"/pacientes/{pid}/contatos/{contato}/alterar", {"nome": " ", "parentesco": ""})
+    assert "Informe o nome do contato." in vazio.get_data(as_text=True)
+    with engine_web.connect() as c:
+        dono = c.execute(text("SELECT paciente_id, contato_id, numero, tipo FROM telefone")).one()
+        assert tuple(dono) == (None, contato, "999990003", "celular")  # continua do contato (INV-12)
+        alteracoes = (
+            c.execute(
+                text(
+                    "SELECT alteracoes FROM auditoria WHERE entidade IN ('telefone', 'contato')"
+                    " ORDER BY id DESC LIMIT 2"
+                )
+            )
+            .scalars()
+            .all()
+        )
+    assert '"parentesco":["Filha","Neta"]' in alteracoes[0] and '"numero":["36310002","999990003"]' in alteracoes[1]
+
+    visualizador = cliente(engine_web, criar_usuario, "visualizador")
+    assert "/alterar" not in get(visualizador, f"/pacientes/{pid}").get_data(as_text=True)
+    assert post(visualizador, f"/pacientes/{pid}/contatos/{contato}/alterar", {"nome": "x"}).status_code == 403
