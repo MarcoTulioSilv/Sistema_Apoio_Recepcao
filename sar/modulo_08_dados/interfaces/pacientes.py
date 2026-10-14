@@ -3,6 +3,7 @@ têm os mesmos nomes do DadosPaciente do MOD-02; o repositório faz a ponte com 
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import date, datetime
 from typing import Literal, Protocol
@@ -37,6 +38,7 @@ class PacienteGravado:
     campos: CamposPaciente
     cep_verificado: bool
     anulado_em: datetime | None
+    criado_em: datetime
 
 
 @dataclass(frozen=True, slots=True)
@@ -48,6 +50,7 @@ class PeriodoGravado:
     evento_data: date | None
     evento_local: str | None
     evento_documento_id: bytes | None
+    evento_registrado_em: datetime | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -102,6 +105,18 @@ class RepositorioPaciente(Protocol):
     def buscar(self, nome: str | None, exato: str | None, limite: int) -> list[PacienteGravado]:
         """Não anulados cujo nome contém o termo (sem distinção de caixa e de acento, pela collation), ou cujo
         prontuário, CPF ou CNS é igual ao termo exato. Em ordem de nome."""
+        ...
+
+    def vivos(self, ids: Sequence[int] | None) -> list[PacienteGravado]:
+        """Não anulados, todos ou só os dos ids, numa consulta só (§11.3)."""
+        ...
+
+    def periodos_de(self, ids: Sequence[int] | None) -> list[PeriodoGravado]:
+        """Períodos dos pacientes não anulados, todos ou só os dos ids, em ordem de paciente e de início."""
+        ...
+
+    def descartes(self) -> set[tuple[int, int]]:
+        """Pares de duplicidade descartada, com o menor id primeiro."""
         ...
 
     def duplicidade_descartada(self, a: int, b: int) -> bool: ...

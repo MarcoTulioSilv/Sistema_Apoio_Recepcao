@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import secrets
+import uuid
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime
 
-from sqlalchemy import Engine
+from sqlalchemy import Engine, text
 
 from sar.composicao import montar_barramento, montar_executor
 from sar.modulo_01_acesso.servicos import ServicoAuditoria, ServicoAutorizacoes
@@ -73,3 +75,20 @@ def dados_completos(fabrica: Fabrica) -> DadosPaciente:
         cns=p.cns,
         municipio=p.municipio.codigo_ibge,
     )
+
+
+def inserir_documento(engine_migracao: Engine, paciente_id: int, tipo: str, capturado_por: int) -> bytes:
+    """Documento já incorporado, gravado direto: o MOD-04 chega no Incremento 4. Hash e arquivo aleatórios, porque
+    os dois são únicos no banco."""
+    documento = uuid.uuid4().bytes
+    with engine_migracao.begin() as c:
+        c.execute(
+            text(
+                "INSERT INTO documento (id, paciente_id, tipo, versao, arquivo, chave_cifrada, nonce, hash_sha256,"
+                " paginas, origem, capturado_em, capturado_por, local_digitalizacao) VALUES (:d, :p, :t, 1, :a,"
+                " REPEAT('k', 60), REPEAT('n', 12), :h, 1, 'scanner', NOW(6), :u, 'Recepção')"
+            ),
+            {"d": documento, "p": paciente_id, "t": tipo, "a": str(uuid.uuid4()), "h": secrets.token_hex(32),
+             "u": capturado_por},
+        )  # fmt: skip
+    return documento

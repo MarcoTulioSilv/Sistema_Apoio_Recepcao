@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from datetime import UTC, date, datetime
 from typing import Any
 
@@ -42,12 +43,13 @@ def _valores(campos: CamposPaciente) -> dict[str, Any]:
 def _paciente(p: Paciente) -> PacienteGravado:
     campos = CamposPaciente(**{nome: getattr(p, _COLUNAS.get(nome, nome)) for nome in _CAMPOS})
     anulado = p.anulado_em.replace(tzinfo=UTC) if p.anulado_em is not None else None
-    return PacienteGravado(p.id, p.versao, campos, p.cep_verificado, anulado)
+    return PacienteGravado(p.id, p.versao, campos, p.cep_verificado, anulado, p.criado_em.replace(tzinfo=UTC))
 
 
 def _periodo(p: PeriodoTratamento) -> PeriodoGravado:
+    registrado = p.evento_registrado_em.replace(tzinfo=UTC) if p.evento_registrado_em is not None else None
     return PeriodoGravado(p.id, p.paciente_id, p.inicio, p.evento_tipo, p.evento_data, p.evento_local,
-                          p.evento_documento_id)  # fmt: skip
+                          p.evento_documento_id, registrado)  # fmt: skip
 
 
 def _contato(c: Contato) -> ContatoGravado:
@@ -104,6 +106,27 @@ class RepositorioPacienteSQL:
             return []
         consulta = select(Paciente).where(or_(*condicoes), Paciente.anulado_em.is_(None))
         return [_paciente(p) for p in self._s.scalars(consulta.order_by(Paciente.nome, Paciente.id).limit(limite))]
+
+    def vivos(self, ids: Sequence[int] | None) -> list[PacienteGravado]:
+        consulta = select(Paciente).where(Paciente.anulado_em.is_(None))
+        if ids is not None:
+            consulta = consulta.where(Paciente.id.in_(list(ids)))
+        return [_paciente(p) for p in self._s.scalars(consulta.order_by(Paciente.id))]
+
+    def periodos_de(self, ids: Sequence[int] | None) -> list[PeriodoGravado]:
+        consulta = (
+            select(PeriodoTratamento)
+            .join(Paciente, Paciente.id == PeriodoTratamento.paciente_id)
+            .where(Paciente.anulado_em.is_(None))
+        )
+        if ids is not None:
+            consulta = consulta.where(PeriodoTratamento.paciente_id.in_(list(ids)))
+        ordem = (PeriodoTratamento.paciente_id, PeriodoTratamento.inicio)
+        return [_periodo(p) for p in self._s.scalars(consulta.order_by(*ordem))]
+
+    def descartes(self) -> set[tuple[int, int]]:
+        pares = self._s.execute(select(DuplicidadeDescartada.paciente_a_id, DuplicidadeDescartada.paciente_b_id))
+        return {(a, b) for a, b in pares}
 
     def duplicidade_descartada(self, a: int, b: int) -> bool:
         menor, maior = sorted((a, b))

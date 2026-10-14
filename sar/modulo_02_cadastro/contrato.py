@@ -77,6 +77,15 @@ class DadosCobertura:
     carteirinha: str | None = None
 
 
+PREFIXO_VINCULO_EVENTO = "evento:"
+
+
+def vinculo_do_evento(periodo_id: int) -> str:
+    """Vínculo opaco da ingestão aberta a partir do evento pendente (§6.5): o MOD-04 guarda sem interpretar e
+    devolve no DocumentoIncorporado."""
+    return f"{PREFIXO_VINCULO_EVENTO}{periodo_id}"
+
+
 # ------------------------------------------------------------------ saídas
 @dataclass(frozen=True, slots=True)
 class Identificacao:

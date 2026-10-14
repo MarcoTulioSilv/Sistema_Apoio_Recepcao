@@ -31,8 +31,11 @@ from sar.modulo_01_acesso.servicos import (
     manipulador_aviso_integridade,
     manipulador_encerrar_sessoes,
 )
+from sar.modulo_02_cadastro.comprovante import manipulador_comprovante, manipulador_revinculo
 from sar.modulo_02_cadastro.contrato import ContatoService, EventoService, LeituraCadastro, PacienteService
 from sar.modulo_02_cadastro.eventos import ExecutorCorrigirEvento, ExecutorRemoverEvento, ServicoEventos
+from sar.modulo_02_cadastro.pendencias import FONTES as FONTES_CADASTRO
+from sar.modulo_02_cadastro.pendencias import ServicoMarcoRetencao
 from sar.modulo_02_cadastro.servicos import ServicoContatos, ServicoLeituraCadastro, ServicoPacientes
 from sar.modulo_06_configuracao.contrato import ConfiguracaoService, Referencias
 from sar.modulo_06_configuracao.servicos import LeitorParametrosSQL, ServicoConfiguracao, ServicoReferencias
@@ -54,9 +57,22 @@ from sar.modulo_08_dados.repositorios.sessoes import RepositorioSessaoSQL
 from sar.modulo_08_dados.repositorios.trilha import RepositorioExpurgoSQL, RepositorioTrilhaSQL
 from sar.modulo_08_dados.repositorios.usuarios import RepositorioUsuarioSQL
 from sar.modulo_08_dados.uow import ExecutorSQL, FabricaRepositorio, GravadorAuditoria, UnidadeDeTrabalhoSQL
-from sar.nucleo.eventos import Barramento, CadeiaDivergente, UsuarioInativado
+from sar.nucleo.eventos import (
+    Barramento,
+    CadeiaDivergente,
+    DocumentoIncorporado,
+    DocumentoRevinculado,
+    UsuarioInativado,
+)
 from sar.nucleo.parametros import LeitorParametros, VerificadorUso
-from sar.nucleo.portas import Cifra, ExecutorAutorizavel, Relogio, VerificadorImpedimento
+from sar.nucleo.portas import (
+    Cifra,
+    ExecutorAutorizavel,
+    FonteMarcoRetencao,
+    FontePendencia,
+    Relogio,
+    VerificadorImpedimento,
+)
 from sar.nucleo.uow import ExecutorDeOperacao, UnidadeDeTrabalho
 
 
@@ -94,6 +110,9 @@ def montar_barramento(relogio: Relogio) -> Barramento:
     barramento = Barramento()
     barramento.assinar(CadeiaDivergente, manipulador_aviso_integridade(relogio))
     barramento.assinar(UsuarioInativado, manipulador_encerrar_sessoes(relogio))
+    auditoria = ServicoAuditoria()  # só registra na unidade de trabalho de quem publicou
+    barramento.assinar(DocumentoIncorporado, manipulador_comprovante(relogio, auditoria))
+    barramento.assinar(DocumentoRevinculado, manipulador_revinculo(relogio, auditoria))
     return barramento
 
 
@@ -133,6 +152,8 @@ class Componentes:
     pacientes: PacienteService
     contatos: ContatoService
     eventos: EventoService
+    fontes_pendencia: tuple[FontePendencia, ...]
+    marco_retencao: FonteMarcoRetencao
     leitura_cadastro: LeituraCadastro
 
 
@@ -186,6 +207,8 @@ def compor(
         pacientes=ServicoPacientes(executar, auditoria, referencias),
         contatos=ServicoContatos(executar, auditoria),
         eventos=ServicoEventos(executar, auditoria, autorizacoes, VERIFICADORES_IMPEDIMENTO),
+        fontes_pendencia=FONTES_CADASTRO,  # DD-54: o MOD-07 agrega as fontes de todos os módulos
+        marco_retencao=ServicoMarcoRetencao(),
         leitura_cadastro=ServicoLeituraCadastro(),
     )
 

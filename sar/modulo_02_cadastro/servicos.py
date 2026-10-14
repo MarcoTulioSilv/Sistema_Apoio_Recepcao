@@ -80,7 +80,8 @@ def _campos(dados: DadosPaciente) -> CamposPaciente:
     return CamposPaciente(**valores)
 
 
-def _dados(campos: CamposPaciente) -> DadosPaciente:
+def dados_de(campos: CamposPaciente) -> DadosPaciente:
+    """Os campos gravados como o DadosPaciente do contrato (também para as fontes de pendência)."""
     valores = {campo.name: getattr(campos, campo.name) for campo in fields(DadosPaciente)}
     valores["sexo"] = Sexo(campos.sexo) if campos.sexo is not None else None
     return DadosPaciente(**valores)
@@ -216,7 +217,7 @@ class ServicoPacientes:
             periodos = repositorio.periodos(paciente_id)
             if periodos:
                 verificar_inicio(periodos[0].inicio, dados.data_nascimento)
-            alteracoes = campos_alterados(_dados(atual.campos), dados)
+            alteracoes = campos_alterados(dados_de(atual.campos), dados)
             if not alteracoes:
                 return versao  # nada mudou: nada é gravado nem auditado (DD-10)
             self._verificar.municipios(uow, dados)
@@ -357,7 +358,7 @@ class ServicoPacientes:
             paciente = repositorio.por_id(paciente_id)
             if paciente is None or paciente.anulado_em is not None:
                 raise NaoEncontrado()
-            dados = _dados(paciente.campos)
+            dados = dados_de(paciente.campos)
             periodos = repositorio.periodos(paciente_id)
             telefones = repositorio.telefones(paciente_id)
 

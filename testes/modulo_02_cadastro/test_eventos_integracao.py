@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import uuid
 from dataclasses import dataclass, field
 from datetime import date
 
@@ -14,7 +13,7 @@ from sar.nucleo.contexto import Contexto, Perfil
 from sar.nucleo.erros import AcessoNegado, NaoEncontrado, RegraViolada
 from sar.nucleo.portas import Impedimento, OperacaoPeriodo
 from sar.nucleo.uow import UnidadeDeTrabalho
-from testes.apoio.cadastro import Cadastro, dados_completos, montar, pessoa
+from testes.apoio.cadastro import Cadastro, dados_completos, inserir_documento, montar, pessoa
 from testes.apoio.fabrica import Fabrica
 
 pytestmark = pytest.mark.integracao
@@ -155,16 +154,8 @@ def test_correcao_do_tipo_pela_administracao_executa_na_hora_e_desliga_o_comprov
     cadastro = montar(engine_web)
     pid, periodo = novo(cadastro, cadastro_zerado, fabrica)
     cadastro.eventos.registrar(admin(cadastro_zerado), pid, ALTA, date(2026, 3, 1), None)
-    documento = uuid.uuid4().bytes
+    documento = inserir_documento(engine_migracao, pid, "documento_alta", cadastro_zerado["admin"])
     with engine_migracao.begin() as c:
-        c.execute(
-            text(
-                "INSERT INTO documento (id, paciente_id, tipo, versao, arquivo, chave_cifrada, nonce, hash_sha256,"
-                " paginas, origem, capturado_em, capturado_por, local_digitalizacao) VALUES (:d, :p, 'documento_alta',"
-                " 1, :a, REPEAT('k', 60), REPEAT('n', 12), REPEAT('h', 64), 1, 'scanner', NOW(6), :u, 'Recepção')"
-            ),
-            {"d": documento, "p": pid, "a": uuid.uuid4().hex[:36].ljust(36, "0"), "u": cadastro_zerado["admin"]},
-        )
         c.execute(
             text("UPDATE periodo_tratamento SET evento_documento_id = :d WHERE id = :p"), {"d": documento, "p": periodo}
         )
