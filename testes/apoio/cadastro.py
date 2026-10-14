@@ -15,18 +15,35 @@ from sar.modulo_02_cadastro.anulacao import ExecutorAnularPaciente, ServicoAnula
 from sar.modulo_02_cadastro.contrato import DadosPaciente
 from sar.modulo_02_cadastro.eventos import ExecutorCorrigirEvento, ExecutorRemoverEvento, ServicoEventos
 from sar.modulo_02_cadastro.rascunhos import ServicoRascunhos
-from sar.modulo_02_cadastro.servicos import ServicoContatos, ServicoLeituraCadastro, ServicoPacientes
+from sar.modulo_02_cadastro.servicos import ServicoCep, ServicoContatos, ServicoLeituraCadastro, ServicoPacientes
 from sar.modulo_06_configuracao.servicos import LeitorParametrosSQL, ServicoConfiguracao, ServicoReferencias
 from sar.modulo_08_dados.cifra import CifraAesGcm
 from sar.modulo_08_dados.relogio import RelogioSistema
 from sar.nucleo.contexto import Contexto, Perfil
-from sar.nucleo.portas import ParticipanteAnulacao, VerificadorImpedimento
+from sar.nucleo.erros import IndisponivelExterno
+from sar.nucleo.portas import EnderecoCep, ParticipanteAnulacao, VerificadorImpedimento
 from sar.nucleo.uow import ExecutorDeOperacao
 from testes.apoio.fabrica import Fabrica
 
 AGORA = datetime(2026, 10, 13, 13, 0, tzinfo=UTC)  # 10h em Jataí
 INICIO = date(2026, 10, 1)
 JATAI = "5211909"
+
+
+@dataclass
+class ProvedorCepFalso:
+    """No lugar do ViaCEP e da BrasilAPI: os testes nunca acessam a internet. Começa fora do ar (QAS-03); o teste
+    liga e informa os CEPs que existem."""
+
+    enderecos: dict[str, EnderecoCep] = field(default_factory=dict)
+    fora_do_ar: bool = True
+    consultados: list[str] = field(default_factory=list)
+
+    def consultar(self, cep: str) -> EnderecoCep | None:
+        self.consultados.append(cep)
+        if self.fora_do_ar:
+            raise IndisponivelExterno("cep")
+        return self.enderecos.get(cep)
 
 
 @dataclass(frozen=True, slots=True)
@@ -40,6 +57,8 @@ class Cadastro:
     eventos: ServicoEventos
     anulacao: ServicoAnulacao
     rascunhos: ServicoRascunhos
+    cep: ServicoCep
+    provedor_cep: ProvedorCepFalso
     verificadores: list[VerificadorImpedimento] = field(default_factory=list)
     participantes: list[ParticipanteAnulacao] = field(default_factory=list)
 
@@ -51,6 +70,8 @@ def montar(engine: Engine) -> Cadastro:
     auditoria = ServicoAuditoria()
     verificadores: list[VerificadorImpedimento] = []
     participantes: list[ParticipanteAnulacao] = []
+    provedor_cep = ProvedorCepFalso()
+    referencias = ServicoReferencias()
     executores = {
         e.tipo: e
         for e in (
@@ -62,7 +83,7 @@ def montar(engine: Engine) -> Cadastro:
     autorizacoes = ServicoAutorizacoes(executar, auditoria, executores)
     return Cadastro(
         executar,
-        ServicoPacientes(executar, auditoria, ServicoReferencias()),
+        ServicoPacientes(executar, auditoria, referencias, provedor_cep),
         ServicoContatos(executar, auditoria),
         ServicoLeituraCadastro(),
         ServicoConfiguracao(executar, auditoria),
@@ -70,6 +91,8 @@ def montar(engine: Engine) -> Cadastro:
         ServicoEventos(executar, auditoria, autorizacoes, verificadores),
         ServicoAnulacao(executar, autorizacoes, participantes),
         ServicoRascunhos(executar, auditoria, CifraAesGcm(bytes(32)), LeitorParametrosSQL(executar)),
+        ServicoCep(executar, referencias, provedor_cep),
+        provedor_cep,
         verificadores,
         participantes,
     )

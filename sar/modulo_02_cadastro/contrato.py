@@ -209,6 +209,11 @@ class PacienteService(Protocol):
         anulado)."""
         ...
 
+    def verificar_cep(self, contexto: Contexto, paciente_id: int) -> bool:
+        """Resolução da pendência de CEP não verificado: consulta de novo e grava o resultado. RegraViolada
+        ("cep.ausente"); IndisponivelExterno se as fontes continuam fora do ar."""
+        ...
+
     def descartar_duplicidade(self, contexto: Contexto, paciente_id: int, outro_id: int) -> None:
         """Encerra a possível duplicidade do par (INV-08). RegraViolada("duplicidade.sem_coincidencia") se a
         tríade dos dois não coincide."""
@@ -251,6 +256,23 @@ class AnulacaoService(Protocol):
     def solicitar(self, contexto: Contexto, paciente_id: int, motivo: str) -> str:
         """Id da solicitação; aprovada na hora quando a administração pede (P-01). Na aprovação, tudo o que está
         ligado ao cadastro é descartado na mesma transação e os dados pessoais são apagados."""
+        ...
+
+
+@dataclass(frozen=True, slots=True)
+class EnderecoSugerido:
+    """O que a consulta do CEP devolve para preencher a ficha; a pessoa confere e completa."""
+
+    cep: str
+    logradouro: str | None
+    bairro: str | None
+    municipio: Municipio | None  # da tabela do IBGE; None se a fonte trouxe um município que ela não tem
+
+
+class CepService(Protocol):
+    def consultar(self, contexto: Contexto, cep: str) -> EnderecoSugerido | None:
+        """Consulta individual, no preenchimento (AD-23). None se o CEP não existe; IndisponivelExterno se as duas
+        fontes estão fora do ar, e a ficha segue sem ela (QAS-03). RegraViolada("cep.invalido")."""
         ...
 
 

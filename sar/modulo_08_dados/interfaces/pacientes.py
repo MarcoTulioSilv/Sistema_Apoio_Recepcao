@@ -99,6 +99,10 @@ class RepositorioPaciente(Protocol):
         avança a versão. Períodos e coberturas ficam."""
         ...
 
+    def definir_cep_verificado(self, id: int, verificado: bool) -> None:
+        """Resultado da consulta feita na resolução da pendência; não muda a versão do cadastro."""
+        ...
+
     def quem_usa(self, coluna: ColunaUnica, valor: str) -> int | None:
         """Id do paciente que já tem o valor, anulado ou não: a restrição do banco vale para todos."""
         ...

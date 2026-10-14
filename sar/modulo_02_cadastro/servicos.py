@@ -12,6 +12,7 @@ from sar.modulo_02_cadastro.contrato import (
     ContatoFicha,
     DadosCobertura,
     DadosPaciente,
+    EnderecoSugerido,
     Ficha,
     Identificacao,
     PeriodoFicha,
@@ -29,6 +30,7 @@ from sar.modulo_02_cadastro.regras import (
     idade,
     normalizar,
     pendencias,
+    sem_acento,
     situacao,
     validar_cobertura,
     validar_contato,
@@ -51,8 +53,16 @@ from sar.modulo_08_dados.interfaces.pacientes import (
 from sar.modulo_08_dados.interfaces.rascunhos import RepositorioRascunho
 from sar.modulo_08_dados.relogio import FUSO_CLINICA
 from sar.nucleo.contexto import Contexto
-from sar.nucleo.erros import AcessoNegado, ConfirmacaoNecessaria, ConflitoDeVersao, NaoEncontrado, RegraViolada
+from sar.nucleo.erros import (
+    AcessoNegado,
+    ConfirmacaoNecessaria,
+    ConflitoDeVersao,
+    IndisponivelExterno,
+    NaoEncontrado,
+    RegraViolada,
+)
 from sar.nucleo.logs import campos_do_erro
+from sar.nucleo.portas import EnderecoCep, ProvedorCep
 from sar.nucleo.uow import ExecutorDeOperacao, UnidadeDeTrabalho
 
 GUARDA = PermissionGuard()
@@ -157,12 +167,26 @@ class _Verificacoes:
         ]
 
 
+def _cep_existe(provedor: ProvedorCep, cep: str | None) -> bool:
+    """Para gravar o cadastro: fonte fora do ar ou CEP desconhecido deixam o CEP não verificado, com pendência,
+    sem impedir a gravação (QAS-03). A consulta acontece antes da transação: rede nunca segura trava do banco."""
+    if cep is None:
+        return False
+    try:
+        return provedor.consultar(cep) is not None
+    except IndisponivelExterno:
+        return False
+
+
 class ServicoPacientes:
-    def __init__(self, executar: ExecutorDeOperacao, auditoria: AuditService, referencias: Referencias) -> None:
+    def __init__(
+        self, executar: ExecutorDeOperacao, auditoria: AuditService, referencias: Referencias, cep: ProvedorCep
+    ) -> None:
         self._executar = executar
         self._auditoria = auditoria
         self._referencias = referencias
         self._verificar = _Verificacoes(referencias)
+        self._cep = cep
 
     # ---------------------------------------------------------------- escrita
     def criar(
@@ -183,6 +207,7 @@ class ServicoPacientes:
         carteirinha = (
             validar_cobertura(cobertura.tipo, cobertura.convenio_id, cobertura.carteirinha) if cobertura else None
         )
+        cep_verificado = _cep_existe(self._cep, dados.cep)
 
         def operacao(uow: UnidadeDeTrabalho) -> int:
             repositorio = uow.repositorio(RepositorioPaciente)
@@ -191,7 +216,7 @@ class ServicoPacientes:
             candidatos = self._verificar.candidatos_triade(repositorio, dados, None)
             if candidatos and not confirmar_duplicidade:
                 raise ConfirmacaoNecessaria("triade", {"candidatos": [p.id for p in candidatos]})
-            paciente_id = repositorio.criar(campos, cep_verificado=False, em=contexto.instante)
+            paciente_id = repositorio.criar(campos, cep_verificado=cep_verificado, em=contexto.instante)
             periodo_id = repositorio.abrir_periodo(paciente_id, inicio)
             alteracoes = campos_alterados(DadosPaciente(), dados)
             alteracoes["periodo_inicio"] = (None, inicio)
@@ -211,6 +236,9 @@ class ServicoPacientes:
         dados = normalizar(dados, hoje)
         verificar_minimo(dados, hoje)  # a data de início já existe: aqui só nome e prontuário contam
         campos = _campos(dados)
+        anterior = self._executar(lambda uow: uow.repositorio(RepositorioPaciente).por_id(paciente_id))
+        cep_mudou = anterior is None or anterior.campos.cep != campos.cep
+        cep_novo_verificado = _cep_existe(self._cep, campos.cep) if cep_mudou else False
 
         def operacao(uow: UnidadeDeTrabalho) -> int:
             repositorio = uow.repositorio(RepositorioPaciente)
@@ -227,7 +255,7 @@ class ServicoPacientes:
                 return versao  # nada mudou: nada é gravado nem auditado (DD-10)
             self._verificar.municipios(uow, dados)
             self._verificar.unicos(repositorio, dados, paciente_id)
-            cep_verificado = atual.cep_verificado and campos.cep == atual.campos.cep
+            cep_verificado = atual.cep_verificado if campos.cep == atual.campos.cep else cep_novo_verificado
             if not repositorio.atualizar(paciente_id, versao, campos, cep_verificado):
                 raise ConflitoDeVersao(None, None)
             self._auditoria.registrar(
@@ -322,6 +350,30 @@ class ServicoPacientes:
             {"periodo_id": (None, periodo_id), "inicio": (None, inicio), "tipo": (None, cobertura.tipo.value),
              "convenio_id": (None, cobertura.convenio_id), "carteirinha": (None, carteirinha)},
         )  # fmt: skip
+
+    def verificar_cep(self, contexto: Contexto, paciente_id: int) -> bool:
+        GUARDA.exigir(contexto, "cadastro.paciente.atualizar")
+        paciente = self._executar(lambda uow: uow.repositorio(RepositorioPaciente).por_id(paciente_id))
+        if paciente is None or paciente.anulado_em is not None:
+            raise NaoEncontrado()
+        cep = paciente.campos.cep
+        if cep is None:
+            raise RegraViolada("cep.ausente")
+        existe = self._cep.consultar(cep) is not None  # IndisponivelExterno sobe: a pessoa tenta mais tarde
+
+        def operacao(uow: UnidadeDeTrabalho) -> None:
+            repositorio = uow.repositorio(RepositorioPaciente)
+            atual = _paciente_vivo(repositorio, paciente_id)
+            if atual.campos.cep != cep or atual.cep_verificado == existe:
+                return  # o CEP mudou no meio do caminho, ou nada muda
+            repositorio.definir_cep_verificado(paciente_id, existe)
+            self._auditoria.registrar(
+                uow, contexto, "cadastro.paciente.atualizar", "paciente", str(paciente_id),
+                {"cep_verificado": (atual.cep_verificado, existe)},
+            )  # fmt: skip
+
+        self._executar(operacao)
+        return existe
 
     def descartar_duplicidade(self, contexto: Contexto, paciente_id: int, outro_id: int) -> None:
         GUARDA.exigir(contexto, "cadastro.paciente.descartar_duplicidade")
@@ -620,6 +672,39 @@ def _telefone_vivo(repositorio: RepositorioPaciente, telefone_id: int) -> Telefo
     elif telefone.contato_id is not None:
         _contato_vivo(repositorio, telefone.contato_id)
     return telefone
+
+
+class ServicoCep:
+    """Implementa o CepService do contrato: a consulta do preenchimento, com o município resolvido na tabela do
+    IBGE (pelo código, ou pelo nome e pela UF quando a fonte não traz o código)."""
+
+    def __init__(self, executar: ExecutorDeOperacao, referencias: Referencias, provedor: ProvedorCep) -> None:
+        self._executar = executar
+        self._referencias = referencias
+        self._provedor = provedor
+
+    def consultar(self, contexto: Contexto, cep: str) -> EnderecoSugerido | None:
+        GUARDA.exigir(contexto, "cadastro.cep.consultar")
+        numero = digitos(cep, "cep.invalido")
+        if numero is None or len(numero) != 8:
+            raise RegraViolada("cep.invalido")
+        endereco = self._provedor.consultar(numero)
+        if endereco is None:
+            return None
+        municipio = self._executar(lambda uow: self._municipio(uow, endereco))
+        return EnderecoSugerido(numero, endereco.logradouro, endereco.bairro, municipio)
+
+    def _municipio(self, uow: UnidadeDeTrabalho, endereco: EnderecoCep) -> Municipio | None:
+        if endereco.municipio_ibge is not None:
+            return self._referencias.municipio(uow, endereco.municipio_ibge)
+        if endereco.municipio_nome is None or endereco.uf is None:
+            return None
+        nome = " ".join(sem_acento(endereco.municipio_nome).casefold().split())
+        try:
+            candidatos = self._referencias.buscar_municipios(uow, endereco.municipio_nome, endereco.uf)
+        except RegraViolada:
+            return None  # UF que a tabela não conhece
+        return next((m for m in candidatos if " ".join(sem_acento(m.nome).casefold().split()) == nome), None)
 
 
 class ServicoLeituraCadastro:

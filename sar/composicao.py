@@ -32,9 +32,11 @@ from sar.modulo_01_acesso.servicos import (
     manipulador_encerrar_sessoes,
 )
 from sar.modulo_02_cadastro.anulacao import ExecutorAnularPaciente, ServicoAnulacao
+from sar.modulo_02_cadastro.cep import provedor_padrao
 from sar.modulo_02_cadastro.comprovante import manipulador_comprovante, manipulador_revinculo
 from sar.modulo_02_cadastro.contrato import (
     AnulacaoService,
+    CepService,
     ContatoService,
     EventoService,
     LeituraCadastro,
@@ -45,7 +47,7 @@ from sar.modulo_02_cadastro.eventos import ExecutorCorrigirEvento, ExecutorRemov
 from sar.modulo_02_cadastro.pendencias import FONTES as FONTES_CADASTRO
 from sar.modulo_02_cadastro.pendencias import ServicoMarcoRetencao
 from sar.modulo_02_cadastro.rascunhos import FonteRascunhoProximoDoDescarte, ServicoRascunhos
-from sar.modulo_02_cadastro.servicos import ServicoContatos, ServicoLeituraCadastro, ServicoPacientes
+from sar.modulo_02_cadastro.servicos import ServicoCep, ServicoContatos, ServicoLeituraCadastro, ServicoPacientes
 from sar.modulo_06_configuracao.contrato import ConfiguracaoService, Referencias
 from sar.modulo_06_configuracao.servicos import LeitorParametrosSQL, ServicoConfiguracao, ServicoReferencias
 from sar.modulo_08_dados.cadeia import gravar_encadeado
@@ -82,6 +84,7 @@ from sar.nucleo.portas import (
     FonteMarcoRetencao,
     FontePendencia,
     ParticipanteAnulacao,
+    ProvedorCep,
     Relogio,
     VerificadorImpedimento,
 )
@@ -167,6 +170,7 @@ class Componentes:
     eventos: EventoService
     anulacao: AnulacaoService
     rascunhos: RascunhoService
+    cep: CepService
     fontes_pendencia: tuple[FontePendencia, ...]
     marco_retencao: FonteMarcoRetencao
     leitura_cadastro: LeituraCadastro
@@ -192,8 +196,10 @@ def compor(
     chave_mestra: bytes,
     gravar_auditoria: GravadorAuditoria = gravar_encadeado,
     hasher: Hasher | None = None,
+    provedor_cep: ProvedorCep | None = None,
 ) -> Componentes:
-    """O hasher só muda nos testes, que usam um custo menor; em produção é bcrypt com custo 12 (DD-83)."""
+    """O hasher só muda nos testes, que usam um custo menor; em produção é bcrypt com custo 12 (DD-83). O provedor
+    de CEP também, para os testes nunca acessarem a internet; em produção é ViaCEP com BrasilAPI (DD-88)."""
     relogio = RelogioSistema()
     barramento = montar_barramento(relogio)
     executar = montar_executor(engine, barramento, gravar_auditoria)
@@ -201,6 +207,7 @@ def compor(
     parametros = LeitorParametrosSQL(executar)
     hasher = hasher or Hasher()
     referencias = ServicoReferencias()
+    cep = provedor_cep or provedor_padrao()
     executores = dict(EXECUTORES_AUTORIZAVEIS)
     for executor in (
         ExecutorCorrigirEvento(auditoria, VERIFICADORES_IMPEDIMENTO),
@@ -224,11 +231,12 @@ def compor(
         sessoes=GerenciadorSessao(executar, auditoria, parametros, relogio),
         usuarios=ServicoUsuarios(executar, auditoria, hasher),
         autorizacoes=autorizacoes,
-        pacientes=ServicoPacientes(executar, auditoria, referencias),
+        pacientes=ServicoPacientes(executar, auditoria, referencias, cep),
         contatos=ServicoContatos(executar, auditoria),
         eventos=ServicoEventos(executar, auditoria, autorizacoes, VERIFICADORES_IMPEDIMENTO),
         anulacao=ServicoAnulacao(executar, autorizacoes, PARTICIPANTES_ANULACAO),
         rascunhos=ServicoRascunhos(executar, auditoria, cifra, parametros),
+        cep=ServicoCep(executar, referencias, cep),
         # DD-54: o MOD-07 agrega as fontes de todos os módulos
         fontes_pendencia=(*FONTES_CADASTRO, FonteRascunhoProximoDoDescarte(parametros)),
         marco_retencao=ServicoMarcoRetencao(),

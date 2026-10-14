@@ -12,12 +12,13 @@ from sar.composicao import compor
 from sar.web import criar_app
 from sar.web.configuracao import ConfigWeb, ServicosWeb
 from testes.apoio.acesso import HASHER, SENHA
+from testes.apoio.cadastro import ProvedorCepFalso
 
 ORIGEM = "https://sar.teste"
 
 
 def servicos_web(engine: Engine) -> ServicosWeb:
-    componentes = compor(engine, bytes(32), hasher=HASHER)
+    componentes = compor(engine, bytes(32), hasher=HASHER, provedor_cep=ProvedorCepFalso())
     return ServicosWeb(
         componentes.autenticacao,
         componentes.sessoes,

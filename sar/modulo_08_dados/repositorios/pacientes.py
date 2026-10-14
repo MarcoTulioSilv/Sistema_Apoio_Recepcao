@@ -102,6 +102,12 @@ class RepositorioPacienteSQL:
             execution_options={"synchronize_session": False},
         )  # fmt: skip
 
+    def definir_cep_verificado(self, id: int, verificado: bool) -> None:
+        self._s.execute(
+            update(Paciente).where(Paciente.id == id).values(cep_verificado=verificado),
+            execution_options={"synchronize_session": False},
+        )
+
     def quem_usa(self, coluna: ColunaUnica, valor: str) -> int | None:
         return self._s.scalar(select(Paciente.id).where(getattr(Paciente, coluna) == valor))
 

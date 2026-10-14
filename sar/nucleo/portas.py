@@ -120,6 +120,7 @@ class EnderecoCep:
     bairro: str | None
     municipio_ibge: str | None
     uf: str | None
+    municipio_nome: str | None = None  # quando a fonte não traz o código IBGE (BrasilAPI), quem chama resolve
 
 
 class ProvedorCep(Protocol):
