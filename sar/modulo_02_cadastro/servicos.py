@@ -48,6 +48,7 @@ from sar.modulo_08_dados.interfaces.pacientes import (
     RepositorioPaciente,
     TelefoneGravado,
 )
+from sar.modulo_08_dados.interfaces.rascunhos import RepositorioRascunho
 from sar.modulo_08_dados.relogio import FUSO_CLINICA
 from sar.nucleo.contexto import Contexto
 from sar.nucleo.erros import AcessoNegado, ConfirmacaoNecessaria, ConflitoDeVersao, NaoEncontrado, RegraViolada
@@ -199,6 +200,7 @@ class ServicoPacientes:
             )
             if cobertura is not None:
                 self._gravar_cobertura(uow, contexto, periodo_id, cobertura, carteirinha, inicio)
+            self._eliminar_rascunho(uow, contexto)
             return paciente_id
 
         return _com_unicidade(lambda: self._executar(operacao))
@@ -234,6 +236,17 @@ class ServicoPacientes:
             return versao + 1
 
         return _com_unicidade(lambda: self._executar(operacao))
+
+    def _eliminar_rascunho(self, uow: UnidadeDeTrabalho, contexto: Contexto) -> None:
+        """§6.6: o rascunho de quem salvou o cadastro é eliminado na mesma transação."""
+        if contexto.usuario_id is None:
+            return
+        rascunhos = uow.repositorio(RepositorioRascunho)
+        atual = rascunhos.do_usuario(contexto.usuario_id)
+        if atual is not None and rascunhos.remover_do_usuario(contexto.usuario_id):
+            self._auditoria.registrar(
+                uow, contexto, "cadastro.rascunho.descartar", "rascunho_cadastro", str(atual.id), None, "virou cadastro"
+            )
 
     def abrir_periodo(
         self, contexto: Contexto, paciente_id: int, inicio: date, cobertura: DadosCobertura | None = None

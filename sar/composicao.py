@@ -39,10 +39,12 @@ from sar.modulo_02_cadastro.contrato import (
     EventoService,
     LeituraCadastro,
     PacienteService,
+    RascunhoService,
 )
 from sar.modulo_02_cadastro.eventos import ExecutorCorrigirEvento, ExecutorRemoverEvento, ServicoEventos
 from sar.modulo_02_cadastro.pendencias import FONTES as FONTES_CADASTRO
 from sar.modulo_02_cadastro.pendencias import ServicoMarcoRetencao
+from sar.modulo_02_cadastro.rascunhos import FonteRascunhoProximoDoDescarte, ServicoRascunhos
 from sar.modulo_02_cadastro.servicos import ServicoContatos, ServicoLeituraCadastro, ServicoPacientes
 from sar.modulo_06_configuracao.contrato import ConfiguracaoService, Referencias
 from sar.modulo_06_configuracao.servicos import LeitorParametrosSQL, ServicoConfiguracao, ServicoReferencias
@@ -51,6 +53,7 @@ from sar.modulo_08_dados.cifra import CifraAesGcm
 from sar.modulo_08_dados.interfaces.autorizacoes import RepositorioAutorizacao
 from sar.modulo_08_dados.interfaces.pacientes import RepositorioPaciente
 from sar.modulo_08_dados.interfaces.parametros import RepositorioParametro
+from sar.modulo_08_dados.interfaces.rascunhos import RepositorioRascunho
 from sar.modulo_08_dados.interfaces.referencias import RepositorioConvenio, RepositorioMunicipio
 from sar.modulo_08_dados.interfaces.sessoes import RepositorioSessao
 from sar.modulo_08_dados.interfaces.trilha import RepositorioExpurgo, RepositorioTrilha
@@ -59,6 +62,7 @@ from sar.modulo_08_dados.relogio import RelogioSistema
 from sar.modulo_08_dados.repositorios.autorizacoes import RepositorioAutorizacaoSQL
 from sar.modulo_08_dados.repositorios.pacientes import RepositorioPacienteSQL
 from sar.modulo_08_dados.repositorios.parametros import RepositorioParametroSQL
+from sar.modulo_08_dados.repositorios.rascunhos import RepositorioRascunhoSQL
 from sar.modulo_08_dados.repositorios.referencias import RepositorioConvenioSQL, RepositorioMunicipioSQL
 from sar.modulo_08_dados.repositorios.sessoes import RepositorioSessaoSQL
 from sar.modulo_08_dados.repositorios.trilha import RepositorioExpurgoSQL, RepositorioTrilhaSQL
@@ -110,6 +114,7 @@ REPOSITORIOS: dict[type, FabricaRepositorio] = {
     RepositorioSessao: RepositorioSessaoSQL,
     RepositorioAutorizacao: RepositorioAutorizacaoSQL,
     RepositorioPaciente: RepositorioPacienteSQL,
+    RepositorioRascunho: RepositorioRascunhoSQL,
 }
 
 
@@ -161,6 +166,7 @@ class Componentes:
     contatos: ContatoService
     eventos: EventoService
     anulacao: AnulacaoService
+    rascunhos: RascunhoService
     fontes_pendencia: tuple[FontePendencia, ...]
     marco_retencao: FonteMarcoRetencao
     leitura_cadastro: LeituraCadastro
@@ -203,9 +209,10 @@ def compor(
     ):
         executores.setdefault(executor.tipo, executor)
     autorizacoes = ServicoAutorizacoes(executar, auditoria, executores)
+    cifra = CifraAesGcm(chave_mestra)
     return Componentes(
         relogio=relogio,
-        cifra=CifraAesGcm(chave_mestra),
+        cifra=cifra,
         barramento=barramento,
         executar=executar,
         auditoria=auditoria,
@@ -221,7 +228,9 @@ def compor(
         contatos=ServicoContatos(executar, auditoria),
         eventos=ServicoEventos(executar, auditoria, autorizacoes, VERIFICADORES_IMPEDIMENTO),
         anulacao=ServicoAnulacao(executar, autorizacoes, PARTICIPANTES_ANULACAO),
-        fontes_pendencia=FONTES_CADASTRO,  # DD-54: o MOD-07 agrega as fontes de todos os módulos
+        rascunhos=ServicoRascunhos(executar, auditoria, cifra, parametros),
+        # DD-54: o MOD-07 agrega as fontes de todos os módulos
+        fontes_pendencia=(*FONTES_CADASTRO, FonteRascunhoProximoDoDescarte(parametros)),
         marco_retencao=ServicoMarcoRetencao(),
         leitura_cadastro=ServicoLeituraCadastro(),
     )

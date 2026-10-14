@@ -14,8 +14,10 @@ from sar.modulo_01_acesso.servicos import ServicoAuditoria, ServicoAutorizacoes
 from sar.modulo_02_cadastro.anulacao import ExecutorAnularPaciente, ServicoAnulacao
 from sar.modulo_02_cadastro.contrato import DadosPaciente
 from sar.modulo_02_cadastro.eventos import ExecutorCorrigirEvento, ExecutorRemoverEvento, ServicoEventos
+from sar.modulo_02_cadastro.rascunhos import ServicoRascunhos
 from sar.modulo_02_cadastro.servicos import ServicoContatos, ServicoLeituraCadastro, ServicoPacientes
-from sar.modulo_06_configuracao.servicos import ServicoConfiguracao, ServicoReferencias
+from sar.modulo_06_configuracao.servicos import LeitorParametrosSQL, ServicoConfiguracao, ServicoReferencias
+from sar.modulo_08_dados.cifra import CifraAesGcm
 from sar.modulo_08_dados.relogio import RelogioSistema
 from sar.nucleo.contexto import Contexto, Perfil
 from sar.nucleo.portas import ParticipanteAnulacao, VerificadorImpedimento
@@ -37,6 +39,7 @@ class Cadastro:
     autorizacoes: ServicoAutorizacoes
     eventos: ServicoEventos
     anulacao: ServicoAnulacao
+    rascunhos: ServicoRascunhos
     verificadores: list[VerificadorImpedimento] = field(default_factory=list)
     participantes: list[ParticipanteAnulacao] = field(default_factory=list)
 
@@ -66,6 +69,7 @@ def montar(engine: Engine) -> Cadastro:
         autorizacoes,
         ServicoEventos(executar, auditoria, autorizacoes, verificadores),
         ServicoAnulacao(executar, autorizacoes, participantes),
+        ServicoRascunhos(executar, auditoria, CifraAesGcm(bytes(32)), LeitorParametrosSQL(executar)),
         verificadores,
         participantes,
     )

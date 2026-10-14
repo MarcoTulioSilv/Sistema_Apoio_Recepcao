@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime
 from enum import Enum
 from typing import Protocol
 
@@ -251,6 +252,27 @@ class AnulacaoService(Protocol):
         """Id da solicitação; aprovada na hora quando a administração pede (P-01). Na aprovação, tudo o que está
         ligado ao cadastro é descartado na mesma transação e os dados pessoais são apagados."""
         ...
+
+
+@dataclass(frozen=True, slots=True)
+class RascunhoSalvo:
+    conteudo: dict[str, str]  # campos do formulário, como digitados
+    atualizado_em: datetime
+    descarte_em: date  # último salvamento mais o prazo (RF-920); derivado, nunca gravado
+
+
+class RascunhoService(Protocol):
+    """Rascunho do próprio usuário (§6.6, RF-919): um por pessoa, cifrado. Nenhuma regra do cadastro roda no
+    rascunho; AcessoNegado para quem não é recepção nem administração, e para o contexto de sistema."""
+
+    def salvar(self, contexto: Contexto, conteudo: Mapping[str, str]) -> RascunhoSalvo:
+        """Cria ou substitui. Conteúdo igual ao gravado não grava nem audita. RegraViolada("rascunho.conteudo")
+        acima dos limites."""
+        ...
+
+    def retomar(self, contexto: Contexto) -> RascunhoSalvo | None: ...
+
+    def descartar(self, contexto: Contexto) -> None: ...
 
 
 class ContatoService(Protocol):
