@@ -181,3 +181,20 @@ def test_municipios_da_naturalidade_por_uf(
         cliente, "/cadastro/municipios?naturalidade_uf=SP"
     ).get_data(as_text=True)
     assert get(cliente, "/cadastro/municipios?naturalidade_uf=XX").status_code == 404
+
+
+@pytest.mark.requisito("RF-301")
+def test_sem_javascript_a_cobertura_salva_mostra_so_os_campos_dela(
+    criar_usuario: CriarUsuario, cadastro_zerado: dict[str, int], engine_web: Engine, fabrica: Fabrica
+) -> None:
+    cliente = recepcao(engine_web, criar_usuario)
+    cns = fabrica.cns()
+    corpo = post(cliente, "/cadastro/novo", {"cobertura": "sus", "cns": cns, "acao": "rascunho"}).get_data(as_text=True)
+    assert re.search(r'data-cobertura="convenio" hidden', corpo) and not re.search(
+        r'data-cobertura="sus" hidden', corpo
+    )
+    assert f'CNS já informado na identificação: <span class="numero">{cns}</span>' in corpo
+    corpo = post(cliente, "/cadastro/novo", {"cobertura": "convenio", "acao": "rascunho"}).get_data(as_text=True)
+    assert re.search(r'data-cobertura="sus" hidden', corpo) and not re.search(
+        r'data-cobertura="convenio" hidden', corpo
+    )

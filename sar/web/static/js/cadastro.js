@@ -38,6 +38,31 @@
     form.addEventListener("input", atualizar);
     atualizar();
 
+    // Cobertura (RF-301): convênio e carteirinha só no convênio; no SUS, o cartão é o CNS da identificação.
+    const cobertura = form.querySelector("#cobertura");
+    const cns = form.querySelector("#cns");
+    const resumo = form.querySelector("[data-cns-resumo]");
+    const mostrarCobertura = () => {
+      form.querySelectorAll("[data-cobertura]").forEach((bloco) => {
+        const visivel = bloco.dataset.cobertura === cobertura.value;
+        bloco.hidden = !visivel;
+        bloco.querySelectorAll("input, select").forEach((campo) => { campo.disabled = !visivel; });
+      });
+      const numero = cns.value.trim();
+      resumo.textContent = numero
+        ? "CNS já informado na identificação: "
+        : "CNS ainda não informado: preencha o campo Cartão do SUS (CNS), na identificação.";
+      if (numero) {
+        const valor = document.createElement("span");
+        valor.className = "numero";
+        valor.textContent = numero;
+        resumo.appendChild(valor);
+      }
+    };
+    cobertura.addEventListener("change", mostrarCobertura);
+    cns.addEventListener("input", mostrarCobertura);
+    mostrarCobertura();
+
     form.addEventListener("click", (e) => {
       const botao = e.target.closest("button[data-acao]");
       if (!botao || botao.type === "submit") return;

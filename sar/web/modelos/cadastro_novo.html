@@ -100,7 +100,8 @@
             <option value="convenio"{% if v.get('cobertura') == 'convenio' %} selected{% endif %}>Convênio</option>
           </select>
         </div>
-        <div class="campo">
+        {# Convênio e carteirinha só para cobertura por convênio; no SUS, o cartão é o CNS da identificação. #}
+        <div class="campo" data-cobertura="convenio"{% if v.get('cobertura') != 'convenio' %} hidden{% endif %}>
           <label class="rotulo" for="convenio">Convênio</label>
           <select class="entrada" id="convenio" name="convenio" aria-describedby="convenio-erro"{% if erros.get('convenio') %} aria-invalid="true"{% endif %}>
             <option value="">Selecione…</option>
@@ -108,7 +109,11 @@
           </select>
           <p class="ajuda-erro m-0" id="convenio-erro" aria-live="polite">{{ erros.get('convenio', '') }}</p>
         </div>
-        {{ texto("carteirinha", "Carteirinha do convênio", v, erros) }}
+        <div data-cobertura="convenio"{% if v.get('cobertura') != 'convenio' %} hidden{% endif %}>{{ texto("carteirinha", "Carteirinha do convênio", v, erros) }}</div>
+        <div class="campo md:col-span-2" data-cobertura="sus"{% if v.get('cobertura') != 'sus' %} hidden{% endif %}>
+          <span class="rotulo">Cartão do SUS</span>
+          <p class="m-0 min-h-11 content-center" data-cns-resumo aria-live="polite">{% if v.get('cns', '').strip() %}CNS já informado na identificação: <span class="numero">{{ v.get('cns') }}</span>{% else %}CNS ainda não informado: preencha o campo Cartão do SUS (CNS), na identificação.{% endif %}</p>
+        </div>
       </div>
     </fieldset>
 

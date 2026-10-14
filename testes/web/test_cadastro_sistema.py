@@ -68,3 +68,28 @@ def test_cadastro_completo_pelo_navegador(
         assert c.execute(text("SELECT cep_verificado FROM paciente")).scalar_one() == 0  # CT-CAD-04
         assert c.execute(text("SELECT COUNT(*) FROM rascunho_cadastro")).scalar_one() == 0
     assert erros == []  # nenhum bloqueio da CSP nem erro de script
+
+
+@pytest.mark.requisito("RF-301", "RNF-406")
+def test_cobertura_sus_mostra_o_cns_e_esconde_o_convenio(
+    criar_usuario: CriarUsuario, cadastro_zerado: dict[str, int], endereco: str, page: Page, fabrica: Fabrica
+) -> None:
+    criar_usuario("sistcad_rec2")
+    entrar_no_navegador(page, endereco, "sistcad_rec2")
+    page.get_by_role("link", name="Novo cadastro").click()
+    convenio, carteirinha = page.get_by_label("Convênio", exact=True), page.get_by_label("Carteirinha do convênio")
+    resumo = page.locator("[data-cns-resumo]")
+    expect(convenio).to_be_hidden()  # cobertura ainda não informada
+    expect(resumo).to_be_hidden()
+    page.get_by_label("Cobertura").select_option("sus")
+    expect(convenio).to_be_hidden()
+    expect(carteirinha).to_be_hidden()
+    expect(resumo).to_have_text("CNS ainda não informado: preencha o campo Cartão do SUS (CNS), na identificação.")
+    cns = fabrica.cns()
+    page.get_by_label("Cartão do SUS (CNS)").fill(cns)
+    expect(resumo).to_have_text(f"CNS já informado na identificação: {cns}")
+    sem_violacao(page)
+    page.get_by_label("Cobertura").select_option("convenio")
+    expect(convenio).to_be_visible()
+    expect(carteirinha).to_be_visible()
+    expect(resumo).to_be_hidden()
