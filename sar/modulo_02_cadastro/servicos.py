@@ -18,6 +18,7 @@ from sar.modulo_02_cadastro.contrato import (
     EnderecoSugerido,
     Ficha,
     Identificacao,
+    PaginaPacientes,
     PeriodoFicha,
     PeriodoRef,
     Sexo,
@@ -489,14 +490,10 @@ class ServicoPacientes:
         limpo = " ".join(termo.split())
         if len(limpo) < MINIMO_BUSCA:
             return []
-        try:
-            numero = digitos(limpo, "busca")
-        except RegraViolada:
-            numero = None
-        exato = numero if numero is not None and len(numero) in (11, 15) else limpo
+        nome, exato = self._termos(limpo)
 
         def operacao(uow: UnidadeDeTrabalho) -> list[Identificacao]:
-            achados = uow.repositorio(RepositorioPaciente).buscar(limpo, exato, LIMITE_BUSCA)
+            achados = uow.repositorio(RepositorioPaciente).buscar(nome, exato, LIMITE_BUSCA)
             # DDS §4.2: auditada só a quantidade; o termo pode ser nome ou CPF e não vai à trilha (DD-10).
             self._auditoria.registrar(
                 uow, contexto, "cadastro.paciente.buscar", "paciente", None, {"quantidade": (None, len(achados))}
@@ -504,6 +501,32 @@ class ServicoPacientes:
             return [_identificacao(p) for p in achados]
 
         return self._executar(operacao)
+
+    def listar(self, contexto: Contexto, termo: str = "", deslocamento: int = 0, limite: int = 30) -> PaginaPacientes:
+        GUARDA.exigir(contexto, "cadastro.paciente.buscar")
+        limpo = " ".join(termo.split())
+        nome, exato = (None, None) if len(limpo) < MINIMO_BUSCA else self._termos(limpo)
+        limite = max(1, min(limite, LIMITE_BUSCA))
+        deslocamento = max(0, deslocamento)
+
+        def operacao(uow: UnidadeDeTrabalho) -> PaginaPacientes:
+            achados = uow.repositorio(RepositorioPaciente).buscar(nome, exato, limite + 1, deslocamento)
+            pagina = achados[:limite]
+            self._auditoria.registrar(
+                uow, contexto, "cadastro.paciente.buscar", "paciente", None, {"quantidade": (None, len(pagina))}
+            )
+            return PaginaPacientes(tuple(_identificacao(p) for p in pagina), len(achados) > limite)
+
+        return self._executar(operacao)
+
+    @staticmethod
+    def _termos(limpo: str) -> tuple[str, str]:
+        """O termo como nome, e como número exato (só os dígitos de um CPF ou CNS com pontuação) ou prontuário."""
+        try:
+            numero = digitos(limpo, "busca")
+        except RegraViolada:
+            numero = None
+        return limpo, numero if numero is not None and len(numero) in (11, 15) else limpo
 
     def ver_ficha(self, contexto: Contexto, paciente_id: int) -> Ficha:
         GUARDA.exigir(contexto, "cadastro.paciente.ver_ficha")

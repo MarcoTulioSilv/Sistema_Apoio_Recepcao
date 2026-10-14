@@ -111,9 +111,10 @@ class RepositorioPaciente(Protocol):
         """Não anulados, para a comparação da tríade (INV-08), que é feita no serviço."""
         ...
 
-    def buscar(self, nome: str | None, exato: str | None, limite: int) -> list[PacienteGravado]:
-        """Não anulados cujo nome contém o termo (sem distinção de caixa e de acento, pela collation), ou cujo
-        prontuário, CPF ou CNS é igual ao termo exato. Em ordem de nome."""
+    def buscar(self, nome: str | None, exato: str | None, limite: int, deslocamento: int = 0) -> list[PacienteGravado]:
+        """Não anulados cujo nome contém o termo (sem distinção de caixa e de acento, pela collation), cujo
+        prontuário começa pelo termo exato, ou cujo CPF ou CNS é igual a ele. Sem termo nenhum, todos. Em ordem de
+        nome; a página começa no deslocamento."""
         ...
 
     def vivos(self, ids: Sequence[int] | None) -> list[PacienteGravado]:

@@ -257,3 +257,38 @@ def test_edicao_de_telefone_e_contato_pela_ficha(
     visualizador = cliente(engine_web, criar_usuario, "visualizador")
     assert "/alterar" not in get(visualizador, f"/pacientes/{pid}").get_data(as_text=True)
     assert post(visualizador, f"/pacientes/{pid}/contatos/{contato}/alterar", {"nome": "x"}).status_code == 403
+
+
+@pytest.mark.requisito("RF-107", "DD-10", "DD-81")
+def test_lista_paginada_e_filtro(
+    criar_usuario: CriarUsuario, cadastro_zerado: dict[str, int], engine_web: Engine, fabrica: Fabrica
+) -> None:
+    recepcao = cliente(engine_web, criar_usuario, "recepcao")
+    for i in range(32):
+        post(recepcao, "/cadastro/novo", {"nome": f"Lista {i:02d} Fictício", "prontuario": f"P{i:03d}",
+                                          "inicio": "2026-01-05", "acao": "paciente"})  # fmt: skip
+    pagina = get(recepcao, "/pacientes").get_data(as_text=True)
+    assert pagina.count("data-paciente=") == 30 and "data-mais" in pagina and "deslocamento=30" in pagina
+    assert "Lista 00 Fictício" in pagina and "Lista 30 Fictício" not in pagina  # em ordem de nome
+    resto = post(recepcao, "/pacientes/lista?deslocamento=30", {"termo": ""}).get_data(as_text=True)
+    assert resto.count("data-paciente=") == 2 and "Fim da lista: 32 pacientes." in resto and "data-mais" not in resto
+    filtrado = post(recepcao, "/pacientes/lista", {"termo": "lista 1"}).get_data(as_text=True)
+    assert filtrado.count("data-paciente=") == 10 and "<html" not in filtrado  # só as linhas, para o htmx
+    assert post(recepcao, "/pacientes/lista", {"termo": "P00"}).get_data(as_text=True).count("data-paciente=") == 10
+    assert "Nenhum paciente" in post(recepcao, "/pacientes/lista", {"termo": "zzz"}).get_data(as_text=True)
+    assert (
+        post(recepcao, "/pacientes/lista?deslocamento=abc", {"termo": ""})
+        .get_data(as_text=True)
+        .count("data-paciente=")
+        == 30
+    )
+    with engine_web.connect() as c:
+        quantidades = (
+            c.execute(text("SELECT alteracoes FROM auditoria WHERE operacao = 'cadastro.paciente.buscar' ORDER BY id"))
+            .scalars()
+            .all()
+        )
+    assert '{"quantidade":[null,30]}' in quantidades and '{"quantidade":[null,2]}' in quantidades
+    assert all("lista" not in q.lower() for q in quantidades)  # o termo não vai à trilha
+    ti = cliente(engine_web, criar_usuario, "ti")
+    assert post(ti, "/pacientes/lista", {"termo": ""}).status_code == 403

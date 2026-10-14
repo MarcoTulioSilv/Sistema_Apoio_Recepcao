@@ -115,6 +115,12 @@ class Identificacao:
 
 
 @dataclass(frozen=True, slots=True)
+class PaginaPacientes:
+    itens: tuple[Identificacao, ...]
+    tem_mais: bool  # há outra página depois desta
+
+
+@dataclass(frozen=True, slots=True)
 class PeriodoRef:
     id: int
     inicio: date
@@ -207,6 +213,11 @@ class PacienteService(Protocol):
     def buscar(self, contexto: Contexto, termo: str) -> list[Identificacao]:
         """Pelo nome (contém, sem caixa e acento), ou pelo prontuário, CPF ou CNS exatos. Termo com menos de 2
         caracteres não busca. Anulados nunca aparecem."""
+        ...
+
+    def listar(self, contexto: Contexto, termo: str = "", deslocamento: int = 0, limite: int = 30) -> PaginaPacientes:
+        """A lista da tela de pacientes, página a página, em ordem de nome. Termo com menos de 2 caracteres lista
+        todos; com mais, filtra como o buscar (o prontuário casa pelo começo). Auditada só a quantidade (DD-10)."""
         ...
 
     def ver_ficha(self, contexto: Contexto, paciente_id: int) -> Ficha:

@@ -138,24 +138,41 @@ def _form() -> dict[str, str]:
     return {chave: str(valor) for chave, valor in request.form.items()}
 
 
-# ------------------------------------------------------------------ busca (RF-107)
+# ------------------------------------------------------------------ lista e busca (RF-107)
+PAGINA = 30
+
+
+def _lista(contexto: Contexto, termo: str, deslocamento: int) -> dict[str, Any]:
+    pagina = _servicos().pacientes.listar(contexto, termo, deslocamento, PAGINA)
+    return {
+        "termo": termo, "pacientes": pagina.itens, "tem_mais": pagina.tem_mais,
+        "proximo": deslocamento + len(pagina.itens), "pode": _permissoes(contexto),
+    }  # fmt: skip
+
+
 @bp.get("")
 def busca() -> str:
+    """A lista de todos, em ordem de nome, página a página; o filtro anda enquanto a pessoa digita."""
     contexto = contexto_atual()
-    GUARDA.exigir(contexto, "cadastro.paciente.buscar")
     resultado = RESULTADOS["anulado"] if request.args.get("anulado") else None
-    return render_template(
-        "pacientes_busca.html", termo="", resultados=None, pode=_permissoes(contexto), resultado=resultado
-    )
+    return render_template("pacientes_busca.html", resultado=resultado, **_lista(contexto, "", 0))
 
 
 @bp.post("/buscar")
 def buscar() -> str:
-    """Por POST: o termo (nome ou CPF) não vai para a URL nem para o log de acesso (DD-81)."""
+    """Sem JavaScript: o formulário envia o termo e a tela volta com a primeira página filtrada. Por POST, o termo
+    (nome ou CPF) não vai para a URL nem para o log de acesso (DD-81)."""
     contexto = contexto_atual()
-    termo = request.form.get("termo", "")
-    resultados = _servicos().pacientes.buscar(contexto, termo)
-    return render_template("pacientes_busca.html", termo=termo, resultados=resultados, pode=_permissoes(contexto))
+    return render_template("pacientes_busca.html", **_lista(contexto, request.form.get("termo", ""), 0))
+
+
+@bp.post("/lista")
+def lista() -> str:
+    """Fragmento do htmx: as linhas de uma página, com a linha que pede a próxima quando aparece na rolagem."""
+    contexto = contexto_atual()
+    deslocamento = request.args.get("deslocamento", "0")
+    inicio = int(deslocamento) if deslocamento.isdigit() else 0
+    return render_template("_linhas_pacientes.html", **_lista(contexto, request.form.get("termo", ""), inicio))
 
 
 # ------------------------------------------------------------------ ficha

@@ -4,8 +4,11 @@ from __future__ import annotations
 
 import pytest
 from playwright.sync_api import Page, expect
+from sqlalchemy import Engine
 
+from sar.modulo_02_cadastro.contrato import DadosPaciente
 from testes.apoio.acesso import CriarUsuario
+from testes.apoio.cadastro import INICIO, montar, pessoa
 from testes.apoio.fabrica import Fabrica
 from testes.web.conftest import entrar_no_navegador, sem_violacao
 
@@ -33,9 +36,9 @@ def test_da_busca_a_ficha_e_aos_pedidos(
 
     page.get_by_role("link", name="Pacientes").click()
     sem_violacao(page)
-    page.get_by_label("Nome, prontuário, CPF ou CNS").fill(prontuario)
-    page.get_by_label("Nome, prontuário, CPF ou CNS").press("Enter")
-    expect(page.get_by_role("table", name="Pacientes encontrados")).to_contain_text(nome)
+    page.get_by_label("Nome, prontuário, CPF ou CNS").fill(prontuario)  # filtra enquanto digita, sem Enter
+    expect(page.locator("[data-paciente]")).to_have_count(1)
+    expect(page.get_by_role("table", name="Pacientes")).to_contain_text(nome)
     sem_violacao(page)
     page.get_by_role("link", name=f"Abrir ficha de {nome}").click()
 
@@ -70,4 +73,36 @@ def test_da_busca_a_ficha_e_aos_pedidos(
     page.get_by_label("Motivo da anulação").fill("Cadastro feito em duplicidade")
     page.get_by_role("button", name="Pedir a anulação à administração").click()
     expect(page.get_by_role("status")).to_contain_text("Pedido enviado à administração")
+    assert erros == []
+
+
+@pytest.mark.requisito("RNF-406", "RF-107")
+def test_lista_com_rolagem_continua_e_filtro_enquanto_digita(
+    criar_usuario: CriarUsuario, cadastro_zerado: dict[str, int], endereco: str, page: Page, engine_web: Engine,
+    fabrica: Fabrica,
+) -> None:  # fmt: skip
+    cadastro = montar(engine_web)
+    recepcao = pessoa(cadastro_zerado)
+    for i in range(35):
+        cadastro.pacientes.criar(
+            recepcao, DadosPaciente(nome=f"Paciente {i:02d} Fictício", prontuario=f"L{i:03d}"), INICIO
+        )
+    erros: list[str] = []
+    page.on("console", lambda m: erros.append(m.text) if m.type == "error" else None)
+    criar_usuario("sistpac_rec2")
+    entrar_no_navegador(page, endereco, "sistpac_rec2")
+    page.get_by_role("link", name="Pacientes").click()
+    linhas = page.locator("[data-paciente]")
+    expect(linhas).to_have_count(30)  # primeira página
+    sem_violacao(page)
+    page.locator("[data-mais]").scroll_into_view_if_needed()  # a linha final aparece: vem a próxima página
+    expect(linhas).to_have_count(35)
+    expect(page.locator("[data-fim]")).to_have_text("Fim da lista: 35 pacientes.")
+    page.get_by_label("Nome, prontuário, CPF ou CNS").fill("paciente 3")
+    expect(linhas).to_have_count(5)  # 30 a 34
+    page.get_by_label("Nome, prontuário, CPF ou CNS").fill("L01")  # prontuário pelo começo
+    expect(linhas).to_have_count(10)
+    page.get_by_label("Nome, prontuário, CPF ou CNS").fill("")
+    expect(linhas).to_have_count(30)
+    sem_violacao(page)
     assert erros == []
