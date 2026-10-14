@@ -9,6 +9,7 @@ from typing import Protocol
 
 from sar.modulo_06_configuracao.contrato import Municipio
 from sar.nucleo.contexto import Contexto
+from sar.nucleo.portas import ImpactoAnulacao
 from sar.nucleo.uow import UnidadeDeTrabalho
 
 
@@ -236,6 +237,19 @@ class EventoService(Protocol):
 
     def solicitar_remocao(self, contexto: Contexto, periodo_id: int, motivo: str) -> str:
         """Reabre o período. Só o evento do último período (INV-02)."""
+        ...
+
+
+class AnulacaoService(Protocol):
+    """Anulação de cadastro criado por engano (RF-1008, §6.9, DD-89), só por autorização da administração."""
+
+    def impacto(self, contexto: Contexto, paciente_id: int) -> ImpactoAnulacao:
+        """O que será descartado nos outros módulos, mostrado antes da decisão. Para quem pode pedir ou decidir."""
+        ...
+
+    def solicitar(self, contexto: Contexto, paciente_id: int, motivo: str) -> str:
+        """Id da solicitação; aprovada na hora quando a administração pede (P-01). Na aprovação, tudo o que está
+        ligado ao cadastro é descartado na mesma transação e os dados pessoais são apagados."""
         ...
 
 

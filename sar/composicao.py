@@ -31,8 +31,15 @@ from sar.modulo_01_acesso.servicos import (
     manipulador_aviso_integridade,
     manipulador_encerrar_sessoes,
 )
+from sar.modulo_02_cadastro.anulacao import ExecutorAnularPaciente, ServicoAnulacao
 from sar.modulo_02_cadastro.comprovante import manipulador_comprovante, manipulador_revinculo
-from sar.modulo_02_cadastro.contrato import ContatoService, EventoService, LeituraCadastro, PacienteService
+from sar.modulo_02_cadastro.contrato import (
+    AnulacaoService,
+    ContatoService,
+    EventoService,
+    LeituraCadastro,
+    PacienteService,
+)
 from sar.modulo_02_cadastro.eventos import ExecutorCorrigirEvento, ExecutorRemoverEvento, ServicoEventos
 from sar.modulo_02_cadastro.pendencias import FONTES as FONTES_CADASTRO
 from sar.modulo_02_cadastro.pendencias import ServicoMarcoRetencao
@@ -70,6 +77,7 @@ from sar.nucleo.portas import (
     ExecutorAutorizavel,
     FonteMarcoRetencao,
     FontePendencia,
+    ParticipanteAnulacao,
     Relogio,
     VerificadorImpedimento,
 )
@@ -152,6 +160,7 @@ class Componentes:
     pacientes: PacienteService
     contatos: ContatoService
     eventos: EventoService
+    anulacao: AnulacaoService
     fontes_pendencia: tuple[FontePendencia, ...]
     marco_retencao: FonteMarcoRetencao
     leitura_cadastro: LeituraCadastro
@@ -167,6 +176,9 @@ EXECUTORES_AUTORIZAVEIS: dict[str, ExecutorAutorizavel] = {}
 
 # Quem tem fatos datados que impedem encerrar o período (DD-31, DD-74). O MOD-03 entra no Incremento 3.
 VERIFICADORES_IMPEDIMENTO: list[VerificadorImpedimento] = []
+
+# Quem descarta o que está ligado ao cadastro anulado (§6.9, DD-74). MOD-03 e MOD-04 entram nos Incrementos 3 e 4.
+PARTICIPANTES_ANULACAO: list[ParticipanteAnulacao] = []
 
 
 def compor(
@@ -187,6 +199,7 @@ def compor(
     for executor in (
         ExecutorCorrigirEvento(auditoria, VERIFICADORES_IMPEDIMENTO),
         ExecutorRemoverEvento(auditoria),
+        ExecutorAnularPaciente(auditoria, PARTICIPANTES_ANULACAO),
     ):
         executores.setdefault(executor.tipo, executor)
     autorizacoes = ServicoAutorizacoes(executar, auditoria, executores)
@@ -207,6 +220,7 @@ def compor(
         pacientes=ServicoPacientes(executar, auditoria, referencias),
         contatos=ServicoContatos(executar, auditoria),
         eventos=ServicoEventos(executar, auditoria, autorizacoes, VERIFICADORES_IMPEDIMENTO),
+        anulacao=ServicoAnulacao(executar, autorizacoes, PARTICIPANTES_ANULACAO),
         fontes_pendencia=FONTES_CADASTRO,  # DD-54: o MOD-07 agrega as fontes de todos os módulos
         marco_retencao=ServicoMarcoRetencao(),
         leitura_cadastro=ServicoLeituraCadastro(),

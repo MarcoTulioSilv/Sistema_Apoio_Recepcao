@@ -37,13 +37,15 @@ class Paciente(Base):
         CheckConstraint("cpf REGEXP '^[0-9]{11}$'", name="cpf"),
         CheckConstraint("cns REGEXP '^[0-9]{15}$'", name="cns"),
         CheckConstraint("cep REGEXP '^[0-9]{8}$'", name="cep"),
+        # DD-89: só o anulado fica sem prontuário e nome; o mínimo da P-03 vale para os demais (0005)
+        CheckConstraint("(prontuario IS NOT NULL AND nome IS NOT NULL) OR anulado_em IS NOT NULL", name="minimo"),
         Index("ix_paciente__nome", "nome"),
         Index("ix_paciente__nascimento", "data_nascimento"),
     )
 
     id: Mapped[int] = mapped_column(BIGINT, primary_key=True, autoincrement=True)
-    prontuario: Mapped[str] = mapped_column(String(20))
-    nome: Mapped[str] = mapped_column(String(150))
+    prontuario: Mapped[str | None] = mapped_column(String(20))
+    nome: Mapped[str | None] = mapped_column(String(150))
     data_nascimento: Mapped[date | None] = mapped_column(Date)
     sexo: Mapped[str | None] = mapped_column(Enum("F", "M", name="sexo"))
     nome_mae: Mapped[str | None] = mapped_column(String(150))

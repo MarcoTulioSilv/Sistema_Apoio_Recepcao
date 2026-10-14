@@ -88,7 +88,10 @@ def dados_de(campos: CamposPaciente) -> DadosPaciente:
 
 
 def _identificacao(p: PacienteGravado) -> Identificacao:
+    """Só de paciente vivo: o anulado não tem mais nome nem prontuário (DD-89), e quem chama já o filtrou."""
     c = p.campos
+    if c.nome is None or c.prontuario is None:
+        raise RuntimeError("paciente anulado não tem identificação")
     return Identificacao(p.id, c.nome, c.prontuario, c.data_nascimento, c.nome_mae)
 
 

@@ -89,6 +89,19 @@ class RepositorioPacienteSQL:
         )
         return bool(getattr(resultado, "rowcount", 0) == 1)
 
+    def anular(self, id: int, em: datetime) -> None:
+        dos_contatos = select(Contato.id).where(Contato.paciente_id == id)
+        self._s.execute(delete(Telefone).where(or_(Telefone.paciente_id == id, Telefone.contato_id.in_(dos_contatos))))
+        self._s.execute(delete(Contato).where(Contato.paciente_id == id))
+        apagados = {_COLUNAS.get(nome, nome): None for nome in _CAMPOS}
+        self._s.execute(
+            update(Paciente)
+            .where(Paciente.id == id)
+            .values(**apagados, cep_verificado=False, anulado_em=em.astimezone(UTC).replace(tzinfo=None),
+                    versao=Paciente.versao + 1),
+            execution_options={"synchronize_session": False},
+        )  # fmt: skip
+
     def quem_usa(self, coluna: ColunaUnica, valor: str) -> int | None:
         return self._s.scalar(select(Paciente.id).where(getattr(Paciente, coluna) == valor))
 

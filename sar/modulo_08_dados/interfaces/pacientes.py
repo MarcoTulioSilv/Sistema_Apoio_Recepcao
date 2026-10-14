@@ -13,8 +13,8 @@ ColunaUnica = Literal["prontuario", "cpf", "cns"]
 
 @dataclass(frozen=True, slots=True)
 class CamposPaciente:
-    prontuario: str
-    nome: str
+    prontuario: str | None  # None só no paciente anulado (DD-89)
+    nome: str | None
     data_nascimento: date | None
     sexo: str | None
     nome_mae: str | None
@@ -92,6 +92,11 @@ class RepositorioPaciente(Protocol):
 
     def atualizar(self, id: int, versao: int, campos: CamposPaciente, cep_verificado: bool) -> bool:
         """Grava se a versão ainda for a informada, e avança a versão (DD-17). False se outra tela gravou antes."""
+        ...
+
+    def anular(self, id: int, em: datetime) -> None:
+        """DD-89: apaga os dados pessoais (todos os campos a nulo), exclui contatos e telefones, marca a anulação e
+        avança a versão. Períodos e coberturas ficam."""
         ...
 
     def quem_usa(self, coluna: ColunaUnica, valor: str) -> int | None:
