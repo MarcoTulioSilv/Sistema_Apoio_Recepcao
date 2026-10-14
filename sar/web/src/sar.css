@@ -36,6 +36,9 @@
   --color-urgencia-texto: #5c1510;
   --color-urgencia-fundo: #fbe9e7;
   --color-urgencia-borda: #e8b9b3;
+  --color-aprovar: #1e6b3a;
+  --color-aprovar-escura: #154d29;
+  --color-aprovar-fundo: #e3f2e8;
   --color-alta: #6e4400;
   --color-alta-fundo: #fff1d6;
   --color-normal: #3a4250;
@@ -69,6 +72,12 @@
   &[aria-pressed="true"] { @apply border-ausente-borda bg-ausente-fundo font-bold text-ausente; }
 }
 @utility btn-urgente { @apply btn bg-urgencia text-white hover:bg-urgencia-texto; }
+@utility btn-aprovar { @apply btn bg-aprovar text-white hover:bg-aprovar-escura; }
+/* Opção de um seletor de decisão (rádio escondido, rótulo visível): a cor de quem está marcado vem no modelo */
+@utility opcao-decisao {
+  @apply inline-flex min-h-12 min-w-36 cursor-pointer items-center justify-center gap-2 rounded-lg border-2 border-borda-forte
+    bg-superficie px-5 font-bold text-tinta has-focus-visible:outline-3 has-focus-visible:outline-offset-2 has-focus-visible:outline-acao;
+}
 
 /* Etiquetas de pendência por prioridade */
 @utility etiqueta { @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-sm; }

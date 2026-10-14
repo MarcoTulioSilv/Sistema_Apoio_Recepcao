@@ -25,7 +25,7 @@ ESTADOS = {
     "pendente": "Pendente",
     "executada": "Executada",
     "invalidada": "Invalidada: o registro mudou desde o pedido",
-    "recusada": "Reprovada",
+    "recusada": "Negada",
     "cancelada": "Cancelada",
 }
 RESULTADOS = {
@@ -34,14 +34,12 @@ RESULTADOS = {
         "O registro mudou desde o pedido: a solicitação foi invalidada sem executar. "
         "Peça de novo, se ainda for preciso."
     ),
-    "recusada": "Solicitação reprovada.",
+    "recusada": "Solicitação negada.",
     "cancelada": "Solicitação cancelada.",
 }
 ERROS = {
     "autorizacao.ja_decidida": "Esta solicitação já foi decidida.",
-    "autorizacao.motivo_obrigatorio": (
-        "Informe o motivo, com até 500 caracteres. Para reprovar, o comentário é obrigatório."
-    ),
+    "autorizacao.motivo_obrigatorio": ("Informe o motivo, com até 500 caracteres. Para negar, o motivo é obrigatório."),
     "autorizacao.motivo": "O motivo pode ter até 500 caracteres.",
     "aviso.explicacao_obrigatoria": "Informe a explicação recebida do TI.",
     "aviso.ja_encerrado": "Este aviso já foi encerrado.",
@@ -112,8 +110,27 @@ def _decidir(acao: str, solicitacao_id: str) -> Response | str:
             servico.cancelar(contexto, solicitacao_id)
             estado = "cancelada"
     except RegraViolada as erro:
-        return _pagina_analise(contexto, solicitacao_id, erro=ERROS.get(erro.codigo, erro.codigo), comentario=motivo)
+        decisao = "aprovar" if acao == "aprovar" else "negar"
+        return _pagina_analise(
+            contexto, solicitacao_id, erro=ERROS.get(erro.codigo, erro.codigo), comentario=motivo, decisao=decisao,
+            confirmar=acao != "cancelar",
+        )  # fmt: skip
     return redirect(url_for("autorizacoes.lista", resultado=estado))
+
+
+@autorizacoes.post("/<solicitacao_id>/decidir")
+def decidir(solicitacao_id: str) -> Response | str:
+    """A decisão da tela de análise, em dois passos: a escolha (aprovar ou negar) e a confirmação, com o motivo.
+    Com JavaScript, a confirmação é um diálogo na própria tela; sem ele, a tela volta com o diálogo aberto."""
+    contexto = contexto_atual()
+    decisao = request.form.get("decisao", "")
+    if decisao not in ("aprovar", "negar"):
+        return _pagina_analise(contexto, solicitacao_id, erro="Escolha aprovar ou negar antes de confirmar.")
+    if request.form.get("confirmado") != "1":
+        return _pagina_analise(
+            contexto, solicitacao_id, decisao=decisao, confirmar=True, comentario=request.form.get("motivo", "")
+        )
+    return _decidir("aprovar" if decisao == "aprovar" else "recusar", solicitacao_id)
 
 
 @autorizacoes.post("/<solicitacao_id>/aprovar")

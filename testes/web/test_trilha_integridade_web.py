@@ -135,10 +135,10 @@ def test_administracao_aprova_pela_fila(
     solicitacao = re.search(r'data-solicitacao="([0-9a-f]{32})"', fila)
     assert solicitacao is not None and f'href="/autorizacoes/{solicitacao.group(1)}"' in fila  # botão Analisar
     analise = get(admin, f"/autorizacoes/{solicitacao.group(1)}").get_data(as_text=True)
-    assert "Cadastro duplicado" in analise and ">Aprovar<" in analise and ">Reprovar<" in analise
+    assert "Cadastro duplicado" in analise and 'value="aprovar"' in analise and 'value="negar"' in analise
     sem_motivo = post(admin, f"/autorizacoes/{solicitacao.group(1)}/recusar", {"motivo": ""})
     corpo = sem_motivo.get_data(as_text=True)
-    assert "Para reprovar, o comentário é obrigatório" in corpo and "Análise do pedido" in corpo  # volta à análise
+    assert "Para negar, o motivo é obrigatório" in corpo and "Análise do pedido" in corpo  # volta à análise
     aprovada = post(admin, f"/autorizacoes/{solicitacao.group(1)}/aprovar", {"motivo": ""})
     assert "resultado=executada" in aprovada.headers["Location"]
     assert "Nenhuma solicitação aguardando" in get(admin, "/autorizacoes").get_data(as_text=True)
@@ -168,14 +168,14 @@ def test_tela_de_analise_do_pedido(
     minhas = get(autora, "/autorizacoes").get_data(as_text=True)
     assert f'href="/autorizacoes/{primeiro}"' in minhas and "Ver detalhes" in minhas
     detalhe = get(autora, f"/autorizacoes/{primeiro}").get_data(as_text=True)
-    assert "Cadastro duplicado" in detalhe and "Cancelar este pedido" in detalhe and ">Aprovar<" not in detalhe
+    assert "Cadastro duplicado" in detalhe and "Cancelar este pedido" in detalhe and 'value="aprovar"' not in detalhe
 
     admin = logado(app, "webt_adm4")
     reprovado = post(admin, f"/autorizacoes/{primeiro}/recusar", {"motivo": "Não é duplicata: são irmãos gêmeos"})
     assert "resultado=recusada" in reprovado.headers["Location"]
-    assert "Solicitação reprovada." in get(admin, reprovado.headers["Location"]).get_data(as_text=True)
+    assert "Solicitação negada." in get(admin, reprovado.headers["Location"]).get_data(as_text=True)
     decidido = get(autora, f"/autorizacoes/{primeiro}").get_data(as_text=True)
-    assert "Reprovada" in decidido and "Não é duplicata: são irmãos gêmeos" in decidido
+    assert "Negada" in decidido and "Não é duplicata: são irmãos gêmeos" in decidido
     assert "Cancelar este pedido" not in decidido
 
     post(autora, f"/autorizacoes/{segundo}/cancelar", {})
@@ -185,3 +185,36 @@ def test_tela_de_analise_do_pedido(
     assert get(admin, "/autorizacoes/" + "0" * 32).status_code == 404
     assert get(admin, "/autorizacoes/nao-e-hex").status_code == 404
     assert get(logado(app, "webt_ti4"), f"/autorizacoes/{primeiro}").status_code == 403
+
+
+@pytest.mark.requisito("RF-1008", "DEC-42")
+def test_decisao_em_dois_passos_sem_javascript(
+    criar_usuario: CriarUsuario, engine_web: Engine, monkeypatch: pytest.MonkeyPatch, limpar: None
+) -> None:
+    """A escolha não decide: a tela volta com o diálogo de confirmação aberto, na cor da escolha, e só o botão do
+    diálogo (confirmado=1) decide. Negar exige o motivo (§5.3)."""
+    monkeypatch.setitem(sar.composicao.EXECUTORES_AUTORIZAVEIS, ANULAR, ExecutorFalso())
+    criar_usuario("webt_adm6", perfil="administracao")
+    recepcao = criar_usuario("webt_r6")
+    pedidos = ServicoAutorizacoes(
+        montar_executor(engine_web, montar_barramento(RelogioSistema())), ServicoAuditoria(), {ANULAR: ExecutorFalso()}
+    )
+    contexto = Contexto(recepcao, Perfil.RECEPCAO, None, "10.0.0.5", datetime.now(UTC), "d" * 32)
+    negar = pedidos.solicitar(contexto, ANULAR, "44", {"paciente_id": 44}, "Duplicado")
+    aprovar = pedidos.solicitar(contexto, ANULAR, "45", {"paciente_id": 45}, "Duplicado")
+    admin = logado(montar(engine_web), "webt_adm6")
+
+    sem_escolha = post(admin, f"/autorizacoes/{negar}/decidir", {}).get_data(as_text=True)
+    assert "Escolha aprovar ou negar antes de confirmar." in sem_escolha
+    passo = post(admin, f"/autorizacoes/{negar}/decidir", {"decisao": "negar"}).get_data(as_text=True)
+    assert re.search(r'id="confirmar-decisao"[^>]*\bopen\b', passo) and "Negar este pedido?" in passo
+    assert 'class="btn-urgente" type="submit" name="confirmado"' in passo and "required" in passo
+    sem_motivo = post(admin, f"/autorizacoes/{negar}/decidir", {"decisao": "negar", "confirmado": "1", "motivo": " "})
+    assert "Para negar, o motivo é obrigatório" in sem_motivo.get_data(as_text=True)
+    negado = post(admin, f"/autorizacoes/{negar}/decidir", {"decisao": "negar", "confirmado": "1", "motivo": "Não"})
+    assert "resultado=recusada" in negado.headers["Location"]
+
+    passo = post(admin, f"/autorizacoes/{aprovar}/decidir", {"decisao": "aprovar"}).get_data(as_text=True)
+    assert "Aprovar este pedido?" in passo and 'class="btn-aprovar" type="submit" name="confirmado"' in passo
+    aprovado = post(admin, f"/autorizacoes/{aprovar}/decidir", {"decisao": "aprovar", "confirmado": "1"})
+    assert "resultado=executada" in aprovado.headers["Location"]  # motivo opcional ao aprovar
