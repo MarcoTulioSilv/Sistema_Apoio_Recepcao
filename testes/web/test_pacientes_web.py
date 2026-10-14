@@ -83,6 +83,8 @@ def test_edicao_dos_dados_com_versao(
     assert f'value="{dados["nome"]}"' in formulario and 'name="inicio"' not in formulario  # o início é do período
     assert 'name="versao" value="1"' in formulario
     assert post(recepcao, "/cadastro/conferir/cpf", {"cpf": cpf, "paciente_id": str(pid)}).get_data(as_text=True) == ""
+    parcial = f"{cpf[:3]}.{cpf[3:6]}"  # busca enquanto digita: CPF pelo começo, com pontuação
+    assert f'data-paciente="{pid}"' in post(recepcao, "/pacientes/lista", {"termo": parcial}).get_data(as_text=True)
     base = {"nome": dados["nome"], "prontuario": dados["prontuario"], "cpf": cpf, "naturalidade_uf": "GO"}
     resposta = post(recepcao, f"/pacientes/{pid}/editar", {**base, "bairro": "Centro", "versao": "1"})
     assert resposta.headers["Location"] == f"/pacientes/{pid}?resultado=atualizado"

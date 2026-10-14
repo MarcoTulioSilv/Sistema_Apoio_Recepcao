@@ -211,13 +211,14 @@ class PacienteService(Protocol):
         ...
 
     def buscar(self, contexto: Contexto, termo: str) -> list[Identificacao]:
-        """Pelo nome (contém, sem caixa e acento), ou pelo prontuário, CPF ou CNS exatos. Termo com menos de 2
-        caracteres não busca. Anulados nunca aparecem."""
+        """Pelo nome (contém, sem caixa e acento), pelo começo do prontuário, ou pelo começo do CPF ou do CNS (a
+        partir de 3 dígitos, com ou sem pontuação). Termo com menos de 2 caracteres não busca. Anulados nunca
+        aparecem."""
         ...
 
     def listar(self, contexto: Contexto, termo: str = "", deslocamento: int = 0, limite: int = 30) -> PaginaPacientes:
         """A lista da tela de pacientes, página a página, em ordem de nome. Termo com menos de 2 caracteres lista
-        todos; com mais, filtra como o buscar (o prontuário casa pelo começo). Auditada só a quantidade (DD-10)."""
+        todos; com mais, filtra como o buscar. Auditada só a quantidade (DD-10)."""
         ...
 
     def ver_ficha(self, contexto: Contexto, paciente_id: int) -> Ficha:

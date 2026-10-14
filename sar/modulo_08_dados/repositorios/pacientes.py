@@ -115,14 +115,16 @@ class RepositorioPacienteSQL:
         consulta = select(Paciente).where(Paciente.data_nascimento == data, Paciente.anulado_em.is_(None))
         return [_paciente(p) for p in self._s.scalars(consulta.order_by(Paciente.id))]
 
-    def buscar(self, nome: str | None, exato: str | None, limite: int, deslocamento: int = 0) -> list[PacienteGravado]:
+    def buscar(
+        self, nome: str | None, prontuario: str | None, numero: str | None, limite: int, deslocamento: int = 0
+    ) -> list[PacienteGravado]:
         condicoes: list[ColumnElement[bool]] = []
         if nome is not None:
             condicoes.append(Paciente.nome.like(f"%{_escapar_like(nome)}%", escape="\\"))
-        if exato is not None:
-            condicoes.append(Paciente.prontuario.like(f"{_escapar_like(exato)}%", escape="\\"))
-            if exato.isascii() and exato.isdigit():  # CPF e CNS são colunas ASCII: termo com acento nem chega nelas
-                condicoes += [Paciente.cpf == exato, Paciente.cns == exato]
+        if prontuario is not None:
+            condicoes.append(Paciente.prontuario.like(f"{_escapar_like(prontuario)}%", escape="\\"))
+        if numero is not None:  # só dígitos ASCII: o termo com acento nem chega às colunas ASCII de CPF e CNS
+            condicoes += [Paciente.cpf.like(f"{numero}%"), Paciente.cns.like(f"{numero}%")]
         consulta = select(Paciente).where(Paciente.anulado_em.is_(None))
         if condicoes:
             consulta = consulta.where(or_(*condicoes))

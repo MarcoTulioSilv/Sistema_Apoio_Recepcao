@@ -342,3 +342,24 @@ def test_busca_por_nome_com_acento(cadastro_zerado: dict[str, int], engine_web: 
     pid = cadastro.pacientes.criar(recepcao, replace(dados_completos(fabrica), nome="José Conceição Fictício"), INICIO)
     for termo in ("José", "conceição", "JOSE CONCEICAO"):
         assert [i.paciente_id for i in cadastro.pacientes.buscar(recepcao, termo)] == [pid], termo
+
+
+@pytest.mark.requisito("RF-107")
+def test_busca_por_cpf_e_cns_pelo_comeco(cadastro_zerado: dict[str, int], engine_web: Engine, fabrica: Fabrica) -> None:
+    """Defeito encontrado em uso: com a busca andando enquanto se digita, CPF e CNS só achavam o número inteiro, e
+    a lista ficava vazia até o último dígito."""
+    cadastro = montar(engine_web)
+    recepcao = pessoa(cadastro_zerado)
+    dados = dados_completos(fabrica)
+    pid = cadastro.pacientes.criar(recepcao, dados, INICIO)
+    outro = cadastro.pacientes.criar(recepcao, dados_completos(fabrica), INICIO)
+    assert dados.cpf is not None and dados.cns is not None
+    cpf, cns = dados.cpf, dados.cns
+    formatado = f"{cpf[:3]}.{cpf[3:6]}.{cpf[6:9]}-{cpf[9:]}"
+    for termo in (cpf, formatado, cpf[:6], formatado[:7], cpf[:3], cns, cns[:8], f"{cns[:3]} {cns[3:7]}"):
+        achados = [i.paciente_id for i in cadastro.pacientes.listar(recepcao, termo).itens]
+        assert pid in achados, termo
+        assert [i.paciente_id for i in cadastro.pacientes.buscar(recepcao, termo)] == achados, termo
+    assert outro not in [i.paciente_id for i in cadastro.pacientes.listar(recepcao, cpf).itens]
+    sem_numero = cadastro.pacientes.listar(recepcao, cpf[:2]).itens  # 2 dígitos ainda não buscam CPF nem CNS
+    assert pid not in [i.paciente_id for i in sem_numero]  # (o prontuário da fábrica começa por "F")
