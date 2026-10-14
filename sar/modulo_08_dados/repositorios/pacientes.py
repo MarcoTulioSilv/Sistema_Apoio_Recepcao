@@ -120,7 +120,9 @@ class RepositorioPacienteSQL:
         if nome is not None:
             condicoes.append(Paciente.nome.like(f"%{_escapar_like(nome)}%", escape="\\"))
         if exato is not None:
-            condicoes += [Paciente.prontuario == exato, Paciente.cpf == exato, Paciente.cns == exato]
+            condicoes.append(Paciente.prontuario == exato)
+            if exato.isascii() and exato.isdigit():  # CPF e CNS são colunas ASCII: termo com acento nem chega nelas
+                condicoes += [Paciente.cpf == exato, Paciente.cns == exato]
         if not condicoes:
             return []
         consulta = select(Paciente).where(or_(*condicoes), Paciente.anulado_em.is_(None))

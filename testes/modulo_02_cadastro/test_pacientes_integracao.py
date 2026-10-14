@@ -311,3 +311,34 @@ def test_anulado_nao_existe_para_os_outros_modulos(
     assert executar(lambda uow: leitura.periodo_aberto_em(uow, pid, INICIO)) is None
     assert executar(lambda uow: leitura.data_obito(uow, pid)) is None
     assert executar(lambda uow: leitura.pacientes_com_periodo_aberto_em(uow, INICIO)) == []
+
+
+@pytest.mark.requisito("DEC-55", "DD-10", "RNF-605")
+def test_busca_e_ficha_sao_auditadas_sem_o_termo(
+    cadastro_zerado: dict[str, int], engine_web: Engine, fabrica: Fabrica
+) -> None:
+    """DDS §4.2: busca auditada só com a quantidade; ver a ficha também é auditado (DEC-55)."""
+    cadastro = montar(engine_web)
+    recepcao = pessoa(cadastro_zerado)
+    dados = dados_completos(fabrica)
+    pid = cadastro.pacientes.criar(recepcao, dados, INICIO)
+    assert dados.nome is not None
+    cadastro.pacientes.buscar(recepcao, dados.nome)
+    cadastro.pacientes.ver_ficha(recepcao, pid)
+    assert auditorias(engine_web, "cadastro.paciente.buscar") == [("None", '{"quantidade":[null,1]}')]
+    assert auditorias(engine_web, "cadastro.paciente.ver_ficha") == [(str(pid), "None")]
+    with engine_web.connect() as c:
+        leituras = "'cadastro.paciente.buscar', 'cadastro.paciente.ver_ficha'"
+        textos = c.execute(text(f"SELECT COALESCE(alteracoes, '') FROM auditoria WHERE operacao IN ({leituras})"))  # noqa: S608
+        assert all(dados.nome not in linha for (linha,) in textos)
+
+
+@pytest.mark.requisito("RF-107")
+def test_busca_por_nome_com_acento(cadastro_zerado: dict[str, int], engine_web: Engine, fabrica: Fabrica) -> None:
+    """Defeito encontrado ao auditar a busca: o termo ia também às colunas ASCII de CPF e CNS, e um nome com acento
+    ("José") derrubava a consulta no MySQL."""
+    cadastro = montar(engine_web)
+    recepcao = pessoa(cadastro_zerado)
+    pid = cadastro.pacientes.criar(recepcao, replace(dados_completos(fabrica), nome="José Conceição Fictício"), INICIO)
+    for termo in ("José", "conceição", "JOSE CONCEICAO"):
+        assert [i.paciente_id for i in cadastro.pacientes.buscar(recepcao, termo)] == [pid], termo

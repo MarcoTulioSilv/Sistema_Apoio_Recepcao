@@ -497,6 +497,10 @@ class ServicoPacientes:
 
         def operacao(uow: UnidadeDeTrabalho) -> list[Identificacao]:
             achados = uow.repositorio(RepositorioPaciente).buscar(limpo, exato, LIMITE_BUSCA)
+            # DDS §4.2: auditada só a quantidade; o termo pode ser nome ou CPF e não vai à trilha (DD-10).
+            self._auditoria.registrar(
+                uow, contexto, "cadastro.paciente.buscar", "paciente", None, {"quantidade": (None, len(achados))}
+            )
             return [_identificacao(p) for p in achados]
 
         return self._executar(operacao)
@@ -510,6 +514,9 @@ class ServicoPacientes:
             paciente = repositorio.por_id(paciente_id)
             if paciente is None or paciente.anulado_em is not None:
                 raise NaoEncontrado()
+            self._auditoria.registrar(
+                uow, contexto, "cadastro.paciente.ver_ficha", "paciente", str(paciente_id)
+            )  # DEC-55
             dados = dados_de(paciente.campos)
             periodos = repositorio.periodos(paciente_id)
             telefones = repositorio.telefones(paciente_id)
