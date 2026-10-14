@@ -2,16 +2,19 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
-from dataclasses import fields
+from collections.abc import Callable, Sequence
+from dataclasses import dataclass, fields
 from datetime import date, timedelta
+from typing import Literal
 
 from sar.modulo_01_acesso.contrato import AuditService, PermissionGuard
 from sar.modulo_02_cadastro.contrato import (
     CoberturaFicha,
     ContatoFicha,
     DadosCobertura,
+    DadosContato,
     DadosPaciente,
+    DadosTelefone,
     EnderecoSugerido,
     Ficha,
     Identificacao,
@@ -110,6 +113,38 @@ def _triade(c: CamposPaciente | DadosPaciente) -> tuple[str, date, str] | None:
     return chave_triade(c.nome, c.data_nascimento, c.nome_mae)
 
 
+@dataclass(frozen=True, slots=True)
+class _TelefoneLimpo:
+    ddd: str
+    numero: str
+    tipo: str
+
+
+def _telefones_limpos(telefones: Sequence[DadosTelefone], posicao: dict[str, int]) -> list[_TelefoneLimpo]:
+    """Regras do telefone antes da transação, com a posição no erro; número repetido no mesmo dono é recusado."""
+    limpos: list[_TelefoneLimpo] = []
+    for i, telefone in enumerate(telefones):
+        try:
+            ddd, numero = validar_telefone(telefone.ddd, telefone.numero, telefone.tipo)
+        except RegraViolada as erro:
+            raise RegraViolada(erro.codigo, {**posicao, "telefone": i}) from None
+        if any((t.ddd, t.numero) == (ddd, numero) for t in limpos):
+            raise RegraViolada("telefone.repetido", {**posicao, "telefone": i})
+        limpos.append(_TelefoneLimpo(ddd, numero, telefone.tipo.value))
+    return limpos
+
+
+def _contatos_limpos(contatos: Sequence[DadosContato]) -> list[tuple[str, str | None, list[_TelefoneLimpo]]]:
+    limpos = []
+    for j, contato in enumerate(contatos):
+        try:
+            nome, parentesco = validar_contato(contato.nome, contato.parentesco)
+        except RegraViolada as erro:
+            raise RegraViolada(erro.codigo, {"contato": j}) from None
+        limpos.append((nome, parentesco, _telefones_limpos(contato.telefones, {"contato": j})))
+    return limpos
+
+
 def _com_unicidade[R](chamada: Callable[[], R]) -> R:
     """Duas gravações simultâneas que a verificação prévia não viu: a restrição do banco barra a segunda
     (INV-02, INV-07, INV-09, INV-15)."""
@@ -196,6 +231,8 @@ class ServicoPacientes:
         inicio: date | None,
         confirmar_duplicidade: bool = False,
         cobertura: DadosCobertura | None = None,
+        telefones: Sequence[DadosTelefone] = (),
+        contatos: Sequence[DadosContato] = (),
     ) -> int:
         GUARDA.exigir(contexto, "cadastro.paciente.criar")
         dados = normalizar(dados, hoje_na_clinica(contexto))
@@ -207,6 +244,8 @@ class ServicoPacientes:
         carteirinha = (
             validar_cobertura(cobertura.tipo, cobertura.convenio_id, cobertura.carteirinha) if cobertura else None
         )
+        telefones_limpos = _telefones_limpos(telefones, {})
+        contatos_limpos = _contatos_limpos(contatos)
         cep_verificado = _cep_existe(self._cep, dados.cep)
 
         def operacao(uow: UnidadeDeTrabalho) -> int:
@@ -225,6 +264,7 @@ class ServicoPacientes:
             )
             if cobertura is not None:
                 self._gravar_cobertura(uow, contexto, periodo_id, cobertura, carteirinha, inicio)
+            self._gravar_telefones_e_contatos(uow, contexto, paciente_id, telefones_limpos, contatos_limpos)
             self._eliminar_rascunho(uow, contexto)
             return paciente_id
 
@@ -264,6 +304,36 @@ class ServicoPacientes:
             return versao + 1
 
         return _com_unicidade(lambda: self._executar(operacao))
+
+    def _gravar_telefones_e_contatos(
+        self,
+        uow: UnidadeDeTrabalho,
+        contexto: Contexto,
+        paciente_id: int,
+        telefones: list[_TelefoneLimpo],
+        contatos: list[tuple[str, str | None, list[_TelefoneLimpo]]],
+    ) -> None:
+        """Mesma trilha do ContatoService: um registro por contato e por telefone (INV-12: um dono só)."""
+        repositorio = uow.repositorio(RepositorioPaciente)
+
+        def telefone(dono_paciente: int | None, contato_id: int | None, t: _TelefoneLimpo) -> None:
+            telefone_id = repositorio.criar_telefone(dono_paciente, contato_id, t.ddd, t.numero, t.tipo)
+            self._auditoria.registrar(
+                uow, contexto, "cadastro.telefone.gerir", "telefone", str(telefone_id),
+                {"paciente_id": (None, dono_paciente), "contato_id": (None, contato_id), "ddd": (None, t.ddd),
+                 "numero": (None, t.numero), "tipo": (None, t.tipo)},
+            )  # fmt: skip
+
+        for t in telefones:
+            telefone(paciente_id, None, t)
+        for nome, parentesco, telefones_do_contato in contatos:
+            contato_id = repositorio.criar_contato(paciente_id, nome, parentesco)
+            self._auditoria.registrar(
+                uow, contexto, "cadastro.contato.gerir", "contato", str(contato_id),
+                {"paciente_id": (None, paciente_id), "nome": (None, nome), "parentesco": (None, parentesco)},
+            )  # fmt: skip
+            for t in telefones_do_contato:
+                telefone(None, contato_id, t)
 
     def _eliminar_rascunho(self, uow: UnidadeDeTrabalho, contexto: Contexto) -> None:
         """§6.6: o rascunho de quem salvou o cadastro é eliminado na mesma transação."""
@@ -350,6 +420,20 @@ class ServicoPacientes:
             {"periodo_id": (None, periodo_id), "inicio": (None, inicio), "tipo": (None, cobertura.tipo.value),
              "convenio_id": (None, cobertura.convenio_id), "carteirinha": (None, carteirinha)},
         )  # fmt: skip
+
+    def conferir_documento(
+        self, contexto: Contexto, campo: Literal["cpf", "cns"], valor: str, paciente_id: int | None = None
+    ) -> int | None:
+        if not (
+            GUARDA.pode(contexto, "cadastro.paciente.criar") or GUARDA.pode(contexto, "cadastro.paciente.atualizar")
+        ):
+            raise AcessoNegado()
+        dados = DadosPaciente(cpf=valor) if campo == "cpf" else DadosPaciente(cns=valor)
+        limpo: str | None = getattr(normalizar(dados, hoje_na_clinica(contexto)), campo)
+        if limpo is None:
+            return None
+        outro = self._executar(lambda uow: uow.repositorio(RepositorioPaciente).quem_usa(campo, limpo))
+        return outro if outro != paciente_id else None
 
     def verificar_cep(self, contexto: Contexto, paciente_id: int) -> bool:
         GUARDA.exigir(contexto, "cadastro.paciente.atualizar")

@@ -57,6 +57,10 @@ class RepositorioMunicipioSQL:
         linha = self._s.get(Municipio, codigo)
         return _municipio(linha) if linha is not None else None
 
+    def da_uf(self, uf: str) -> list[DadosMunicipio]:
+        consulta = select(Municipio).where(Municipio.uf == uf).order_by(Municipio.nome)
+        return [_municipio(linha) for linha in self._s.scalars(consulta)]
+
     def buscar(self, termo: str, uf: str | None, limite: int) -> list[DadosMunicipio]:
         consulta = select(Municipio).where(Municipio.nome.like(f"{_escapar_like(termo)}%", escape="\\"))
         if uf is not None:

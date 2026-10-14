@@ -14,6 +14,14 @@ from sar.modulo_01_acesso.contrato import (
     SessionManager,
     UsuarioService,
 )
+from sar.modulo_02_cadastro.contrato import (
+    AnulacaoService,
+    CepService,
+    ContatoService,
+    EventoService,
+    PacienteService,
+    RascunhoService,
+)
 from sar.modulo_06_configuracao.contrato import ConfiguracaoService
 
 
@@ -47,3 +55,9 @@ class ServicosWeb:
     autorizacoes: AutorizacaoService
     auditoria: AuditService
     integridade: IntegridadeService
+    pacientes: PacienteService
+    contatos: ContatoService
+    rascunhos: RascunhoService
+    cep: CepService
+    eventos: EventoService
+    anulacao: AnulacaoService

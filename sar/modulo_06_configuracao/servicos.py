@@ -170,6 +170,11 @@ class ServicoConfiguracao:
         GUARDA.exigir(contexto, "config.consultar")
         return self._executar(lambda uow: _buscar_municipios(uow, termo, uf))
 
+    def listar_municipios(self, contexto: Contexto, uf: str) -> list[Municipio]:
+        GUARDA.exigir(contexto, "config.consultar")
+        sigla = validar_uf(uf)
+        return self._executar(lambda uow: [_municipio(m) for m in uow.repositorio(RepositorioMunicipio).da_uf(sigla)])
+
     def incluir_convenio(self, contexto: Contexto, nome: str) -> int:
         GUARDA.exigir(contexto, "config.convenio.gerir")
         limpo = validar_nome_convenio(nome)

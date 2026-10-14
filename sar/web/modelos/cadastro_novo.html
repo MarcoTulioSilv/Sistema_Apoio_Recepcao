@@ -1,0 +1,149 @@
+{% extends "layout.html" %}
+{% from "_cadastro_campos.html" import texto, telefone, contato %}
+{% block cabeca %}
+  {# htmx sem histórico local: nada da ficha fica guardado no navegador (R-33); estilos do indicador vêm do sar.css #}
+  <meta name="htmx-config" content="history:false includeIndicatorCSS:false">
+  <script src="{{ url_for('static', filename='js/htmx-4.0.0.min.js') }}" defer></script>
+  <script src="{{ url_for('static', filename='js/cadastro.js') }}" defer></script>
+{% endblock %}
+{% block titulo_pagina %}Novo cadastro{% endblock %}
+{% block subtitulo %}Na ordem da ficha de papel. Só nome, prontuário e início do tratamento são obrigatórios{% endblock %}
+{% block conteudo %}
+<form class="flex flex-col" method="post" action="{{ url_for('cadastro.salvar') }}" data-tela="cadastro" novalidate
+      hx-post="{{ url_for('cadastro.rascunho') }}" hx-trigger="change delay:800ms" hx-target="#rascunho-estado" hx-swap="innerHTML">
+  <div class="flex flex-col gap-4">
+    {% include "_avisos.html" %}
+    {% if aviso %}<p class="m-0 w-full rounded-lg bg-normal-fundo p-3 text-normal" role="status">{{ aviso }}</p>{% endif %}
+
+    {% if candidatos %}
+    <section class="flex flex-col gap-3 rounded-xl border border-borda-forte bg-superficie p-4" role="alert" aria-labelledby="triade-t">
+      <h2 id="triade-t" class="m-0 text-lg">Já existe paciente com o mesmo nome, nascimento e nome da mãe</h2>
+      <p class="m-0">Confira se não é a mesma pessoa. Se for, não salve: o cadastro já existe.</p>
+      <div class="overflow-x-auto">
+        <table class="w-full border-collapse text-left">
+          <caption class="sr-only">Cadastros com a mesma tríade</caption>
+          <thead><tr class="text-sm text-suave">
+            <th scope="col" class="px-3 py-2 font-bold">Nome</th>
+            <th scope="col" class="px-3 py-2 font-bold">Prontuário</th>
+            <th scope="col" class="px-3 py-2 font-bold">Nascimento</th>
+            <th scope="col" class="px-3 py-2 font-bold">Nome da mãe</th>
+          </tr></thead>
+          <tbody>
+          {% for c in candidatos %}
+            <tr class="border-t border-linha"><td class="px-3 py-2">{{ c.nome }}</td><td class="px-3 py-2 numero">{{ c.prontuario }}</td><td class="px-3 py-2">{{ c.data_nascimento.strftime('%d/%m/%Y') if c.data_nascimento else '' }}</td><td class="px-3 py-2">{{ c.nome_mae or '' }}</td></tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <div><button class="btn-secundario" type="submit" name="acao" value="confirmar">É outra pessoa: salvar o paciente</button></div>
+    </section>
+    {% endif %}
+
+    <fieldset class="cartao m-0 flex flex-col gap-3 px-5 pt-3 pb-5">
+      <legend class="px-1.5 text-[17px] font-bold">Identificação</legend>
+      <div class="grid grid-cols-1 gap-x-4 gap-y-3 md:grid-cols-3">
+        {{ texto("nome", "Nome completo", v, erros, obrigatorio=True) }}
+        {{ texto("prontuario", "Prontuário", v, erros, obrigatorio=True) }}
+        {{ texto("inicio", "Início do tratamento", v, erros, tipo="date", obrigatorio=True) }}
+        {{ texto("nascimento", "Data de nascimento", v, erros, tipo="date") }}
+        <div class="campo">
+          <label class="rotulo" for="sexo">Sexo</label>
+          <select class="entrada" id="sexo" name="sexo">
+            <option value="">Não informado</option>
+            <option value="F"{% if v.get('sexo') == 'F' %} selected{% endif %}>Feminino</option>
+            <option value="M"{% if v.get('sexo') == 'M' %} selected{% endif %}>Masculino</option>
+          </select>
+        </div>
+        {{ texto("mae", "Nome da mãe", v, erros) }}
+        {{ texto("cpf", "CPF", v, erros, extra='inputmode="numeric" hx-post="' ~ url_for('cadastro.conferir', campo='cpf') ~ '" hx-trigger="change" hx-target="#cpf-erro"') }}
+        {{ texto("cns", "Cartão do SUS (CNS)", v, erros, extra='inputmode="numeric" hx-post="' ~ url_for('cadastro.conferir', campo='cns') ~ '" hx-trigger="change" hx-target="#cns-erro"') }}
+        {{ texto("rg", "RG", v, erros) }}
+        {{ texto("rg_orgao", "Órgão emissor do RG", v, erros) }}
+        <div class="campo">
+          <label class="rotulo" for="naturalidade_uf">Naturalidade: UF</label>
+          <select class="entrada" id="naturalidade_uf" name="naturalidade_uf" hx-get="{{ url_for('cadastro.municipios') }}" hx-trigger="change" hx-target="#naturalidade">
+            {% for uf in ufs %}<option{% if uf == uf_naturalidade %} selected{% endif %}>{{ uf }}</option>{% endfor %}
+          </select>
+        </div>
+        <div class="campo">
+          <label class="rotulo" for="naturalidade">Naturalidade: município</label>
+          <select class="entrada" id="naturalidade" name="naturalidade" aria-describedby="naturalidade-erro"{% if erros.get('naturalidade') %} aria-invalid="true"{% endif %}>
+            {% with municipios=municipios_naturalidade, selecionado=v.get('naturalidade', '') %}{% include "_opcoes_municipios.html" %}{% endwith %}
+          </select>
+          <p class="ajuda-erro m-0" id="naturalidade-erro" aria-live="polite">{{ erros.get('naturalidade', '') }}</p>
+        </div>
+      </div>
+    </fieldset>
+
+    <fieldset class="cartao m-0 flex flex-col gap-3 px-5 pt-3 pb-5">
+      <legend class="px-1.5 text-[17px] font-bold">Endereço</legend>
+      <div class="campo max-w-xs">
+        <label class="rotulo" for="cep">CEP</label>
+        <span class="flex gap-2">
+          <input class="entrada" id="cep" name="cep" type="text" inputmode="numeric" value="{{ v.get('cep', '') }}" aria-describedby="cep-erro"{% if erros.get('cep') %} aria-invalid="true"{% endif %}
+                 hx-post="{{ url_for('cadastro.cep') }}" hx-trigger="change" hx-target="#endereco-campos" hx-swap="outerHTML">
+          <button type="button" class="btn-secundario shrink-0" hx-post="{{ url_for('cadastro.cep') }}" hx-target="#endereco-campos" hx-swap="outerHTML">Buscar</button>
+        </span>
+        <p class="ajuda-erro m-0" id="cep-erro" aria-live="polite">{{ erros.get('cep', '') }}</p>
+      </div>
+      {% include "_endereco_campos.html" %}
+    </fieldset>
+
+    <fieldset class="cartao m-0 flex flex-col gap-3 px-5 pt-3 pb-5">
+      <legend class="px-1.5 text-[17px] font-bold">Tratamento</legend>
+      <div class="grid grid-cols-1 gap-x-4 gap-y-3 md:grid-cols-3">
+        <div class="campo">
+          <label class="rotulo" for="cobertura">Cobertura</label>
+          <select class="entrada" id="cobertura" name="cobertura">
+            <option value="">Não informada</option>
+            <option value="sus"{% if v.get('cobertura') == 'sus' %} selected{% endif %}>SUS</option>
+            <option value="convenio"{% if v.get('cobertura') == 'convenio' %} selected{% endif %}>Convênio</option>
+          </select>
+        </div>
+        <div class="campo">
+          <label class="rotulo" for="convenio">Convênio</label>
+          <select class="entrada" id="convenio" name="convenio" aria-describedby="convenio-erro"{% if erros.get('convenio') %} aria-invalid="true"{% endif %}>
+            <option value="">Selecione…</option>
+            {% for c in convenios %}<option value="{{ c.id }}"{% if v.get('convenio') == c.id|string %} selected{% endif %}>{{ c.nome }}</option>{% endfor %}
+          </select>
+          <p class="ajuda-erro m-0" id="convenio-erro" aria-live="polite">{{ erros.get('convenio', '') }}</p>
+        </div>
+        {{ texto("carteirinha", "Carteirinha do convênio", v, erros) }}
+      </div>
+    </fieldset>
+
+    <fieldset class="cartao m-0 flex flex-col gap-3 px-5 pt-3 pb-5">
+      <legend class="px-1.5 text-[17px] font-bold">Telefones do paciente</legend>
+      <div class="flex flex-col gap-3" data-lista-telefones>
+        {% for linha in telefones %}{{ telefone(linha, tipos_telefone, erros) }}{% endfor %}
+      </div>
+      <button type="button" class="btn-secundario self-start" data-acao="adicionar-telefone">Adicionar telefone</button>
+    </fieldset>
+
+    <fieldset class="cartao m-0 flex flex-col gap-3 px-5 pt-3 pb-5">
+      <legend class="px-1.5 text-[17px] font-bold">Contatos</legend>
+      <p class="m-0 text-sm text-suave">Pessoas para avisar ou chamar: familiares, responsáveis, vizinhos.</p>
+      <div class="flex flex-col gap-3" data-lista-contatos>
+        {% for bloco in contatos %}{{ contato(bloco, parentescos, tipos_telefone, erros) }}{% endfor %}
+      </div>
+      <button type="button" class="btn-secundario self-start" data-acao="adicionar-contato">Adicionar contato</button>
+    </fieldset>
+
+    {# Modelos para o script acrescentar linhas; __P__ vira o prefixo da linha nova. #}
+    <template id="modelo-telefone">{{ telefone({"prefixo": "__P__", "ddd": "", "numero": "", "tipo": "celular"}, tipos_telefone, {}) }}</template>
+    <template id="modelo-contato">{{ contato({"prefixo": "__P__", "nome": "", "parentesco": "", "telefones": [{"prefixo": "__P__-tel-0", "ddd": "", "numero": "", "tipo": "celular"}]}, parentescos, tipos_telefone, {}) }}</template>
+  </div>
+
+  <footer class="sticky bottom-0 mt-4 flex flex-wrap items-center justify-between gap-4 border-t border-borda bg-superficie px-6 py-4">
+    <div class="flex flex-col gap-1">
+      <p class="m-0 text-base font-bold" aria-live="polite">Mínimo para salvar o paciente: <span class="numero" data-contagem="minimo">—</span> de 3</p>
+      <p class="m-0 max-w-[62ch] text-sm text-suave">Nome, prontuário e início do tratamento. O resto pode ficar para depois e vira pendência. <span id="rascunho-estado" aria-live="polite"></span></p>
+    </div>
+    <div class="flex flex-wrap gap-3">
+      {% if tem_rascunho %}<button type="submit" class="btn-neutro min-h-12" name="acao" value="descartar">Descartar rascunho</button>{% endif %}
+      <button type="submit" class="btn-secundario min-h-12" name="acao" value="rascunho">Salvar rascunho</button>
+      <button type="submit" class="btn-primario min-h-12" name="acao" value="paciente" data-acao="salvar-paciente">Salvar paciente</button>
+    </div>
+  </footer>
+</form>
+{% endblock %}

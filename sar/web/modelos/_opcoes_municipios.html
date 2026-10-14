@@ -1,0 +1,2 @@
+<option value="">Selecione…</option>
+{% for m in municipios %}<option value="{{ m.codigo }}"{% if selecionado == m.codigo %} selected{% endif %}>{{ m.nome }}</option>{% endfor %}

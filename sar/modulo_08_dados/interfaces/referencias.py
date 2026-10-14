@@ -39,6 +39,10 @@ class RepositorioConvenio(Protocol):
 class RepositorioMunicipio(Protocol):
     def por_codigo(self, codigo: str) -> DadosMunicipio | None: ...
 
+    def da_uf(self, uf: str) -> list[DadosMunicipio]:
+        """Todos os da UF, em ordem de nome (Goiás tem 246)."""
+        ...
+
     def buscar(self, termo: str, uf: str | None, limite: int) -> list[DadosMunicipio]:
         """Nomes que começam pelo termo, sem distinção de caixa nem de acento, em ordem de nome."""
         ...

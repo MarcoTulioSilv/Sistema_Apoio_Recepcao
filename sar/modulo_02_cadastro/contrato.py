@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date, datetime
 from enum import Enum
-from typing import Protocol
+from typing import Literal, Protocol
 
 from sar.modulo_06_configuracao.contrato import Municipio
 from sar.nucleo.contexto import Contexto
@@ -86,6 +86,20 @@ def vinculo_do_evento(periodo_id: int) -> str:
     """Vínculo opaco da ingestão aberta a partir do evento pendente (§6.5): o MOD-04 guarda sem interpretar e
     devolve no DocumentoIncorporado."""
     return f"{PREFIXO_VINCULO_EVENTO}{periodo_id}"
+
+
+@dataclass(frozen=True, slots=True)
+class DadosTelefone:
+    ddd: str
+    numero: str
+    tipo: TipoTelefone
+
+
+@dataclass(frozen=True, slots=True)
+class DadosContato:
+    nome: str
+    parentesco: str | None
+    telefones: tuple[DadosTelefone, ...] = ()
 
 
 # ------------------------------------------------------------------ saídas
@@ -170,9 +184,13 @@ class PacienteService(Protocol):
         inicio: date | None,
         confirmar_duplicidade: bool = False,
         cobertura: DadosCobertura | None = None,
+        telefones: Sequence[DadosTelefone] = (),
+        contatos: Sequence[DadosContato] = (),
     ) -> int:
-        """Cria o paciente com o período aberto desde o início do tratamento (P-03) e, se informada, a cobertura
-        vigente desde o mesmo dia. As RegraViolada da cobertura são as do registrar_cobertura.
+        """Cria o paciente com o período aberto desde o início do tratamento (P-03) e, se informados, a cobertura
+        vigente desde o mesmo dia, os telefones e os contatos, tudo numa transação. As RegraViolada da cobertura são
+        as do registrar_cobertura; as de telefone e contato trazem a posição no detalhe ({"telefone": i} ou
+        {"contato": j, "telefone": k}) e incluem "telefone.repetido" no mesmo dono.
 
         RegraViolada: mínimo da P-03 ("P-03.minimo", com os faltantes), campo inválido, residência fora de Goiás
         ("municipio.fora_de_goias"), município inexistente, prontuário, CPF ou CNS repetido ("prontuario.repetido",
@@ -207,6 +225,13 @@ class PacienteService(Protocol):
         repetido), "cobertura.antes_do_periodo", "cobertura.depois_do_fim", "cobertura.convenio",
         "cobertura.sus_sem_convenio", "cobertura.convenio_inativo". NaoEncontrado (período, convênio ou paciente
         anulado)."""
+        ...
+
+    def conferir_documento(
+        self, contexto: Contexto, campo: Literal["cpf", "cns"], valor: str, paciente_id: int | None = None
+    ) -> int | None:
+        """Conferência imediata na tela (DD-22): RegraViolada se o dígito não confere; devolve o id do paciente
+        que já usa o número (outro que não o paciente_id), ou None. Vazio é aceito e devolve None."""
         ...
 
     def verificar_cep(self, contexto: Contexto, paciente_id: int) -> bool:

@@ -77,6 +77,11 @@ class ConfiguracaoService(Protocol):
         """O mesmo de Referencias.buscar_municipios, para a interface (config.consultar)."""
         ...
 
+    def listar_municipios(self, contexto: Contexto, uf: str) -> list[Municipio]:
+        """Todos os municípios da UF, em ordem de nome, para os campos de escolha (config.consultar).
+        RegraViolada("municipio.uf")."""
+        ...
+
     def incluir_convenio(self, contexto: Contexto, nome: str) -> int:
         """Administração (RF-1204). RegraViolada se o nome for inválido ou já existir, sem distinção de caixa e
         de acento. Auditada."""
