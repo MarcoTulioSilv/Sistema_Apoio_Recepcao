@@ -216,9 +216,17 @@ class PacienteService(Protocol):
         aparecem."""
         ...
 
-    def listar(self, contexto: Contexto, termo: str = "", deslocamento: int = 0, limite: int = 30) -> PaginaPacientes:
+    def listar(
+        self,
+        contexto: Contexto,
+        termo: str = "",
+        deslocamento: int = 0,
+        limite: int = 30,
+        registrar_na_trilha: bool = True,
+    ) -> PaginaPacientes:
         """A lista da tela de pacientes, página a página, em ordem de nome. Termo com menos de 2 caracteres lista
-        todos; com mais, filtra como o buscar. Auditada só a quantidade (DD-10)."""
+        todos; com mais, filtra como o buscar. Auditada só a quantidade (DD-10), e só quando registrar_na_trilha:
+        a tela registra a abertura e a busca confirmada, não cada filtragem nem cada página da rolagem (DD-90)."""
         ...
 
     def ver_ficha(self, contexto: Contexto, paciente_id: int) -> Ficha:

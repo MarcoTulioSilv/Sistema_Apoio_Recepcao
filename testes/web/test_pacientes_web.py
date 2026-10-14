@@ -284,13 +284,40 @@ def test_lista_paginada_e_filtro(
         .count("data-paciente=")
         == 30
     )
-    with engine_web.connect() as c:
-        quantidades = (
-            c.execute(text("SELECT alteracoes FROM auditoria WHERE operacao = 'cadastro.paciente.buscar' ORDER BY id"))
-            .scalars()
-            .all()
-        )
-    assert '{"quantidade":[null,30]}' in quantidades and '{"quantidade":[null,2]}' in quantidades
-    assert all("lista" not in q.lower() for q in quantidades)  # o termo não vai à trilha
     ti = cliente(engine_web, criar_usuario, "ti")
     assert post(ti, "/pacientes/lista", {"termo": ""}).status_code == 403
+
+
+@pytest.mark.requisito("DD-90", "DD-10", "DEC-55")
+def test_trilha_registra_a_abertura_e_a_busca_confirmada_nao_cada_tecla(
+    criar_usuario: CriarUsuario, cadastro_zerado: dict[str, int], engine_web: Engine, fabrica: Fabrica
+) -> None:
+    """Defeito encontrado em uso: a filtragem enquanto se digita gerava um registro na trilha a cada pausa (oito em
+    oito segundos numa busca simples)."""
+    recepcao = cliente(engine_web, criar_usuario, "recepcao")
+    for i in range(32):
+        post(recepcao, "/cadastro/novo", {"nome": f"Trilha {i:02d} Fictício", "prontuario": f"T{i:03d}",
+                                          "inicio": "2026-01-05", "acao": "paciente"})  # fmt: skip
+
+    def buscas() -> list[str]:
+        with engine_web.connect() as c:
+            sql = "SELECT alteracoes FROM auditoria WHERE operacao = 'cadastro.paciente.buscar' ORDER BY id"
+            return [str(a) for a in c.execute(text(sql)).scalars()]
+
+    get(recepcao, "/pacientes")  # abrir a tela: um registro
+    assert buscas() == ['{"quantidade":[null,30]}']
+    for parcial in ("tri", "tril", "trilh", "trilha 0"):  # digitando: nenhum
+        post(recepcao, "/pacientes/lista", {"termo": parcial})
+    post(recepcao, "/pacientes/lista?deslocamento=30", {"termo": ""})  # rolagem: nenhum
+    assert len(buscas()) == 1
+    curto = post(recepcao, "/pacientes/lista", {"termo": "tr"})
+    assert curto.status_code == 204 and curto.get_data() == b""  # 1 ou 2 caracteres: a lista fica como está
+    post(recepcao, "/pacientes/buscar", {"termo": "trilha 0"})  # busca confirmada (Enter ou Buscar): um
+    assert buscas() == ['{"quantidade":[null,30]}', '{"quantidade":[null,10]}']
+    assert all("trilha" not in b.lower() for b in buscas())  # o termo não vai à trilha
+    with engine_web.connect() as c:
+        pid = c.execute(text("SELECT id FROM paciente ORDER BY nome LIMIT 1")).scalar_one()
+    get(recepcao, f"/pacientes/{pid}")  # o acesso ao dado continua auditado na ficha
+    with engine_web.connect() as c:
+        sql = "SELECT COUNT(*) FROM auditoria WHERE operacao = 'cadastro.paciente.ver_ficha' AND entidade_id = :p"
+        assert c.execute(text(sql), {"p": str(pid)}).scalar_one() == 1

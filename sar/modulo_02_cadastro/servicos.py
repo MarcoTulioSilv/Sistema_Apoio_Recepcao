@@ -503,7 +503,14 @@ class ServicoPacientes:
 
         return self._executar(operacao)
 
-    def listar(self, contexto: Contexto, termo: str = "", deslocamento: int = 0, limite: int = 30) -> PaginaPacientes:
+    def listar(
+        self,
+        contexto: Contexto,
+        termo: str = "",
+        deslocamento: int = 0,
+        limite: int = 30,
+        registrar_na_trilha: bool = True,
+    ) -> PaginaPacientes:
         GUARDA.exigir(contexto, "cadastro.paciente.buscar")
         limpo = " ".join(termo.split())
         nome, prontuario, numero = (None, None, None) if len(limpo) < MINIMO_BUSCA else self._termos(limpo)
@@ -513,9 +520,10 @@ class ServicoPacientes:
         def operacao(uow: UnidadeDeTrabalho) -> PaginaPacientes:
             achados = uow.repositorio(RepositorioPaciente).buscar(nome, prontuario, numero, limite + 1, deslocamento)
             pagina = achados[:limite]
-            self._auditoria.registrar(
-                uow, contexto, "cadastro.paciente.buscar", "paciente", None, {"quantidade": (None, len(pagina))}
-            )
+            if registrar_na_trilha:  # DD-90: a abertura e a busca confirmada, não cada tecla
+                self._auditoria.registrar(
+                    uow, contexto, "cadastro.paciente.buscar", "paciente", None, {"quantidade": (None, len(pagina))}
+                )
             return PaginaPacientes(tuple(_identificacao(p) for p in pagina), len(achados) > limite)
 
         return self._executar(operacao)

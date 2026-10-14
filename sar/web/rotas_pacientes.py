@@ -142,8 +142,11 @@ def _form() -> dict[str, str]:
 PAGINA = 30
 
 
-def _lista(contexto: Contexto, termo: str, deslocamento: int) -> dict[str, Any]:
-    pagina = _servicos().pacientes.listar(contexto, termo, deslocamento, PAGINA)
+MINIMO_FILTRO = 3  # DD-90: com 1 ou 2 caracteres, a filtragem enquanto se digita não roda
+
+
+def _lista(contexto: Contexto, termo: str, deslocamento: int, registrar: bool) -> dict[str, Any]:
+    pagina = _servicos().pacientes.listar(contexto, termo, deslocamento, PAGINA, registrar_na_trilha=registrar)
     return {
         "termo": termo, "pacientes": pagina.itens, "tem_mais": pagina.tem_mais,
         "proximo": deslocamento + len(pagina.itens), "pode": _permissoes(contexto),
@@ -155,7 +158,7 @@ def busca() -> str:
     """A lista de todos, em ordem de nome, página a página; o filtro anda enquanto a pessoa digita."""
     contexto = contexto_atual()
     resultado = RESULTADOS["anulado"] if request.args.get("anulado") else None
-    return render_template("pacientes_busca.html", resultado=resultado, **_lista(contexto, "", 0))
+    return render_template("pacientes_busca.html", resultado=resultado, **_lista(contexto, "", 0, registrar=True))
 
 
 @bp.post("/buscar")
@@ -163,16 +166,21 @@ def buscar() -> str:
     """Sem JavaScript: o formulário envia o termo e a tela volta com a primeira página filtrada. Por POST, o termo
     (nome ou CPF) não vai para a URL nem para o log de acesso (DD-81)."""
     contexto = contexto_atual()
-    return render_template("pacientes_busca.html", **_lista(contexto, request.form.get("termo", ""), 0))
+    termo = request.form.get("termo", "")
+    return render_template("pacientes_busca.html", **_lista(contexto, termo, 0, registrar=True))  # busca confirmada
 
 
 @bp.post("/lista")
-def lista() -> str:
-    """Fragmento do htmx: as linhas de uma página, com a linha que pede a próxima quando aparece na rolagem."""
+def lista() -> Response | str:
+    """Fragmento do htmx: as linhas de uma página, com a linha que pede a próxima quando aparece na rolagem. Não
+    entra na trilha: filtragem enquanto se digita e página da rolagem não são ações da pessoa (DD-90)."""
     contexto = contexto_atual()
+    termo = request.form.get("termo", "")
+    if 0 < len(termo.strip()) < MINIMO_FILTRO:
+        return Response(status=204)  # o htmx não troca nada com 204: a lista fica como está
     deslocamento = request.args.get("deslocamento", "0")
     inicio = int(deslocamento) if deslocamento.isdigit() else 0
-    return render_template("_linhas_pacientes.html", **_lista(contexto, request.form.get("termo", ""), inicio))
+    return render_template("_linhas_pacientes.html", **_lista(contexto, termo, inicio, registrar=False))
 
 
 # ------------------------------------------------------------------ ficha

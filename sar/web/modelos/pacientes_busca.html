@@ -11,7 +11,7 @@
   <form class="flex flex-wrap items-end gap-2" method="post" action="{{ url_for('pacientes.buscar') }}" role="search">
     <label class="campo"><span class="rotulo">Nome, prontuário, CPF ou CNS</span>
       <input class="entrada w-80" id="termo" type="search" name="termo" value="{{ termo }}" autocomplete="off"
-             hx-post="{{ url_for('pacientes.lista') }}" hx-trigger="input changed delay:300ms, search" hx-target="#linhas" hx-swap="innerHTML"></label>
+             hx-post="{{ url_for('pacientes.lista') }}" hx-trigger="input changed delay:500ms, search" hx-target="#linhas" hx-swap="innerHTML"></label>
     <button class="btn-primario" type="submit">Buscar</button>
   </form>
   <div class="cartao overflow-x-auto">
