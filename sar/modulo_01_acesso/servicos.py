@@ -854,6 +854,18 @@ class ServicoAutorizacoes:
 
         return self._executar(operacao)
 
+    def finalizadas(self, contexto: Contexto, limite: int = 50) -> list[SolicitacaoResumo]:
+        decide = GUARDA.pode(contexto, "acesso.autorizacao.decidir")
+        if not decide:
+            GUARDA.exigir(contexto, "acesso.autorizacao.solicitar")
+        solicitante = None if decide else contexto.usuario_id
+
+        def operacao(uow: UnidadeDeTrabalho) -> list[SolicitacaoResumo]:
+            linhas = uow.repositorio(RepositorioAutorizacao).finalizadas(limite, solicitante)
+            return [self._resumo(uow, s) for s in linhas]
+
+        return self._executar(operacao)
+
     def minhas(self, contexto: Contexto) -> list[SolicitacaoResumo]:
         GUARDA.exigir(contexto, "acesso.autorizacao.solicitar")
         return self._executar(

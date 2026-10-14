@@ -20,6 +20,7 @@ autorizacoes = Blueprint("autorizacoes", __name__, url_prefix="/autorizacoes")
 trilha = Blueprint("trilha", __name__, url_prefix="/trilha")
 integridade = Blueprint("integridade", __name__, url_prefix="/integridade")
 FUSO = ZoneInfo("America/Sao_Paulo")
+LIMITE_FINALIZADAS = 50
 
 ESTADOS = {
     "pendente": "Pendente",
@@ -68,7 +69,12 @@ def _pagina_autorizacoes(contexto: Contexto, **dados: Any) -> str:
     return render_template(
         "autorizacoes.html",
         pendentes=servicos.autorizacoes.pendentes(contexto) if decide else [],
-        minhas=servicos.autorizacoes.minhas(contexto) if pede else [],
+        # Quem decide vê a fila e todas as finalizadas; quem pede, as suas pendentes e finalizadas.
+        minhas=[s for s in servicos.autorizacoes.minhas(contexto) if s.estado == "pendente"]
+        if pede and not decide
+        else [],
+        finalizadas=servicos.autorizacoes.finalizadas(contexto, LIMITE_FINALIZADAS) if decide or pede else [],
+        limite_finalizadas=LIMITE_FINALIZADAS,
         decide=decide,
         estados=ESTADOS,
         fuso=FUSO,

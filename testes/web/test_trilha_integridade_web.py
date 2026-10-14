@@ -218,3 +218,38 @@ def test_decisao_em_dois_passos_sem_javascript(
     assert "Aprovar este pedido?" in passo and 'class="btn-aprovar" type="submit" name="confirmado"' in passo
     aprovado = post(admin, f"/autorizacoes/{aprovar}/decidir", {"decisao": "aprovar", "confirmado": "1"})
     assert "resultado=executada" in aprovado.headers["Location"]  # motivo opcional ao aprovar
+
+
+@pytest.mark.requisito("RF-1008", "DEC-42")
+def test_finalizadas_da_mais_recente_para_a_mais_antiga(
+    criar_usuario: CriarUsuario, engine_web: Engine, monkeypatch: pytest.MonkeyPatch, limpar: None
+) -> None:
+    monkeypatch.setitem(sar.composicao.EXECUTORES_AUTORIZAVEIS, ANULAR, ExecutorFalso())
+    admin_id = criar_usuario("webt_adm7", perfil="administracao")
+    rita, ana = criar_usuario("webt_r7"), criar_usuario("webt_r8")
+    servico = ServicoAutorizacoes(
+        montar_executor(engine_web, montar_barramento(RelogioSistema())), ServicoAuditoria(), {ANULAR: ExecutorFalso()}
+    )
+
+    def em(usuario: int, perfil: Perfil, hora: int) -> Contexto:
+        return Contexto(usuario, perfil, None, "10.0.0.5", datetime(2026, 10, 14, hora, 0, tzinfo=UTC), "d" * 32)
+
+    antiga = servico.solicitar(em(rita, Perfil.RECEPCAO, 10), ANULAR, "50", {"paciente_id": 50}, "Pedido A")
+    meio = servico.solicitar(em(ana, Perfil.RECEPCAO, 10), ANULAR, "51", {"paciente_id": 51}, "Pedido B")
+    nova = servico.solicitar(em(rita, Perfil.RECEPCAO, 10), ANULAR, "52", {"paciente_id": 52}, "Pedido C")
+    pendente = servico.solicitar(em(rita, Perfil.RECEPCAO, 10), ANULAR, "53", {"paciente_id": 53}, "Pedido D")
+    servico.recusar(em(admin_id, Perfil.ADMINISTRACAO, 11), antiga, "Não")
+    servico.aprovar(em(admin_id, Perfil.ADMINISTRACAO, 12), meio)
+    servico.cancelar(em(rita, Perfil.RECEPCAO, 13), nova)
+    app = montar(engine_web)
+
+    tela = get(logado(app, "webt_adm7"), "/autorizacoes").get_data(as_text=True)
+    ordem = re.findall(r'data-finalizada="([0-9a-f]{32})"', tela)
+    assert ordem == [nova, meio, antiga]  # cancelada às 13h, aprovada às 12h, negada às 11h
+    assert "Finalizadas" in tela and f'data-solicitacao="{pendente}"' in tela  # a fila continua acima
+    assert f'data-finalizada="{pendente}"' not in tela
+
+    da_rita = get(logado(app, "webt_r7"), "/autorizacoes").get_data(as_text=True)
+    assert re.findall(r'data-finalizada="([0-9a-f]{32})"', da_rita) == [nova, antiga]  # só as dela
+    assert "Minhas solicitações finalizadas" in da_rita and f'data-minha="{pendente}"' in da_rita
+    assert "Negada" in da_rita and "Cancelada" in da_rita

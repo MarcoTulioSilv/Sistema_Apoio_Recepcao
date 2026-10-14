@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
 from sar.modulo_08_dados.interfaces.autorizacoes import DadosSolicitacao
@@ -85,6 +85,14 @@ class RepositorioAutorizacaoSQL:
             .values(estado=estado, decisor_id=decisor_id, decidida_em=_banco(em), motivo_decisao=motivo),
             execution_options={"synchronize_session": False},
         )
+
+    def finalizadas(self, limite: int, solicitante_id: int | None = None) -> list[DadosSolicitacao]:
+        quando = func.coalesce(SolicitacaoAutorizacao.decidida_em, SolicitacaoAutorizacao.solicitada_em)
+        consulta = select(SolicitacaoAutorizacao).where(SolicitacaoAutorizacao.estado != "pendente")
+        if solicitante_id is not None:
+            consulta = consulta.where(SolicitacaoAutorizacao.solicitante_id == solicitante_id)
+        consulta = consulta.order_by(quando.desc(), SolicitacaoAutorizacao.solicitada_em.desc()).limit(limite)
+        return [_dados(linha) for linha in self._s.scalars(consulta)]
 
     def listar(self, estado: str | None = None, solicitante_id: int | None = None) -> list[DadosSolicitacao]:
         consulta = select(SolicitacaoAutorizacao).order_by(SolicitacaoAutorizacao.solicitada_em)
