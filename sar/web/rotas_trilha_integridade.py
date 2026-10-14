@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import date
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from flask import Blueprint, current_app, redirect, render_template, request, url_for
 from werkzeug.wrappers import Response
@@ -18,12 +19,13 @@ GUARDA = PermissionGuard()
 autorizacoes = Blueprint("autorizacoes", __name__, url_prefix="/autorizacoes")
 trilha = Blueprint("trilha", __name__, url_prefix="/trilha")
 integridade = Blueprint("integridade", __name__, url_prefix="/integridade")
+FUSO = ZoneInfo("America/Sao_Paulo")
 
 ESTADOS = {
     "pendente": "Pendente",
     "executada": "Executada",
     "invalidada": "Invalidada: o registro mudou desde o pedido",
-    "recusada": "Recusada",
+    "recusada": "Reprovada",
     "cancelada": "Cancelada",
 }
 RESULTADOS = {
@@ -32,12 +34,14 @@ RESULTADOS = {
         "O registro mudou desde o pedido: a solicitação foi invalidada sem executar. "
         "Peça de novo, se ainda for preciso."
     ),
-    "recusada": "Solicitação recusada.",
+    "recusada": "Solicitação reprovada.",
     "cancelada": "Solicitação cancelada.",
 }
 ERROS = {
     "autorizacao.ja_decidida": "Esta solicitação já foi decidida.",
-    "autorizacao.motivo_obrigatorio": "Informe o motivo, com até 500 caracteres.",
+    "autorizacao.motivo_obrigatorio": (
+        "Informe o motivo, com até 500 caracteres. Para reprovar, o comentário é obrigatório."
+    ),
     "autorizacao.motivo": "O motivo pode ter até 500 caracteres.",
     "aviso.explicacao_obrigatoria": "Informe a explicação recebida do TI.",
     "aviso.ja_encerrado": "Este aviso já foi encerrado.",
@@ -69,13 +73,29 @@ def _pagina_autorizacoes(contexto: Contexto, **dados: Any) -> str:
         minhas=servicos.autorizacoes.minhas(contexto) if pede else [],
         decide=decide,
         estados=ESTADOS,
+        fuso=FUSO,
         **dados,
     )
+
+
+def _pagina_analise(contexto: Contexto, solicitacao_id: str, **dados: Any) -> str:
+    """Tela de análise de um pedido: a justificativa e, para quem decide, aprovar ou reprovar com comentário."""
+    solicitacao = _servicos().autorizacoes.detalhe(contexto, solicitacao_id)
+    decide = GUARDA.pode(contexto, "acesso.autorizacao.decidir") and solicitacao.estado == "pendente"
+    return render_template(
+        "autorizacao.html", s=solicitacao, decide=decide, estados=ESTADOS, fuso=FUSO,
+        propria=solicitacao.solicitante_id == contexto.usuario_id, **dados,
+    )  # fmt: skip
 
 
 @autorizacoes.get("")
 def lista() -> str:
     return _pagina_autorizacoes(contexto_atual(), resultado=RESULTADOS.get(request.args.get("resultado", "")))
+
+
+@autorizacoes.get("/<solicitacao_id>")
+def analise(solicitacao_id: str) -> str:
+    return _pagina_analise(contexto_atual(), solicitacao_id)
 
 
 def _decidir(acao: str, solicitacao_id: str) -> Response | str:
@@ -92,7 +112,7 @@ def _decidir(acao: str, solicitacao_id: str) -> Response | str:
             servico.cancelar(contexto, solicitacao_id)
             estado = "cancelada"
     except RegraViolada as erro:
-        return _pagina_autorizacoes(contexto, erro=ERROS.get(erro.codigo, erro.codigo))
+        return _pagina_analise(contexto, solicitacao_id, erro=ERROS.get(erro.codigo, erro.codigo), comentario=motivo)
     return redirect(url_for("autorizacoes.lista", resultado=estado))
 
 

@@ -131,14 +131,57 @@ def test_administracao_aprova_pela_fila(
 
     admin = logado(app, "webt_adm3")
     fila = get(admin, "/autorizacoes").get_data(as_text=True)
-    assert "Anular o cadastro 42" in fila and "Cadastro duplicado" in fila
+    assert "Anular o cadastro 42" in fila
     solicitacao = re.search(r'data-solicitacao="([0-9a-f]{32})"', fila)
-    assert solicitacao is not None
+    assert solicitacao is not None and f'href="/autorizacoes/{solicitacao.group(1)}"' in fila  # botão Analisar
+    analise = get(admin, f"/autorizacoes/{solicitacao.group(1)}").get_data(as_text=True)
+    assert "Cadastro duplicado" in analise and ">Aprovar<" in analise and ">Reprovar<" in analise
     sem_motivo = post(admin, f"/autorizacoes/{solicitacao.group(1)}/recusar", {"motivo": ""})
-    assert "Informe o motivo" in sem_motivo.get_data(as_text=True)
+    corpo = sem_motivo.get_data(as_text=True)
+    assert "Para reprovar, o comentário é obrigatório" in corpo and "Análise do pedido" in corpo  # volta à análise
     aprovada = post(admin, f"/autorizacoes/{solicitacao.group(1)}/aprovar", {"motivo": ""})
     assert "resultado=executada" in aprovada.headers["Location"]
     assert "Nenhuma solicitação aguardando" in get(admin, "/autorizacoes").get_data(as_text=True)
 
     minhas = get(logado(app, "webt_r3"), "/autorizacoes").get_data(as_text=True)
     assert "Minhas solicitações" in minhas and "Executada" in minhas and "Aguardando decisão" not in minhas
+
+
+@pytest.mark.requisito("RF-1008", "DEC-42", "RNF-623")
+def test_tela_de_analise_do_pedido(
+    criar_usuario: CriarUsuario, engine_web: Engine, monkeypatch: pytest.MonkeyPatch, limpar: None
+) -> None:
+    monkeypatch.setitem(sar.composicao.EXECUTORES_AUTORIZAVEIS, ANULAR, ExecutorFalso())
+    criar_usuario("webt_adm4", perfil="administracao")
+    recepcao = criar_usuario("webt_r4")
+    criar_usuario("webt_r5")
+    criar_usuario("webt_ti4", perfil="ti")
+    pedidos = ServicoAutorizacoes(
+        montar_executor(engine_web, montar_barramento(RelogioSistema())), ServicoAuditoria(), {ANULAR: ExecutorFalso()}
+    )
+    contexto = Contexto(recepcao, Perfil.RECEPCAO, None, "10.0.0.5", datetime.now(UTC), "d" * 32)
+    primeiro = pedidos.solicitar(contexto, ANULAR, "42", {"paciente_id": 42}, "Cadastro duplicado")
+    segundo = pedidos.solicitar(contexto, ANULAR, "43", {"paciente_id": 43}, "Paciente errado")
+    app = montar(engine_web)
+
+    autora = logado(app, "webt_r4")
+    minhas = get(autora, "/autorizacoes").get_data(as_text=True)
+    assert f'href="/autorizacoes/{primeiro}"' in minhas and "Ver detalhes" in minhas
+    detalhe = get(autora, f"/autorizacoes/{primeiro}").get_data(as_text=True)
+    assert "Cadastro duplicado" in detalhe and "Cancelar este pedido" in detalhe and ">Aprovar<" not in detalhe
+
+    admin = logado(app, "webt_adm4")
+    reprovado = post(admin, f"/autorizacoes/{primeiro}/recusar", {"motivo": "Não é duplicata: são irmãos gêmeos"})
+    assert "resultado=recusada" in reprovado.headers["Location"]
+    assert "Solicitação reprovada." in get(admin, reprovado.headers["Location"]).get_data(as_text=True)
+    decidido = get(autora, f"/autorizacoes/{primeiro}").get_data(as_text=True)
+    assert "Reprovada" in decidido and "Não é duplicata: são irmãos gêmeos" in decidido
+    assert "Cancelar este pedido" not in decidido
+
+    post(autora, f"/autorizacoes/{segundo}/cancelar", {})
+    assert "Cancelada" in get(autora, f"/autorizacoes/{segundo}").get_data(as_text=True)
+
+    assert get(logado(app, "webt_r5"), f"/autorizacoes/{primeiro}").status_code == 404  # não é dela
+    assert get(admin, "/autorizacoes/" + "0" * 32).status_code == 404
+    assert get(admin, "/autorizacoes/nao-e-hex").status_code == 404
+    assert get(logado(app, "webt_ti4"), f"/autorizacoes/{primeiro}").status_code == 403

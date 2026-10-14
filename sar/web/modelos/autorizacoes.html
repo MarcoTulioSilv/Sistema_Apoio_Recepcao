@@ -8,25 +8,30 @@
   {% if decide %}
   <section class="flex flex-col gap-3" aria-labelledby="pendentes-t">
     <h2 id="pendentes-t" class="m-0 text-xl">Aguardando decisão</h2>
-    {% if not pendentes %}<p class="m-0 text-[15px] text-suave">Nenhuma solicitação aguardando decisão.</p>{% endif %}
-    {% for s in pendentes %}
-    <article class="cartao flex flex-col gap-3 p-5" data-solicitacao="{{ s.id }}" aria-labelledby="sol-{{ s.id }}">
-      <div class="flex flex-col gap-1">
-        <h3 id="sol-{{ s.id }}" class="m-0 text-lg">{{ s.descricao }}</h3>
-        <p class="m-0 text-[15px] text-suave">Pedida em {{ s.solicitada_em.strftime("%d/%m/%Y %H:%M") }} UTC · motivo: {{ s.motivo }}</p>
-      </div>
-      <div class="flex flex-wrap items-end gap-3">
-        <form class="flex flex-wrap items-end gap-2" method="post" action="{{ url_for('autorizacoes.aprovar', solicitacao_id=s.id) }}">
-          <label class="campo"><span class="rotulo">Observação (opcional)</span><input class="entrada" name="motivo" maxlength="500"></label>
-          <button class="btn-primario" type="submit">Aprovar<span class="sr-only"> {{ s.descricao }}</span></button>
-        </form>
-        <form class="flex flex-wrap items-end gap-2" method="post" action="{{ url_for('autorizacoes.recusar', solicitacao_id=s.id) }}">
-          <label class="campo"><span class="rotulo">Motivo da recusa</span><input class="entrada" name="motivo" maxlength="500" required></label>
-          <button class="btn-secundario" type="submit">Recusar<span class="sr-only"> {{ s.descricao }}</span></button>
-        </form>
-      </div>
-    </article>
-    {% endfor %}
+    {% if not pendentes %}<p class="m-0 text-[15px] text-suave">Nenhuma solicitação aguardando decisão.</p>
+    {% else %}
+    <div class="cartao overflow-x-auto">
+      <table class="w-full border-collapse text-left">
+        <caption class="sr-only">Solicitações aguardando decisão</caption>
+        <thead><tr class="text-sm text-suave">
+          <th scope="col" class="px-4 py-2 font-bold">Pedido</th>
+          <th scope="col" class="px-4 py-2 font-bold">Solicitante</th>
+          <th scope="col" class="px-4 py-2 font-bold">Pedida em</th>
+          <th scope="col" class="px-4 py-2 font-bold"><span class="sr-only">Ações</span></th>
+        </tr></thead>
+        <tbody>
+        {% for s in pendentes %}
+          <tr class="border-t border-linha" data-solicitacao="{{ s.id }}">
+            <td class="px-4 py-2.5">{{ s.descricao }}</td>
+            <td class="px-4 py-2.5">{{ s.solicitante_nome }}</td>
+            <td class="px-4 py-2.5">{{ s.solicitada_em.astimezone(fuso).strftime("%d/%m/%Y %H:%M") }}</td>
+            <td class="px-4 py-2.5 text-right"><a class="btn-primario" href="{{ url_for('autorizacoes.analise', solicitacao_id=s.id) }}">Analisar<span class="sr-only"> {{ s.descricao }}</span></a></td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% endif %}
   </section>
   {% endif %}
 
@@ -38,19 +43,17 @@
         <caption class="sr-only">Minhas solicitações</caption>
         <thead><tr class="text-sm text-suave">
           <th scope="col" class="px-4 py-2 font-bold">Pedido</th>
+          <th scope="col" class="px-4 py-2 font-bold">Pedida em</th>
           <th scope="col" class="px-4 py-2 font-bold">Situação</th>
           <th scope="col" class="px-4 py-2 font-bold"><span class="sr-only">Ações</span></th>
         </tr></thead>
         <tbody>
         {% for s in minhas %}
-          <tr class="border-t border-linha">
+          <tr class="border-t border-linha" data-minha="{{ s.id }}">
             <td class="px-4 py-2.5">{{ s.descricao }}</td>
-            <td class="px-4 py-2.5">{{ estados.get(s.estado, s.estado) }}{% if s.motivo_decisao %} — {{ s.motivo_decisao }}{% endif %}</td>
-            <td class="px-4 py-2.5 text-right">
-              {% if s.estado == "pendente" %}
-              <form method="post" action="{{ url_for('autorizacoes.cancelar', solicitacao_id=s.id) }}"><button class="btn-neutro" type="submit">Cancelar<span class="sr-only"> {{ s.descricao }}</span></button></form>
-              {% endif %}
-            </td>
+            <td class="px-4 py-2.5">{{ s.solicitada_em.astimezone(fuso).strftime("%d/%m/%Y %H:%M") }}</td>
+            <td class="px-4 py-2.5">{{ estados.get(s.estado, s.estado) }}</td>
+            <td class="px-4 py-2.5 text-right"><a class="btn-secundario" href="{{ url_for('autorizacoes.analise', solicitacao_id=s.id) }}">Ver detalhes<span class="sr-only"> {{ s.descricao }}</span></a></td>
           </tr>
         {% endfor %}
         </tbody>

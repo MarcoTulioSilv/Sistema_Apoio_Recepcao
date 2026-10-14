@@ -718,9 +718,10 @@ class ServicoAutorizacoes:
 
     def _resumo(self, uow: UnidadeDeTrabalho, s: DadosSolicitacao) -> SolicitacaoResumo:
         descricao = self._executor(s.tipo).descrever(uow, s.parametros)
+        solicitante = uow.repositorio(RepositorioUsuario).por_id(s.solicitante_id)
         return SolicitacaoResumo(
             s.id, s.tipo, s.entidade, s.entidade_id, descricao, s.motivo, s.solicitante_id, s.solicitada_em,
-            s.estado, s.decisor_id, s.decidida_em, s.motivo_decisao,
+            s.estado, s.decisor_id, s.decidida_em, s.motivo_decisao, solicitante.nome if solicitante else "",
         )  # fmt: skip
 
     def solicitar(
@@ -839,6 +840,19 @@ class ServicoAutorizacoes:
         return self._executar(
             lambda uow: [self._resumo(uow, s) for s in uow.repositorio(RepositorioAutorizacao).listar("pendente")]
         )
+
+    def detalhe(self, contexto: Contexto, solicitacao_id: str) -> SolicitacaoResumo:
+        decide = GUARDA.pode(contexto, "acesso.autorizacao.decidir")
+        if not decide and not GUARDA.pode(contexto, "acesso.autorizacao.solicitar"):
+            raise AcessoNegado()
+
+        def operacao(uow: UnidadeDeTrabalho) -> SolicitacaoResumo:
+            s = uow.repositorio(RepositorioAutorizacao).por_id(solicitacao_id)
+            if s is None or not (decide or s.solicitante_id == contexto.usuario_id):
+                raise NaoEncontrado()
+            return self._resumo(uow, s)
+
+        return self._executar(operacao)
 
     def minhas(self, contexto: Contexto) -> list[SolicitacaoResumo]:
         GUARDA.exigir(contexto, "acesso.autorizacao.solicitar")
