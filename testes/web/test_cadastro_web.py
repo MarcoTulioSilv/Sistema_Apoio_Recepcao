@@ -64,8 +64,11 @@ def test_salva_o_paciente_com_telefones_e_contato_numa_vez(
     )  # fmt: skip
     post(cliente, "/cadastro/rascunho", {"nome": dados["nome"]})
     resposta = post(cliente, "/cadastro/novo", {**dados, "acao": "paciente"})
-    assert resposta.status_code == 302 and f"criado={dados['prontuario']}" in resposta.headers["Location"]
-    assert "Paciente cadastrado" in get(cliente, resposta.headers["Location"]).get_data(as_text=True)
+    assert resposta.status_code == 302 and re.fullmatch(
+        r"/pacientes/\d+\?resultado=criado", resposta.headers["Location"]
+    )
+    ficha = get(cliente, resposta.headers["Location"]).get_data(as_text=True)  # vai direto para a ficha
+    assert "Paciente cadastrado." in ficha and dados["prontuario"] in ficha
     assert (contar(engine_web, "paciente"), contar(engine_web, "telefone"), contar(engine_web, "contato")) == (1, 2, 1)
     assert contar(engine_web, "cobertura") == 1 and contar(engine_web, "rascunho_cadastro") == 0
 

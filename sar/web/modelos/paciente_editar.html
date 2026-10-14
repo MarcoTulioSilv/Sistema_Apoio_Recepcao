@@ -1,0 +1,20 @@
+{% extends "layout.html" %}
+{% block cabeca %}
+  <meta name="htmx-config" content="history:false includeIndicatorCSS:false">
+  <script src="{{ url_for('static', filename='js/htmx-4.0.0.min.js') }}" defer></script>
+{% endblock %}
+{% block titulo_pagina %}Editar dados do paciente{% endblock %}
+{% block subtitulo %}Identificação e endereço. Nome e prontuário não podem ficar vazios{% endblock %}
+{% block conteudo %}
+<form class="flex flex-col gap-4" method="post" action="{{ url_for('pacientes.editar_enviar', paciente_id=paciente_id) }}" novalidate>
+  <input type="hidden" name="versao" value="{{ versao }}">
+  <input type="hidden" name="paciente_id" value="{{ paciente_id }}">
+  {% include "_avisos.html" %}
+  {% include "_fieldset_identificacao.html" %}
+  {% include "_fieldset_endereco.html" %}
+  <div class="flex flex-wrap gap-3">
+    <button class="btn-primario" type="submit">Salvar alterações</button>
+    <a class="btn-neutro" href="{{ url_for('pacientes.ficha', paciente_id=paciente_id) }}">Cancelar</a>
+  </div>
+</form>
+{% endblock %}

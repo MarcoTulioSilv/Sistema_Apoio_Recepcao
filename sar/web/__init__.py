@@ -50,6 +50,7 @@ class ItemMenu:
 # Cada item aparece só para quem pode a operação da tela (AD-20). As telas dos incrementos seguintes entram aqui.
 MENU: tuple[ItemMenu, ...] = (
     ItemMenu("Início", "acesso.inicio"),
+    ItemMenu("Pacientes", "pacientes.busca", (("cadastro.paciente.buscar", None),)),
     ItemMenu("Novo cadastro", "cadastro.novo", (("cadastro.paciente.criar", None),)),
     ItemMenu("Usuários", "usuarios.lista", (("acesso.usuario.consultar", None),)),
     ItemMenu(
@@ -102,6 +103,7 @@ def criar_app(servicos: ServicosWeb | None = None, config: ConfigWeb | None = No
     from sar.web.rotas_acesso import bp as acesso
     from sar.web.rotas_cadastro import bp as cadastro
     from sar.web.rotas_convenios import bp as convenios
+    from sar.web.rotas_pacientes import bp as pacientes
     from sar.web.rotas_parametros import bp as parametros
     from sar.web.rotas_saude import bp as saude
     from sar.web.rotas_trilha_integridade import autorizacoes, integridade, trilha
@@ -109,7 +111,17 @@ def criar_app(servicos: ServicosWeb | None = None, config: ConfigWeb | None = No
 
     app.register_blueprint(saude)
     if servicos is not None:
-        for blueprint in (acesso, cadastro, usuarios, parametros, convenios, autorizacoes, trilha, integridade):
+        for blueprint in (
+            acesso,
+            cadastro,
+            pacientes,
+            usuarios,
+            parametros,
+            convenios,
+            autorizacoes,
+            trilha,
+            integridade,
+        ):
             app.register_blueprint(blueprint)
 
     @app.before_request

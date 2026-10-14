@@ -77,7 +77,7 @@ def _hora(instante: datetime) -> str:
     return instante.astimezone(FUSO).strftime("%H:%M")
 
 
-def _municipios(contexto: Contexto, uf: str) -> list[Municipio]:
+def municipios_da_uf(contexto: Contexto, uf: str) -> list[Municipio]:
     return _servicos().configuracao.listar_municipios(contexto, uf)
 
 
@@ -89,10 +89,12 @@ def _pagina(contexto: Contexto, v: dict[str, str], **dados: Any) -> str:
         v=v,
         telefones=telefones_do_paciente(v),
         contatos=contatos(v),
-        municipios_go=_municipios(contexto, UF_RESIDENCIA),
+        municipios_go=municipios_da_uf(contexto, UF_RESIDENCIA),
         ufs=UFS,
         uf_naturalidade=uf_naturalidade if uf_naturalidade in UFS else UF_RESIDENCIA,
-        municipios_naturalidade=_municipios(contexto, uf_naturalidade if uf_naturalidade in UFS else UF_RESIDENCIA),
+        municipios_naturalidade=municipios_da_uf(
+            contexto, uf_naturalidade if uf_naturalidade in UFS else UF_RESIDENCIA
+        ),
         convenios=[c for c in configuracao.listar_convenios(contexto) if c.ativo],
         parentescos=PARENTESCOS,
         tipos_telefone=TIPOS_TELEFONE,
@@ -101,7 +103,7 @@ def _pagina(contexto: Contexto, v: dict[str, str], **dados: Any) -> str:
     )
 
 
-def _identificacao(contexto: Contexto, paciente_id: int) -> Identificacao | None:
+def identificacao_de(contexto: Contexto, paciente_id: int) -> Identificacao | None:
     try:
         ficha = _servicos().pacientes.ver_ficha(contexto, paciente_id)
     except NaoEncontrado:
@@ -110,7 +112,9 @@ def _identificacao(contexto: Contexto, paciente_id: int) -> Identificacao | None
     return Identificacao(ficha.paciente_id, d.nome or "", d.prontuario or "", d.data_nascimento, d.nome_mae)
 
 
-def _erro(contexto: Contexto, erro: RegraViolada, cadastro: Cadastro | None) -> tuple[dict[str, str], str | None]:
+def erro_do_formulario(
+    contexto: Contexto, erro: RegraViolada, cadastro: Cadastro | None
+) -> tuple[dict[str, str], str | None]:
     """Os erros por campo e o aviso geral, para a pessoa saber o que corrigir e onde."""
     if erro.codigo == "P-03.minimo":
         faltam = [FALTAM[c] for c in erro.detalhe.get("faltam", []) if c in FALTAM]
@@ -118,7 +122,7 @@ def _erro(contexto: Contexto, erro: RegraViolada, cadastro: Cadastro | None) -> 
         return campos, f"Para salvar o paciente falta: {', '.join(faltam)}. Sem isso, salve como rascunho."
     if erro.codigo in REPETIDOS:
         campo = REPETIDOS[erro.codigo]
-        dono = _identificacao(contexto, erro.detalhe["paciente_id"]) if "paciente_id" in erro.detalhe else None
+        dono = identificacao_de(contexto, erro.detalhe["paciente_id"]) if "paciente_id" in erro.detalhe else None
         quem = f" por {dono.nome}, prontuário {dono.prontuario}" if dono else ""
         return {campo: f"{NOMES_REPETIDOS[campo]} já está em uso{quem}."}, None
     if erro.codigo.endswith(".tamanho"):
@@ -134,11 +138,9 @@ def _erro(contexto: Contexto, erro: RegraViolada, cadastro: Cadastro | None) -> 
 @bp.get("/novo")
 def novo() -> str:
     contexto = _contexto()
-    criado = request.args.get("criado", "")
-    resultado = f"Paciente cadastrado: prontuário {criado}." if criado else None
-    retomado = _servicos().rascunhos.retomar(contexto) if not criado else None
+    retomado = _servicos().rascunhos.retomar(contexto)
     if retomado is None:
-        return _pagina(contexto, {}, resultado=resultado)
+        return _pagina(contexto, {})
     aviso = (
         f"Rascunho retomado, salvo às {_hora(retomado.atualizado_em)}"
         f" de {retomado.atualizado_em.astimezone(FUSO):%d/%m}."
@@ -164,17 +166,17 @@ def salvar() -> Response | str:
     cadastro: Cadastro | None = None
     try:
         cadastro = ler(v)
-        _servicos().pacientes.criar(
+        paciente_id = _servicos().pacientes.criar(
             contexto, cadastro.dados, cadastro.inicio, confirmar_duplicidade=acao == "confirmar",
             cobertura=cadastro.cobertura, telefones=cadastro.telefones, contatos=cadastro.contatos,
         )  # fmt: skip
     except ConfirmacaoNecessaria as alerta:
-        candidatos = [i for pid in alerta.dados.get("candidatos", []) if (i := _identificacao(contexto, pid))]
+        candidatos = [i for pid in alerta.dados.get("candidatos", []) if (i := identificacao_de(contexto, pid))]
         return _pagina(contexto, v, candidatos=candidatos)
     except RegraViolada as erro:
-        campos, geral = _erro(contexto, erro, cadastro)
+        campos, geral = erro_do_formulario(contexto, erro, cadastro)
         return _pagina(contexto, v, erros=campos, erro=geral or "Confira os campos marcados.")
-    return redirect(url_for("cadastro.novo", criado=(cadastro.dados.prontuario or "").strip()))
+    return redirect(url_for("pacientes.ficha", paciente_id=paciente_id, resultado="criado"))
 
 
 # ------------------------------------------------------------------ fragmentos do htmx
@@ -216,7 +218,7 @@ def cep() -> str:
     return render_template(
         "_endereco_campos.html",
         v=v,
-        municipios_go=_municipios(contexto, UF_RESIDENCIA),
+        municipios_go=municipios_da_uf(contexto, UF_RESIDENCIA),
         erros={},
         cep_mensagem=mensagem,
     )
@@ -230,12 +232,15 @@ def conferir(campo: str) -> str:
         raise NaoEncontrado()
     documento: Literal["cpf", "cns"] = "cpf" if campo == "cpf" else "cns"
     try:
-        dono = _servicos().pacientes.conferir_documento(contexto, documento, request.form.get(campo, ""))
+        proprio = request.form.get("paciente_id", "")  # na edição, o número do próprio paciente não é repetido
+        dono = _servicos().pacientes.conferir_documento(
+            contexto, documento, request.form.get(campo, ""), int(proprio) if proprio.isdigit() else None
+        )
     except RegraViolada as erro:
         return ERROS.get(erro.codigo, (None, ""))[1]
     if dono is None:
         return ""
-    quem = _identificacao(contexto, dono)
+    quem = identificacao_de(contexto, dono)
     complemento = f" por {quem.nome}, prontuário {quem.prontuario}" if quem else ""
     return f"{NOMES_REPETIDOS[campo]} já está em uso{complemento}."
 
@@ -246,4 +251,4 @@ def municipios() -> str:
     uf = request.args.get("naturalidade_uf", UF_RESIDENCIA)
     if uf not in UFS:
         raise NaoEncontrado()
-    return render_template("_opcoes_municipios.html", municipios=_municipios(contexto, uf), selecionado="")
+    return render_template("_opcoes_municipios.html", municipios=municipios_da_uf(contexto, uf), selecionado="")

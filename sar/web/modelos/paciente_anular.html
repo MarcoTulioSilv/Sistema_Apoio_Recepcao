@@ -1,0 +1,30 @@
+{% extends "layout.html" %}
+{% block titulo_pagina %}Anular cadastro{% endblock %}
+{% block subtitulo %}{{ ficha.dados.nome }} · prontuário {{ ficha.dados.prontuario }}{% endblock %}
+{% block conteudo %}
+<div class="flex max-w-3xl flex-col gap-4">
+  {% include "_avisos.html" %}
+  <section class="flex flex-col gap-2 rounded-xl border border-urgencia-borda bg-urgencia-fundo p-4" aria-labelledby="anular-t">
+    <h2 id="anular-t" class="m-0 text-lg text-urgencia">Só para cadastro criado por engano</h2>
+    <p class="m-0">Na aprovação, tudo o que está ligado a este cadastro é descartado, e os dados pessoais são apagados.
+      O prontuário, o CPF e o CNS ficam livres para o cadastro certo. Não há transferência para outro paciente.</p>
+  </section>
+  <section class="cartao flex flex-col gap-2 p-5" aria-labelledby="impacto-t">
+    <h2 id="impacto-t" class="m-0 text-xl">O que será descartado</h2>
+    {% set partes = impacto.contagens.items() | selectattr("1") | list %}
+    {% if partes %}
+    <ul class="m-0 pl-5">{% for nome, quantidade in partes | sort %}<li><span class="numero">{{ quantidade }}</span> {{ {"documentos": "documento(s)", "presencas": "presença(s)", "alocacoes": "alocação(ões)", "trocas": "troca(s)"}.get(nome, nome) }}</li>{% endfor %}</ul>
+    {% else %}<p class="m-0">Nada além do próprio cadastro, dos telefones e dos contatos.</p>{% endif %}
+    {% if impacto.alcanca_sessao_confirmada %}<p class="m-0"><span class="etiqueta-a">Alcança sessão já confirmada</span></p>{% endif %}
+    {% if impacto.alcanca_mes_fechado %}<p class="m-0"><span class="etiqueta-a">O mês fechado será marcado como alterado</span></p>{% endif %}
+  </section>
+  <form class="cartao flex flex-col gap-3 p-5" method="post" action="{{ url_for('pacientes.anular_enviar', paciente_id=ficha.paciente_id) }}">
+    <label class="campo"><span class="rotulo">Motivo da anulação</span>
+      <input class="entrada" type="text" name="motivo" value="{{ motivo or '' }}" maxlength="500" required></label>
+    <div class="flex flex-wrap gap-3">
+      <button class="btn-urgente" type="submit">{% if decide %}Anular o cadastro agora{% else %}Pedir a anulação à administração{% endif %}</button>
+      <a class="btn-neutro" href="{{ url_for('pacientes.ficha', paciente_id=ficha.paciente_id) }}">Voltar à ficha</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

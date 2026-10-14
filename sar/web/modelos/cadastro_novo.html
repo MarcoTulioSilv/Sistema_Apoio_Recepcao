@@ -39,55 +39,9 @@
     </section>
     {% endif %}
 
-    <fieldset class="cartao m-0 flex flex-col gap-3 px-5 pt-3 pb-5">
-      <legend class="px-1.5 text-[17px] font-bold">Identificação</legend>
-      <div class="grid grid-cols-1 gap-x-4 gap-y-3 md:grid-cols-3">
-        {{ texto("nome", "Nome completo", v, erros, obrigatorio=True) }}
-        {{ texto("prontuario", "Prontuário", v, erros, obrigatorio=True) }}
-        {{ texto("inicio", "Início do tratamento", v, erros, tipo="date", obrigatorio=True) }}
-        {{ texto("nascimento", "Data de nascimento", v, erros, tipo="date") }}
-        <div class="campo">
-          <label class="rotulo" for="sexo">Sexo</label>
-          <select class="entrada" id="sexo" name="sexo">
-            <option value="">Não informado</option>
-            <option value="F"{% if v.get('sexo') == 'F' %} selected{% endif %}>Feminino</option>
-            <option value="M"{% if v.get('sexo') == 'M' %} selected{% endif %}>Masculino</option>
-          </select>
-        </div>
-        {{ texto("mae", "Nome da mãe", v, erros) }}
-        {{ texto("cpf", "CPF", v, erros, extra='inputmode="numeric" hx-post="' ~ url_for('cadastro.conferir', campo='cpf') ~ '" hx-trigger="change" hx-target="#cpf-erro"') }}
-        {{ texto("cns", "Cartão do SUS (CNS)", v, erros, extra='inputmode="numeric" hx-post="' ~ url_for('cadastro.conferir', campo='cns') ~ '" hx-trigger="change" hx-target="#cns-erro"') }}
-        {{ texto("rg", "RG", v, erros) }}
-        {{ texto("rg_orgao", "Órgão emissor do RG", v, erros) }}
-        <div class="campo">
-          <label class="rotulo" for="naturalidade_uf">Naturalidade: UF</label>
-          <select class="entrada" id="naturalidade_uf" name="naturalidade_uf" hx-get="{{ url_for('cadastro.municipios') }}" hx-trigger="change" hx-target="#naturalidade">
-            {% for uf in ufs %}<option{% if uf == uf_naturalidade %} selected{% endif %}>{{ uf }}</option>{% endfor %}
-          </select>
-        </div>
-        <div class="campo">
-          <label class="rotulo" for="naturalidade">Naturalidade: município</label>
-          <select class="entrada" id="naturalidade" name="naturalidade" aria-describedby="naturalidade-erro"{% if erros.get('naturalidade') %} aria-invalid="true"{% endif %}>
-            {% with municipios=municipios_naturalidade, selecionado=v.get('naturalidade', '') %}{% include "_opcoes_municipios.html" %}{% endwith %}
-          </select>
-          <p class="ajuda-erro m-0" id="naturalidade-erro" aria-live="polite">{{ erros.get('naturalidade', '') }}</p>
-        </div>
-      </div>
-    </fieldset>
+    {% include "_fieldset_identificacao.html" %}
 
-    <fieldset class="cartao m-0 flex flex-col gap-3 px-5 pt-3 pb-5">
-      <legend class="px-1.5 text-[17px] font-bold">Endereço</legend>
-      <div class="campo max-w-xs">
-        <label class="rotulo" for="cep">CEP</label>
-        <span class="flex gap-2">
-          <input class="entrada" id="cep" name="cep" type="text" inputmode="numeric" value="{{ v.get('cep', '') }}" aria-describedby="cep-erro"{% if erros.get('cep') %} aria-invalid="true"{% endif %}
-                 hx-post="{{ url_for('cadastro.cep') }}" hx-trigger="change" hx-target="#endereco-campos" hx-swap="outerHTML">
-          <button type="button" class="btn-secundario shrink-0" hx-post="{{ url_for('cadastro.cep') }}" hx-target="#endereco-campos" hx-swap="outerHTML">Buscar</button>
-        </span>
-        <p class="ajuda-erro m-0" id="cep-erro" aria-live="polite">{{ erros.get('cep', '') }}</p>
-      </div>
-      {% include "_endereco_campos.html" %}
-    </fieldset>
+    {% include "_fieldset_endereco.html" %}
 
     <fieldset class="cartao m-0 flex flex-col gap-3 px-5 pt-3 pb-5">
       <legend class="px-1.5 text-[17px] font-bold">Tratamento</legend>

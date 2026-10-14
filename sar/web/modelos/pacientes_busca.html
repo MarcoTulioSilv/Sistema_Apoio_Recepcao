@@ -1,0 +1,43 @@
+{% extends "layout.html" %}
+{% block titulo_pagina %}Pacientes{% endblock %}
+{% block subtitulo %}Pelo nome, ou pelo prontuário, CPF ou CNS completos{% endblock %}
+{% block conteudo %}
+<div class="flex flex-col gap-4">
+  {% include "_avisos.html" %}
+  <section class="cartao flex flex-col gap-3 p-5" aria-labelledby="busca-t">
+    <h2 id="busca-t" class="m-0 text-xl">Buscar paciente</h2>
+    <form class="flex flex-wrap items-end gap-2" method="post" action="{{ url_for('pacientes.buscar') }}">
+      <label class="campo"><span class="rotulo">Nome, prontuário, CPF ou CNS</span>
+        <input class="entrada w-80" type="search" name="termo" value="{{ termo }}" minlength="2" required autocomplete="off"></label>
+      <button class="btn-primario" type="submit">Buscar</button>
+    </form>
+  </section>
+  {% if resultados is not none %}
+  <div class="cartao overflow-x-auto">
+    <table class="w-full border-collapse text-left">
+      <caption class="sr-only">Pacientes encontrados</caption>
+      <thead><tr class="text-sm text-suave">
+        <th scope="col" class="px-4 py-2 font-bold">Nome</th>
+        <th scope="col" class="px-4 py-2 font-bold">Prontuário</th>
+        <th scope="col" class="px-4 py-2 font-bold">Nascimento</th>
+        <th scope="col" class="px-4 py-2 font-bold">Nome da mãe</th>
+        {% if pode.ficha %}<th scope="col" class="px-4 py-2 font-bold"><span class="sr-only">Ações</span></th>{% endif %}
+      </tr></thead>
+      <tbody>
+      {% for p in resultados %}
+        <tr class="border-t border-linha" data-paciente="{{ p.paciente_id }}">
+          <td class="px-4 py-2.5">{{ p.nome }}</td>
+          <td class="px-4 py-2.5 numero">{{ p.prontuario }}</td>
+          <td class="px-4 py-2.5">{{ p.data_nascimento.strftime('%d/%m/%Y') if p.data_nascimento else '' }}</td>
+          <td class="px-4 py-2.5">{{ p.nome_mae or '' }}</td>
+          {% if pode.ficha %}<td class="px-4 py-2.5 text-right"><a href="{{ url_for('pacientes.ficha', paciente_id=p.paciente_id) }}">Abrir ficha<span class="sr-only"> de {{ p.nome }}</span></a></td>{% endif %}
+        </tr>
+      {% else %}
+        <tr class="border-t border-linha"><td class="px-4 py-2.5 text-suave" colspan="5">Nenhum paciente encontrado. Confira a grafia, ou busque pelo prontuário.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}
