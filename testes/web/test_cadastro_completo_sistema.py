@@ -1,13 +1,8 @@
-"""Cadastro completo cronometrado com dados fictícios (transição §5, Incremento 2).
-
-Mede o sistema, não a pessoa: o navegador digita num ritmo fixo, todos os campos da ficha, com o endereço vindo
-do CEP. Mostra que a tela e o servidor cabem com folga no RNF-403 (menos de 5 min) e no RNF-404 (localizar em
-menos de 15 s). A medição que vale para esses requisitos é com a recepcionista, na homologação (PT §6.5), pelo
-roteiro em docs/ROTEIRO_cadastro_cronometrado.md. Rodar com -s para ver os tempos."""
+"""Cadastro com todos os campos da ficha pelo navegador: endereço pelo CEP, naturalidade, convênio, dois telefones
+e um contato, e a localização do paciente depois. Verificação funcional, não cronometragem: o tempo do RNF-403 e
+do RNF-404 é medido por uma pessoa, pelo roteiro em docs/ROTEIRO_cadastro_cronometrado.md."""
 
 from __future__ import annotations
-
-import time
 
 import pytest
 from playwright.sync_api import Page, expect
@@ -22,21 +17,15 @@ from testes.web.conftest import entrar_no_navegador
 
 pytestmark = pytest.mark.sistema
 
-RITMO = 40  # ms por tecla: ~25 caracteres por segundo, de propósito acima do de uma pessoa
-LIMITE_CADASTRO = 300.0  # RNF-403
-LIMITE_LOCALIZAR = 15.0  # RNF-404
-
 
 def digitar(page: Page, rotulo: str, texto: str, exato: bool = False) -> None:
-    campo = page.get_by_label(rotulo, exact=exato)
-    campo.click()
-    campo.press_sequentially(texto, delay=RITMO)
+    page.get_by_label(rotulo, exact=exato).fill(texto)
 
 
 @pytest.mark.requisito("RNF-406")
-def test_cadastro_completo_e_localizacao_cronometrados(
+def test_cadastro_com_todos_os_campos_e_localizacao(
     criar_usuario: CriarUsuario, cadastro_zerado: dict[str, int], endereco: str, page: Page, engine_web: Engine,
-    fabrica: Fabrica, provedor_cep: ProvedorCepFalso, record_property: pytest.RecordProperty,
+    fabrica: Fabrica, provedor_cep: ProvedorCepFalso,
 ) -> None:  # fmt: skip
     convenio = montar(engine_web).configuracao.incluir_convenio(
         pessoa(cadastro_zerado, "admin", Perfil.ADMINISTRACAO), "Ipasgo"
@@ -47,7 +36,6 @@ def test_cadastro_completo_e_localizacao_cronometrados(
     criar_usuario("cron_rec")
     entrar_no_navegador(page, endereco, "cron_rec")
 
-    inicio = time.monotonic()
     page.get_by_role("link", name="Novo cadastro").click()
     digitar(page, "Nome completo", p.nome)
     digitar(page, "Prontuário", p.prontuario)
@@ -63,40 +51,31 @@ def test_cadastro_completo_e_localizacao_cronometrados(
     digitar(page, "CEP", "75800-000", exato=True)
     page.get_by_label("CEP", exact=True).press("Tab")
     expect(page.get_by_label("Logradouro")).to_have_value("Rua Fictícia")  # preenchido pelo CEP
-    page.locator('input[name="numero"]').press_sequentially("120", delay=RITMO)
+    page.locator('input[name="numero"]').press_sequentially("120")
     digitar(page, "Complemento", "Casa 2")
     page.get_by_label("Cobertura").select_option("convenio")
     page.get_by_label("Convênio", exact=True).select_option(str(convenio))
     digitar(page, "Carteirinha do convênio", "0012345678")
-    page.locator('input[name="tel-0-ddd"]').press_sequentially("64", delay=RITMO)
-    page.locator('input[name="tel-0-numero"]').press_sequentially("999990001", delay=RITMO)
+    page.locator('input[name="tel-0-ddd"]').press_sequentially("64")
+    page.locator('input[name="tel-0-numero"]').press_sequentially("999990001")
     page.get_by_role("button", name="Adicionar telefone", exact=True).click()
-    page.locator('input[name="tel-1-ddd"]').press_sequentially("64", delay=RITMO)
-    page.locator('input[name="tel-1-numero"]').press_sequentially("36310002", delay=RITMO)
+    page.locator('input[name="tel-1-ddd"]').press_sequentially("64")
+    page.locator('input[name="tel-1-numero"]').press_sequentially("36310002")
     page.locator('select[name="tel-1-tipo"]').select_option("recado")
-    page.locator('input[name="contato-0-nome"]').press_sequentially(fabrica.nome(), delay=RITMO)
+    page.locator('input[name="contato-0-nome"]').press_sequentially(fabrica.nome())
     page.locator('select[name="contato-0-parentesco"]').select_option("Filho ou filha")
-    page.locator('input[name="contato-0-tel-0-ddd"]').press_sequentially("64", delay=RITMO)
-    page.locator('input[name="contato-0-tel-0-numero"]').press_sequentially("988880003", delay=RITMO)
+    page.locator('input[name="contato-0-tel-0-ddd"]').press_sequentially("64")
+    page.locator('input[name="contato-0-tel-0-numero"]').press_sequentially("988880003")
     page.get_by_role("button", name="Salvar paciente").click()
     expect(page.get_by_role("status")).to_contain_text("Paciente cadastrado.")
-    cadastro = time.monotonic() - inicio
 
-    inicio = time.monotonic()
     page.get_by_role("link", name="Pacientes").click()
-    page.get_by_label("Nome, prontuário, CPF ou CNS").press_sequentially(p.nome.split()[0], delay=RITMO)
+    page.get_by_label("Nome, prontuário, CPF ou CNS").fill(p.nome.split()[0])
     page.get_by_role("link", name=f"Abrir ficha de {p.nome}").click()
     expect(page.get_by_role("heading", name=p.nome, level=1)).to_be_visible()
-    localizar = time.monotonic() - inicio
-
-    print(f"\nCadastro completo: {cadastro:.1f} s (limite {LIMITE_CADASTRO:.0f} s, RNF-403)")
-    print(f"Localizar e abrir a ficha: {localizar:.1f} s (limite {LIMITE_LOCALIZAR:.0f} s, RNF-404)")
-    record_property("cadastro_segundos", round(cadastro, 1))
-    record_property("localizar_segundos", round(localizar, 1))
     with engine_web.connect() as c:
         linha = c.execute(text("SELECT cep_verificado, cpf, cns FROM paciente")).one()
         assert (linha.cep_verificado, linha.cpf, linha.cns) == (1, p.cpf, p.cns)
         assert c.execute(text("SELECT COUNT(*) FROM telefone")).scalar_one() == 3
         assert c.execute(text("SELECT COUNT(*) FROM contato")).scalar_one() == 1
         assert c.execute(text("SELECT tipo FROM cobertura")).scalar_one() == "convenio"
-    assert cadastro < LIMITE_CADASTRO and localizar < LIMITE_LOCALIZAR

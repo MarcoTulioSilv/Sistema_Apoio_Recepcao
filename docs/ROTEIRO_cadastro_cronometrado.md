@@ -9,15 +9,6 @@ antes, no ambiente de desenvolvimento, e é o mesmo que será usado lá.
 
 **Regra do ensaio:** só dados fictícios — a ficha abaixo foi inventada. Nunca use a ficha de um paciente real.
 
-**Referência automática.** O teste `testes\web\test_cronometragem_sistema.py` faz o mesmo cadastro pelo
-navegador, digitando num ritmo fixo, e mede o sistema sem a pessoa: em 14/10/2026, **9,7 s** para o cadastro
-completo e **0,5 s** para localizar e abrir a ficha. O tempo de uma pessoa é quase todo de leitura da ficha e
-de digitação; se ele passar muito disso, a tela tem algo a melhorar.
-
-```powershell
-pytest testes\web\test_cronometragem_sistema.py -s
-```
-
 ---
 
 ## 1. Preparação
@@ -70,7 +61,7 @@ pytest testes\web\test_cronometragem_sistema.py -s
 
 | Ensaio | Data | Quem digitou | Cadastro completo | Localizar (nome) | Localizar (prontuário) | Observações |
 |---|---|---|---|---|---|---|
-| 1 | | | | | | |
+| 1 | 16/10/2026 | Ensaio em desenvolvimento | 4 min 32 s | | | CEP geral 75800-000 não trouxe Jataí; município só por rolagem na lista |
 | 2 | | | | | | |
 
 **Aprovado quando:** cadastro completo abaixo de 5 minutos e localização abaixo de 15 segundos, nos dois
