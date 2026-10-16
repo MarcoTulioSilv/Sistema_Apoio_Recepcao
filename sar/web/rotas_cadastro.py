@@ -193,6 +193,13 @@ def rascunho() -> str:
     )
 
 
+def cep_geral(cep: str) -> bool:
+    """CEP terminado em 000: nas cidades com um CEP só, é o da cidade inteira; nas que têm CEP por rua, os Correios
+    usam a mesma faixa para logradouros. Por isso o aviso fala em provável CEP geral, sem mudar a consulta."""
+    numero = "".join(c for c in cep if c.isdigit())
+    return len(numero) == 8 and numero.endswith("000")
+
+
 @bp.post("/cep")
 def cep() -> str:
     """Preenche logradouro, bairro e município pelo CEP (AD-23); o número e o complemento ficam como estão."""
@@ -221,6 +228,7 @@ def cep() -> str:
         municipios_go=municipios_da_uf(contexto, UF_RESIDENCIA),
         erros={},
         cep_mensagem=mensagem,
+        cep_geral=cep_geral(v.get("cep", "")),
     )
 
 

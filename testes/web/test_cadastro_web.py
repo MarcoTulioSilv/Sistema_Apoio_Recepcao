@@ -201,3 +201,21 @@ def test_sem_javascript_a_cobertura_salva_mostra_so_os_campos_dela(
     assert re.search(r'data-cobertura="sus" hidden', corpo) and not re.search(
         r'data-cobertura="convenio" hidden', corpo
     )
+
+
+@pytest.mark.requisito("AD-23", "RF-103")
+def test_aviso_de_cep_geral_para_cep_terminado_em_000(
+    criar_usuario: CriarUsuario, cadastro_zerado: dict[str, int], engine_web: Engine, fabrica: Fabrica
+) -> None:
+    """Pedido em uso: 75800-000, o CEP geral de Jataí, não existe na base dos Correios; a consulta fica como é, e a
+    tela avisa que CEP terminado em 000 costuma ser o da cidade inteira."""
+    cliente = recepcao(engine_web, criar_usuario)  # consulta de CEP fora do ar: o aviso não depende dela
+    geral = post(cliente, "/cadastro/cep", {"cep": "75800-000"}).get_data(as_text=True)
+    assert "data-cep-geral" in geral and "<strong>CEP geral.</strong>" in geral
+    assert "data-cep-geral" not in post(cliente, "/cadastro/cep", {"cep": "75800-123"}).get_data(as_text=True)
+    assert "data-cep-geral" not in post(cliente, "/cadastro/cep", {"cep": "758000"}).get_data(as_text=True)
+    resposta = post(cliente, "/cadastro/novo", {**minimo(fabrica, cep="75800-000"), "acao": "paciente"})
+    ficha = get(cliente, resposta.headers["Location"]).get_data(as_text=True)
+    assert ">CEP geral</span>" in ficha
+    outra = post(cliente, "/cadastro/novo", {**minimo(fabrica, cep="75803-123"), "acao": "paciente"})
+    assert ">CEP geral</span>" not in get(cliente, outra.headers["Location"]).get_data(as_text=True)

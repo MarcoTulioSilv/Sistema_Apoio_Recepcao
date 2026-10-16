@@ -85,7 +85,7 @@
       <dt class="font-bold">RG</dt><dd class="m-0">{{ d.rg or "—" }}{% if d.rg_orgao %} ({{ d.rg_orgao }}){% endif %}</dd>
       <dt class="font-bold">Naturalidade</dt><dd class="m-0">{{ ficha.naturalidade.nome ~ "/" ~ ficha.naturalidade.uf if ficha.naturalidade else "—" }}</dd>
       <dt class="font-bold">Endereço</dt><dd class="m-0">{{ [d.logradouro, d.numero, d.complemento, d.bairro] | select | join(", ") or "—" }}{% if ficha.residencia %} — {{ ficha.residencia.nome }}/{{ ficha.residencia.uf }}{% endif %}</dd>
-      <dt class="font-bold">CEP</dt><dd class="m-0 numero">{{ d.cep or "—" }}</dd>
+      <dt class="font-bold">CEP</dt><dd class="m-0"><span class="numero">{{ d.cep or "—" }}</span>{% if d.cep and d.cep.endswith("000") %} <span class="etiqueta-a" title="Terminado em 000: costuma ser o CEP da cidade inteira">CEP geral</span>{% endif %}</dd>
     </dl>
   </section>
 

@@ -1,6 +1,7 @@
 {% from "_cadastro_campos.html" import texto %}
 <div class="grid grid-cols-1 gap-x-4 gap-y-3 md:grid-cols-3" id="endereco-campos">
   {% if cep_mensagem %}<p class="m-0 rounded-lg bg-normal-fundo p-3 text-normal md:col-span-3" role="status">{{ cep_mensagem }}</p>{% endif %}
+  {% if cep_geral %}<p class="m-0 rounded-lg border border-borda-forte bg-alta-fundo p-3 text-alta md:col-span-3" data-cep-geral><strong>CEP geral.</strong> Terminado em 000, costuma ser o CEP da cidade inteira, e não de uma rua. Se a rua do paciente tiver CEP próprio, prefira o dela.</p>{% endif %}
   {{ texto("logradouro", "Logradouro", v, erros) }}
   {{ texto("numero", "Número", v, erros) }}
   {{ texto("complemento", "Complemento", v, erros) }}
