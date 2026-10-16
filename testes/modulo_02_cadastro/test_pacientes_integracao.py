@@ -264,6 +264,7 @@ def test_leituras_de_periodo_e_obito(
     assert aberto is not None and (aberto.inicio, aberto.fim) == (date(2026, 1, 10), None)
     assert executar(lambda uow: leitura.pacientes_com_periodo_aberto_em(uow, date(2026, 5, 1))) == [pid]
     assert executar(lambda uow: leitura.data_obito(uow, pid)) is None
+    assert executar(lambda uow: leitura.periodos_de(uow, [pid])) == {pid: [aberto]}
     with engine_migracao.begin() as c:
         c.execute(
             text(
@@ -272,6 +273,9 @@ def test_leituras_de_periodo_e_obito(
             {"p": pid},
         )
     assert executar(lambda uow: leitura.data_obito(uow, pid)) == date(2026, 6, 1)
+    [encerrado] = executar(lambda uow: leitura.periodos_de(uow, None))[pid]
+    assert (encerrado.fim, encerrado.obito) == (date(2026, 6, 1), True)
+    assert executar(lambda uow: leitura.periodos_de(uow, [])) == {}
     no_dia = executar(lambda uow: leitura.periodo_aberto_em(uow, pid, date(2026, 6, 1)))
     assert no_dia is not None and no_dia.fim == date(2026, 6, 1)  # o dia do evento ainda é do período
     assert executar(lambda uow: leitura.periodo_aberto_em(uow, pid, date(2026, 6, 2))) is None
@@ -311,6 +315,7 @@ def test_anulado_nao_existe_para_os_outros_modulos(
     assert executar(lambda uow: leitura.periodo_aberto_em(uow, pid, INICIO)) is None
     assert executar(lambda uow: leitura.data_obito(uow, pid)) is None
     assert executar(lambda uow: leitura.pacientes_com_periodo_aberto_em(uow, INICIO)) == []
+    assert executar(lambda uow: leitura.periodos_de(uow, [pid])) == {}
 
 
 @pytest.mark.requisito("DEC-55", "DD-10", "RNF-605")

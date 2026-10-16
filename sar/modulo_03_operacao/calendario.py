@@ -8,35 +8,10 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from dataclasses import dataclass
-from datetime import date, datetime, time, timedelta
-from enum import StrEnum
+from datetime import date, datetime, timedelta
 
+from sar.modulo_03_operacao.contrato import Escala, EstadoSessao
 from sar.modulo_08_dados.relogio import FUSO_CLINICA
-
-DIAS_SEMANA = ("seg", "ter", "qua", "qui", "sex", "sab", "dom")  # na ordem de date.weekday()
-ROTULOS_TURNO = {1: "Primeiro turno", 2: "Segundo turno", 3: "Terceiro turno"}  # DD-75
-
-
-@dataclass(frozen=True, slots=True)
-class Escala:
-    id: int
-    codigo: str  # 1-seg, 1-ter…: só nas telas da enfermagem (DD-75)
-    turno: int
-    dias: frozenset[int]  # date.weekday(): 0 = segunda
-    inicio: time
-    fim: time
-
-    @classmethod
-    def de_texto(cls, id: int, codigo: str, turno: int, dias: str, inicio: time, fim: time) -> Escala:
-        """`dias` como na tabela: "seg,qua,sex"."""
-        return cls(id, codigo, turno, frozenset(DIAS_SEMANA.index(d) for d in dias.split(",")), inicio, fim)
-
-    @property
-    def rotulo(self) -> str:
-        return ROTULOS_TURNO[self.turno]
-
-    def atende(self, data: date) -> bool:
-        return data.weekday() in self.dias
 
 
 @dataclass(frozen=True, slots=True)
@@ -60,16 +35,6 @@ class Sessao:
     def ordem(self) -> tuple[date, int]:
         """Ordem cronológica: data e turno (RF-918)."""
         return (self.data, self.escala.turno)
-
-
-class EstadoSessao(StrEnum):
-    FUTURA = "futura"
-    EM_PREPARACAO = "em_preparacao"
-    DEVIDA = "devida"
-    CONFIRMACAO_LIBERADA = "confirmacao_liberada"
-    URGENCIA = "urgencia"
-    CONFIRMADA = "confirmada"
-    NAO_REALIZADA = "nao_realizada"
 
 
 MARCAVEIS = frozenset(

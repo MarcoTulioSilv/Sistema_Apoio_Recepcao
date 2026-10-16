@@ -10,13 +10,13 @@ from sar.modulo_03_operacao.calendario import (
     CONFIRMAVEIS,
     MARCAVEIS,
     Antecedencias,
-    EstadoSessao,
     Sessao,
     estado,
     existe,
     limites_da_competencia,
     sessoes_entre,
 )
+from sar.modulo_03_operacao.contrato import EstadoSessao
 from testes.apoio.operacao import ESCALAS, PADRAO, POR_CODIGO, local
 
 SEGUNDA = date(2026, 10, 19)

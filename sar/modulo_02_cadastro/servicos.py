@@ -831,6 +831,10 @@ class ServicoCep:
         return next((m for m in candidatos if " ".join(sem_acento(m.nome).casefold().split()) == nome), None)
 
 
+def _periodo_ref(p: PeriodoGravado) -> PeriodoRef:
+    return PeriodoRef(p.id, p.inicio, p.evento_data, p.evento_tipo == TipoEvento.OBITO.value)
+
+
 class ServicoLeituraCadastro:
     """Implementa o LeituraCadastro do contrato."""
 
@@ -848,7 +852,7 @@ class ServicoLeituraCadastro:
             return None
         for p in reversed(uow.repositorio(RepositorioPaciente).periodos(paciente_id)):
             if p.inicio <= data and (p.evento_data is None or data <= p.evento_data):
-                return PeriodoRef(p.id, p.inicio, p.evento_data)
+                return _periodo_ref(p)
         return None
 
     def data_obito(self, uow: UnidadeDeTrabalho, paciente_id: int) -> date | None:
@@ -859,3 +863,11 @@ class ServicoLeituraCadastro:
 
     def pacientes_com_periodo_aberto_em(self, uow: UnidadeDeTrabalho, data: date) -> list[int]:
         return uow.repositorio(RepositorioPaciente).pacientes_com_periodo_em(data)
+
+    def periodos_de(self, uow: UnidadeDeTrabalho, paciente_ids: Sequence[int] | None) -> dict[int, list[PeriodoRef]]:
+        if paciente_ids is not None and not paciente_ids:
+            return {}
+        por_paciente: dict[int, list[PeriodoRef]] = {}
+        for p in uow.repositorio(RepositorioPaciente).periodos_de(paciente_ids):
+            por_paciente.setdefault(p.paciente_id, []).append(_periodo_ref(p))
+        return por_paciente

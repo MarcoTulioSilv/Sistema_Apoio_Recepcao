@@ -48,11 +48,15 @@ from sar.modulo_02_cadastro.pendencias import FONTES as FONTES_CADASTRO
 from sar.modulo_02_cadastro.pendencias import ServicoMarcoRetencao
 from sar.modulo_02_cadastro.rascunhos import FonteRascunhoProximoDoDescarte, ServicoRascunhos
 from sar.modulo_02_cadastro.servicos import ServicoCep, ServicoContatos, ServicoLeituraCadastro, ServicoPacientes
+from sar.modulo_03_operacao.contrato import EscalaService
+from sar.modulo_03_operacao.escalas import ServicoEscalas
+from sar.modulo_03_operacao.integracao import VerificadorUsoImplantacao
 from sar.modulo_06_configuracao.contrato import ConfiguracaoService, Referencias
 from sar.modulo_06_configuracao.servicos import LeitorParametrosSQL, ServicoConfiguracao, ServicoReferencias
 from sar.modulo_08_dados.cadeia import gravar_encadeado
 from sar.modulo_08_dados.cifra import CifraAesGcm
 from sar.modulo_08_dados.interfaces.autorizacoes import RepositorioAutorizacao
+from sar.modulo_08_dados.interfaces.operacao import RepositorioOperacao
 from sar.modulo_08_dados.interfaces.pacientes import RepositorioPaciente
 from sar.modulo_08_dados.interfaces.parametros import RepositorioParametro
 from sar.modulo_08_dados.interfaces.rascunhos import RepositorioRascunho
@@ -62,6 +66,7 @@ from sar.modulo_08_dados.interfaces.trilha import RepositorioExpurgo, Repositori
 from sar.modulo_08_dados.interfaces.usuarios import RepositorioUsuario
 from sar.modulo_08_dados.relogio import RelogioSistema
 from sar.modulo_08_dados.repositorios.autorizacoes import RepositorioAutorizacaoSQL
+from sar.modulo_08_dados.repositorios.operacao import RepositorioOperacaoSQL
 from sar.modulo_08_dados.repositorios.pacientes import RepositorioPacienteSQL
 from sar.modulo_08_dados.repositorios.parametros import RepositorioParametroSQL
 from sar.modulo_08_dados.repositorios.rascunhos import RepositorioRascunhoSQL
@@ -118,6 +123,7 @@ REPOSITORIOS: dict[type, FabricaRepositorio] = {
     RepositorioAutorizacao: RepositorioAutorizacaoSQL,
     RepositorioPaciente: RepositorioPacienteSQL,
     RepositorioRascunho: RepositorioRascunhoSQL,
+    RepositorioOperacao: RepositorioOperacaoSQL,
 }
 
 
@@ -174,11 +180,11 @@ class Componentes:
     fontes_pendencia: tuple[FontePendencia, ...]
     marco_retencao: FonteMarcoRetencao
     leitura_cadastro: LeituraCadastro
+    escalas: EscalaService
 
 
-# Verificadores de uso dos parâmetros imutáveis (DD-51). A data de implantação ganha o seu com a sessão
-# confirmada, no Incremento 3 (MOD-03); até lá não há sessão confirmada, e ela pode ser definida.
-VERIFICADORES_USO: dict[str, VerificadorUso] = {}
+# Verificadores de uso dos parâmetros imutáveis (DD-51): a data de implantação trava na primeira sessão confirmada.
+VERIFICADORES_USO: dict[str, VerificadorUso] = {v.parametro: v for v in (VerificadorUsoImplantacao(),)}
 
 # Executores das operações sujeitas à autorização (DEC-42), por tipo, além dos que o compor() monta com as
 # dependências de cada módulo. Um tipo registrado aqui prevalece (os testes da web põem um executor falso).
@@ -217,6 +223,7 @@ def compor(
         executores.setdefault(executor.tipo, executor)
     autorizacoes = ServicoAutorizacoes(executar, auditoria, executores)
     cifra = CifraAesGcm(chave_mestra)
+    leitura_cadastro = ServicoLeituraCadastro()
     return Componentes(
         relogio=relogio,
         cifra=cifra,
@@ -240,7 +247,8 @@ def compor(
         # DD-54: o MOD-07 agrega as fontes de todos os módulos
         fontes_pendencia=(*FONTES_CADASTRO, FonteRascunhoProximoDoDescarte(parametros)),
         marco_retencao=ServicoMarcoRetencao(),
-        leitura_cadastro=ServicoLeituraCadastro(),
+        leitura_cadastro=leitura_cadastro,
+        escalas=ServicoEscalas(executar, auditoria, leitura_cadastro, parametros),
     )
 
 

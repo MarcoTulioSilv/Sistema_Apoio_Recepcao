@@ -125,6 +125,7 @@ class PeriodoRef:
     id: int
     inicio: date
     fim: date | None  # data do evento; None enquanto aberto
+    obito: bool = False  # o evento que encerrou o período foi óbito (INV-01)
 
 
 @dataclass(frozen=True, slots=True)
@@ -387,3 +388,7 @@ class LeituraCadastro(Protocol):
     def data_obito(self, uow: UnidadeDeTrabalho, paciente_id: int) -> date | None: ...
 
     def pacientes_com_periodo_aberto_em(self, uow: UnidadeDeTrabalho, data: date) -> list[int]: ...
+
+    def periodos_de(self, uow: UnidadeDeTrabalho, paciente_ids: Sequence[int] | None) -> dict[int, list[PeriodoRef]]:
+        """Períodos de cada paciente, em ordem de início, numa consulta só (§11.3); de todos com None."""
+        ...
