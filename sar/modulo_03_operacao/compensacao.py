@@ -12,9 +12,7 @@ from datetime import date, timedelta
 from enum import StrEnum
 
 from sar.modulo_03_operacao.calendario import Sessao, competencia, limites_da_competencia
-from sar.modulo_03_operacao.contrato import Escala
-
-LIMITE_EXTRAS = 4  # RN-01: aviso ao acrescentar com quatro; pendência a partir da quinta (RF-506)
+from sar.modulo_03_operacao.contrato import LIMITE_EXTRAS, Escala
 
 
 def _ordem(sessao: Sessao) -> tuple[date, int, int]:

@@ -8,7 +8,8 @@ import pytest
 
 from sar.modulo_03_operacao.calendario import Sessao
 from sar.modulo_03_operacao.compensacao import Periodo, Troca, Vigencia
-from sar.modulo_03_operacao.lista_esperada import Esperado, Origem, SituacaoPaciente, lista_esperada
+from sar.modulo_03_operacao.contrato import Origem
+from sar.modulo_03_operacao.lista_esperada import Esperado, SituacaoPaciente, lista_esperada
 from testes.apoio.operacao import POR_CODIGO
 
 SEGUNDA = date(2026, 10, 19)

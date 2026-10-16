@@ -9,18 +9,10 @@ from __future__ import annotations
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from datetime import date
-from enum import StrEnum
 
 from sar.modulo_03_operacao.calendario import Sessao
 from sar.modulo_03_operacao.compensacao import Periodo, Troca
-
-
-class Origem(StrEnum):
-    ALOCADO = "alocado"
-    TROCA_CHEGANDO = "troca_chegando"
-    EXTRA_PLANEJADA = "extra_planejada"
-    TROCA_SAINDO = "troca_saindo"  # pré-marcado como ausente (P-10)
-    ACRESCENTADO = "acrescentado"  # pela recepção, vindo das presenças gravadas (DD-24)
+from sar.modulo_03_operacao.contrato import Origem
 
 
 @dataclass(frozen=True, slots=True)

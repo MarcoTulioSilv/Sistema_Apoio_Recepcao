@@ -381,6 +381,10 @@ class LeituraCadastro(Protocol):
 
     def identificacao(self, uow: UnidadeDeTrabalho, paciente_id: int) -> Identificacao | None: ...
 
+    def identificacoes(self, uow: UnidadeDeTrabalho, paciente_ids: Sequence[int]) -> dict[int, Identificacao]:
+        """As de vários pacientes numa consulta só (§11.3); os anulados e os inexistentes ficam de fora."""
+        ...
+
     def periodo_aberto_em(self, uow: UnidadeDeTrabalho, paciente_id: int, data: date) -> PeriodoRef | None:
         """O período que cobre a data: início até ela e evento, se houver, nela ou depois (INV-03, INV-04)."""
         ...

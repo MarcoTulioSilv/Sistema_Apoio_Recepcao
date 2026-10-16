@@ -11,6 +11,7 @@ from sar.modulo_01_acesso.servicos import ServicoAuditoria
 from sar.modulo_03_operacao.calendario import Antecedencias
 from sar.modulo_03_operacao.contrato import Escala
 from sar.modulo_03_operacao.escalas import ServicoEscalas
+from sar.modulo_03_operacao.sessoes import ServicoSessoes
 from sar.modulo_06_configuracao.servicos import LeitorParametrosSQL
 from sar.modulo_08_dados.relogio import FUSO_CLINICA
 from sar.nucleo.contexto import Contexto, Perfil
@@ -39,6 +40,7 @@ def local(dia: date, hora: int, minuto: int = 0, segundo: int = 0) -> datetime:
 class Operacao:
     cadastro: Cadastro
     escalas: ServicoEscalas
+    turnos: ServicoSessoes
     parametros: LeitorParametrosSQL
 
 
@@ -46,8 +48,13 @@ def montar(engine: Engine) -> Operacao:
     """Como o compor() monta o MOD-03, sobre os serviços do cadastro de teste."""
     cadastro = montar_cadastro(engine)
     parametros = LeitorParametrosSQL(cadastro.executar)
-    return Operacao(cadastro, ServicoEscalas(cadastro.executar, ServicoAuditoria(), cadastro.leitura, parametros),
-                    parametros)  # fmt: skip
+    auditoria = ServicoAuditoria()
+    return Operacao(
+        cadastro,
+        ServicoEscalas(cadastro.executar, auditoria, cadastro.leitura, parametros),
+        ServicoSessoes(cadastro.executar, auditoria, cadastro.leitura, parametros),
+        parametros,
+    )
 
 
 def definir_implantacao(engine: Engine, data: date | None, usuario_id: int) -> None:

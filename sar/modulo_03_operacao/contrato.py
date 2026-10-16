@@ -51,6 +51,16 @@ class EstadoSessao(StrEnum):
     NAO_REALIZADA = "nao_realizada"
 
 
+class Origem(StrEnum):
+    """Por que o paciente está na lista esperada da sessão (§7.2)."""
+
+    ALOCADO = "alocado"
+    TROCA_CHEGANDO = "troca_chegando"
+    EXTRA_PLANEJADA = "extra_planejada"
+    TROCA_SAINDO = "troca_saindo"  # pré-marcado como ausente (P-10)
+    ACRESCENTADO = "acrescentado"  # pela recepção, vindo das presenças gravadas (DD-24)
+
+
 @dataclass(frozen=True, slots=True)
 class ContagemEscalas:
     """RF-404, sem limite; os sem alocação aparecem explicitamente (RF-403)."""
@@ -103,4 +113,125 @@ class EscalaService(Protocol):
 
     def cancelar_extra(self, contexto: Contexto, extra_id: int, motivo: str | None = None) -> None:
         """RequerAutorizacao("operacao.sessao.reabrir") se a sessão já foi confirmada. NaoEncontrado."""
+        ...
+
+
+# ------------------------------------------------------------------ sessão de turno (§7.3, DD-76)
+LIMITE_EXTRAS = 4  # RN-01: aviso ao acrescentar com quatro extras no mês (RF-506); pendência a partir da quinta
+
+
+@dataclass(frozen=True, slots=True)
+class ResumoSessao:
+    data: date
+    escala: Escala
+    estado: EstadoSessao
+
+
+@dataclass(frozen=True, slots=True)
+class PainelTurnos:
+    """As sessões que pedem ação na tela inicial, da mais antiga para a mais nova (DD-76)."""
+
+    implantacao_definida: bool  # vazia: nenhuma sessão é devida e a tela avisa o TI (DD-91)
+    sessoes: tuple[ResumoSessao, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class PacienteNaSessao:
+    paciente_id: int
+    nome: str
+    prontuario: str
+    origem: Origem
+    presente: bool  # o padrão da origem, ou a marcação gravada
+    marcado: bool  # há exceção gravada
+    extras_no_mes: int  # provisórias (RF-506)
+
+    @property
+    def aviso_extra(self) -> bool:
+        return self.extras_no_mes >= LIMITE_EXTRAS
+
+
+@dataclass(frozen=True, slots=True)
+class TelaTurno:
+    data: date
+    escala: Escala
+    estado: EstadoSessao
+    versao: int  # 0 enquanto a sessão não foi gravada; a confirmação devolve a que a tela leu (DD-17)
+    pacientes: tuple[PacienteNaSessao, ...]  # em ordem de nome
+    nao_realizada_motivo: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class AusenciaDoMes:
+    presenca_id: int | None  # a linha gravada; None na ausência ainda não gravada (troca saindo)
+    data: date
+    escala: Escala
+    livre: bool  # ainda sem par
+
+
+@dataclass(frozen=True, slots=True)
+class FrequenciaAoAcrescentar:
+    """O que a recepção vê ao acrescentar o paciente (RF-917, RF-506)."""
+
+    ausencias: tuple[AusenciaDoMes, ...]
+    extras_no_mes: int
+
+    @property
+    def aviso_extra(self) -> bool:
+        return self.extras_no_mes >= LIMITE_EXTRAS
+
+
+class SessaoTurnoService(Protocol):
+    """O ciclo da sessão de turno na tela inicial (DD-23, DD-24, DD-30, DD-32, DD-76). Toda operação usa o
+    instante do contexto. RegraViolada("implantacao.indefinida") com a data de implantação vazia (DD-91) e
+    "sessao.inexistente" para data e escala sem sessão."""
+
+    def painel(self, contexto: Contexto) -> PainelTurnos:
+        """As de hoje em preparação, abertas, com confirmação liberada ou em urgência, e as de dias anteriores que
+        ficaram sem confirmação."""
+        ...
+
+    def proximo_turno(self, contexto: Contexto) -> TelaTurno | None:
+        """A sessão em preparação agora (RF-922), ou nada."""
+        ...
+
+    def tela_do_turno(self, contexto: Contexto, data: date, escala_id: int) -> TelaTurno: ...
+
+    def marcar_ausencia(self, contexto: Contexto, data: date, escala_id: int, paciente_id: int) -> int:
+        """Grava a exceção e devolve a nova versão da sessão. Antes do início, é a ausência avisada (P-13).
+        RegraViolada: "sessao.fora_da_marcacao" (antes da preparação), "sessao.nao_realizada",
+        "paciente.fora_da_lista". RequerAutorizacao("operacao.presenca.alterar_confirmada") se já confirmada."""
+        ...
+
+    def desmarcar(self, contexto: Contexto, data: date, escala_id: int, paciente_id: int) -> int:
+        """Volta o paciente a presente; os mesmos erros do marcar."""
+        ...
+
+    def acrescentar_paciente(
+        self, contexto: Contexto, data: date, escala_id: int, paciente_id: int, ausencia_id: int | None = None
+    ) -> FrequenciaAoAcrescentar:
+        """Paciente fora da lista, presente (DD-24); com ausencia_id, liga a presença a essa ausência (DD-25).
+        RegraViolada: "INV-01", "INV-04", "paciente.ja_na_lista", "ligacao.invalida" e as do marcar. NaoEncontrado."""
+        ...
+
+    def retirar_acrescentado(self, contexto: Contexto, data: date, escala_id: int, paciente_id: int) -> int:
+        """Desfaz o acréscimo feito por engano, antes da confirmação; devolve a nova versão."""
+        ...
+
+    def frequencia_ao_acrescentar(self, contexto: Contexto, paciente_id: int, data: date) -> FrequenciaAoAcrescentar:
+        """As ausências do mês e as extras, para escolher a ausência a ligar antes de acrescentar (RF-917)."""
+        ...
+
+    def confirmar(self, contexto: Contexto, data: date, escala_id: int, versao: int) -> None:
+        """Resolve a lista esperada e grava todas as presenças, numa transação, com a sessão travada (DD-24).
+        ConflitoDeVersao se a sessão mudou depois da leitura. RegraViolada: "sessao.confirmacao_nao_liberada"
+        (antes da última hora, DD-32), "sessao.confirmada", "sessao.nao_realizada"."""
+        ...
+
+    def registrar_nao_realizada(self, contexto: Contexto, data: date, escala_id: int, motivo: str) -> None:
+        """Só a administração (P-12): a sessão sai das previstas e as exceções gravadas são descartadas.
+        RegraViolada: "sessao.futura", "sessao.confirmada" (precisa reabrir antes), "motivo.obrigatorio"."""
+        ...
+
+    def devidas_nao_confirmadas(self, contexto: Contexto) -> list[ResumoSessao]:
+        """Sessões já começadas e ainda não confirmadas, da mais antiga para a mais nova."""
         ...

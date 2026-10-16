@@ -7,18 +7,30 @@ from datetime import UTC, date, datetime
 from typing import cast
 
 from sqlalchemy import Select, delete, or_, select, update
+from sqlalchemy.dialects.mysql import insert as mysql_insert
 from sqlalchemy.orm import Session
 
 from sar.modulo_08_dados.interfaces.operacao import (
     AlocacaoGravada,
+    CienciaGravada,
     EscalaGravada,
     ExtraGravada,
+    LigacaoGravada,
     PresencaGravada,
     SessaoGravada,
     SituacaoPresenca,
     TrocaGravada,
 )
-from sar.modulo_08_dados.modelos.operacao import Alocacao, Escala, ExtraPlanejada, Presenca, SessaoTurno, TrocaPontual
+from sar.modulo_08_dados.modelos.operacao import (
+    Alocacao,
+    CienciaEnfermagem,
+    Escala,
+    ExtraPlanejada,
+    LigacaoManual,
+    Presenca,
+    SessaoTurno,
+    TrocaPontual,
+)
 
 
 def _utc(instante: datetime | None) -> datetime | None:
@@ -151,6 +163,22 @@ class RepositorioOperacaoSQL:
         self._s.flush()
         return linha.id
 
+    def garantir_sessao(self, data: date, escala_id: int) -> SessaoGravada:
+        self._s.execute(
+            mysql_insert(SessaoTurno).values(data=data, escala_id=escala_id).on_duplicate_key_update(id=SessaoTurno.id)
+        )
+        sessao = self.sessao(data, escala_id, travar=True)
+        if sessao is None:
+            raise RuntimeError("sessão some logo depois de garantida")
+        return sessao
+
+    def tocar_sessao(self, id: int) -> int:
+        self._s.execute(
+            update(SessaoTurno).where(SessaoTurno.id == id).values(versao=SessaoTurno.versao + 1),
+            execution_options={"synchronize_session": False},
+        )
+        return int(self._s.scalars(select(SessaoTurno.versao).where(SessaoTurno.id == id)).one())
+
     def sessoes(self, inicio: date, fim: date) -> list[SessaoGravada]:
         consulta = (
             select(SessaoTurno)
@@ -183,6 +211,10 @@ class RepositorioOperacaoSQL:
     def presencas_da_sessao(self, sessao_id: int) -> list[PresencaGravada]:
         return self._presencas(_PRESENCA.where(Presenca.sessao_id == sessao_id).order_by(Presenca.id), self._s)
 
+    def presenca_por_id(self, id: int) -> PresencaGravada | None:
+        encontradas = self._presencas(_PRESENCA.where(Presenca.id == id), self._s)
+        return encontradas[0] if encontradas else None
+
     def presencas(self, paciente_ids: Sequence[int] | None, inicio: date, fim: date) -> list[PresencaGravada]:
         consulta = _PRESENCA.where(SessaoTurno.data.between(inicio, fim))
         if paciente_ids is not None:
@@ -201,4 +233,42 @@ class RepositorioOperacaoSQL:
         return linha.id
 
     def remover_presenca(self, id: int) -> None:
+        self._s.execute(
+            delete(LigacaoManual).where(or_(LigacaoManual.ausencia_id == id, LigacaoManual.presenca_id == id))
+        )
+        self._s.execute(delete(CienciaEnfermagem).where(CienciaEnfermagem.presenca_id == id))
         self._s.execute(delete(Presenca).where(Presenca.id == id))
+
+    # ---------------------------------------------------------------- ligações e ciências
+    def ligacoes(self, presenca_ids: Sequence[int]) -> list[LigacaoGravada]:
+        if not presenca_ids:
+            return []
+        ids = list(presenca_ids)
+        consulta = (
+            select(LigacaoManual)
+            .where(or_(LigacaoManual.ausencia_id.in_(ids), LigacaoManual.presenca_id.in_(ids)))
+            .order_by(LigacaoManual.id)
+        )
+        return [
+            LigacaoGravada(li.id, li.ausencia_id, li.presenca_id, li.criada_por, li.criada_em.replace(tzinfo=UTC))
+            for li in self._s.scalars(consulta)
+        ]
+
+    def criar_ligacao(self, ausencia_id: int, presenca_id: int, por: int, em: datetime) -> int:
+        linha = LigacaoManual(ausencia_id=ausencia_id, presenca_id=presenca_id, criada_por=por, criada_em=_gravar(em))
+        self._s.add(linha)
+        self._s.flush()
+        return linha.id
+
+    def remover_ligacoes(self, ids: Sequence[int]) -> None:
+        if ids:
+            self._s.execute(delete(LigacaoManual).where(LigacaoManual.id.in_(list(ids))))
+
+    def ciencias(self, presenca_ids: Sequence[int]) -> list[CienciaGravada]:
+        if not presenca_ids:
+            return []
+        consulta = select(CienciaEnfermagem).where(CienciaEnfermagem.presenca_id.in_(list(presenca_ids)))
+        return [
+            CienciaGravada(c.presenca_id, c.registrada_em.replace(tzinfo=UTC), c.registrada_por)
+            for c in self._s.scalars(consulta.order_by(CienciaEnfermagem.presenca_id))
+        ]

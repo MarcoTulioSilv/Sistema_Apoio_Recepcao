@@ -847,6 +847,11 @@ class ServicoLeituraCadastro:
         paciente = self._vivo(uow, paciente_id)
         return _identificacao(paciente) if paciente is not None else None
 
+    def identificacoes(self, uow: UnidadeDeTrabalho, paciente_ids: Sequence[int]) -> dict[int, Identificacao]:
+        if not paciente_ids:
+            return {}
+        return {p.id: _identificacao(p) for p in uow.repositorio(RepositorioPaciente).vivos(paciente_ids)}
+
     def periodo_aberto_em(self, uow: UnidadeDeTrabalho, paciente_id: int, data: date) -> PeriodoRef | None:
         if self._vivo(uow, paciente_id) is None:
             return None

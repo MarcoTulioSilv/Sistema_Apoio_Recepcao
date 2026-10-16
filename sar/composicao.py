@@ -48,9 +48,10 @@ from sar.modulo_02_cadastro.pendencias import FONTES as FONTES_CADASTRO
 from sar.modulo_02_cadastro.pendencias import ServicoMarcoRetencao
 from sar.modulo_02_cadastro.rascunhos import FonteRascunhoProximoDoDescarte, ServicoRascunhos
 from sar.modulo_02_cadastro.servicos import ServicoCep, ServicoContatos, ServicoLeituraCadastro, ServicoPacientes
-from sar.modulo_03_operacao.contrato import EscalaService
+from sar.modulo_03_operacao.contrato import EscalaService, SessaoTurnoService
 from sar.modulo_03_operacao.escalas import ServicoEscalas
 from sar.modulo_03_operacao.integracao import VerificadorUsoImplantacao
+from sar.modulo_03_operacao.sessoes import ServicoSessoes
 from sar.modulo_06_configuracao.contrato import ConfiguracaoService, Referencias
 from sar.modulo_06_configuracao.servicos import LeitorParametrosSQL, ServicoConfiguracao, ServicoReferencias
 from sar.modulo_08_dados.cadeia import gravar_encadeado
@@ -181,6 +182,7 @@ class Componentes:
     marco_retencao: FonteMarcoRetencao
     leitura_cadastro: LeituraCadastro
     escalas: EscalaService
+    turnos: SessaoTurnoService
 
 
 # Verificadores de uso dos parâmetros imutáveis (DD-51): a data de implantação trava na primeira sessão confirmada.
@@ -249,6 +251,7 @@ def compor(
         marco_retencao=ServicoMarcoRetencao(),
         leitura_cadastro=leitura_cadastro,
         escalas=ServicoEscalas(executar, auditoria, leitura_cadastro, parametros),
+        turnos=ServicoSessoes(executar, auditoria, leitura_cadastro, parametros),
     )
 
 
