@@ -103,6 +103,20 @@
   @apply flex min-h-11 items-center rounded-lg px-3 text-menu-texto no-underline hover:bg-white/10;
   &[aria-current="page"] { @apply bg-superficie font-bold text-tinta; }
 }
+/* Link secundário no pé do menu (Trocar senha) e botão de recolher o menu */
+@utility menu-link-discreto {
+  @apply inline-flex min-h-11 items-center text-menu-texto underline underline-offset-2 hover:text-white;
+  &[aria-current="page"] { @apply font-bold text-white; }
+}
+/* Botão de abrir o menu recolhido, no cabeçalho claro, ao lado do nome da tela */
+@utility menu-abrir {
+  @apply h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded-lg border border-borda bg-superficie text-tinta
+    hover:border-borda-forte focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-acao;
+}
+@utility menu-recolher {
+  @apply inline-flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded-lg border border-white/25 bg-transparent
+    text-xl text-menu-texto hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white;
+}
 
 /* Quadros da preparação do turno: presentes e faltantes */
 @utility quadro {

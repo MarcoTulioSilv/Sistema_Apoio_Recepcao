@@ -1,5 +1,5 @@
 {% extends "layout.html" %}
-{% macro fone(t) %}({{ t.ddd }}) {{ t.numero[:-4] }}-{{ t.numero[-4:] }}{% endmacro %}
+{% macro fone(t) %}({{ t.ddd }}) {{ t.numero|telefone }}{% endmacro %}
 {% macro data(d) %}{{ d.strftime('%d/%m/%Y') if d else '' }}{% endmacro %}
 {% macro campo_cobertura(convenios, sufixo) %}
 <label class="campo"><span class="rotulo">Cobertura</span>
@@ -10,7 +10,7 @@
 {% endmacro %}
 {% macro campos_telefone(t=none) %}
 <label class="campo"><span class="rotulo">DDD</span><input class="entrada w-20" type="text" inputmode="numeric" name="ddd" value="{{ t.ddd if t else '' }}" required></label>
-<label class="campo"><span class="rotulo">Número</span><input class="entrada" type="tel" inputmode="numeric" name="numero" value="{{ t.numero if t else '' }}" required></label>
+<label class="campo"><span class="rotulo">Número</span><input class="entrada" type="tel" inputmode="numeric" maxlength="10" data-mascara="telefone" name="numero" value="{{ t.numero|telefone if t else '' }}" required></label>
 <label class="campo"><span class="rotulo">Tipo</span><select class="entrada" name="tipo">{% for valor, nome in [("celular", "Celular"), ("fixo", "Fixo"), ("recado", "Recado")] %}<option value="{{ valor }}"{% if t and t.tipo.value == valor %} selected{% endif %}>{{ nome }}</option>{% endfor %}</select></label>
 {% endmacro %}
 {# Um telefone na ficha: o número, o tipo e, para quem gere contatos, editar e remover. O dono não muda (INV-12). #}
@@ -85,7 +85,7 @@
       <dt class="font-bold">RG</dt><dd class="m-0">{{ d.rg or "—" }}{% if d.rg_orgao %} ({{ d.rg_orgao }}){% endif %}</dd>
       <dt class="font-bold">Naturalidade</dt><dd class="m-0">{{ ficha.naturalidade.nome ~ "/" ~ ficha.naturalidade.uf if ficha.naturalidade else "—" }}</dd>
       <dt class="font-bold">Endereço</dt><dd class="m-0">{{ [d.logradouro, d.numero, d.complemento, d.bairro] | select | join(", ") or "—" }}{% if ficha.residencia %} — {{ ficha.residencia.nome }}/{{ ficha.residencia.uf }}{% endif %}</dd>
-      <dt class="font-bold">CEP</dt><dd class="m-0"><span class="numero">{{ d.cep or "—" }}</span>{% if d.cep and d.cep.endswith("000") %} <span class="etiqueta-a" title="Terminado em 000: costuma ser o CEP da cidade inteira">CEP geral</span>{% endif %}</dd>
+      <dt class="font-bold">CEP</dt><dd class="m-0"><span class="numero">{{ d.cep|cep if d.cep else "—" }}</span>{% if d.cep and d.cep.endswith("000") %} <span class="etiqueta-a" title="Terminado em 000: costuma ser o CEP da cidade inteira">CEP geral</span>{% endif %}</dd>
     </dl>
   </section>
 

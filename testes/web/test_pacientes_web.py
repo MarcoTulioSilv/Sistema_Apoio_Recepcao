@@ -226,7 +226,7 @@ def test_edicao_de_telefone_e_contato_pela_ficha(
     with engine_web.connect() as c:
         telefone = c.execute(text("SELECT id FROM telefone")).scalar_one()
     ficha = get(recepcao, f"/pacientes/{pid}").get_data(as_text=True)
-    assert f'action="/pacientes/{pid}/telefones/{telefone}/alterar"' in ficha and 'value="36310002"' in ficha
+    assert f'action="/pacientes/{pid}/telefones/{telefone}/alterar"' in ficha and 'value="3631-0002"' in ficha
 
     resposta = post(recepcao, f"/pacientes/{pid}/telefones/{telefone}/alterar",
                     {"ddd": "64", "numero": "99999-0003", "tipo": "celular"})  # fmt: skip

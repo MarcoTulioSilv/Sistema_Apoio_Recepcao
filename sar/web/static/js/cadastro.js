@@ -59,6 +59,15 @@
         resumo.appendChild(valor);
       }
     };
+    // O pop-up do rascunho salvo some sozinho depois de alguns segundos; o próximo salvamento o mostra de novo.
+    const estado = form.querySelector("#rascunho-estado");
+    let some;
+    new MutationObserver(() => {
+      if (!estado.textContent.trim()) return;
+      window.clearTimeout(some);
+      some = window.setTimeout(() => { estado.textContent = ""; }, 4000);
+    }).observe(estado, { childList: true, characterData: true, subtree: true });
+
     cobertura.addEventListener("change", mostrarCobertura);
     cns.addEventListener("input", mostrarCobertura);
     mostrarCobertura();

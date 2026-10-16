@@ -10,7 +10,7 @@
 {% macro telefone(linha, tipos, erros, rotulo_remover="Remover este telefone") -%}
 <div class="grid grid-cols-[5rem_minmax(0,1fr)] items-end gap-3 sm:grid-cols-[5rem_minmax(0,1fr)_9rem_auto]" data-telefone>
   <label class="campo"><span class="rotulo">DDD</span><input class="entrada" type="text" inputmode="numeric" maxlength="4" name="{{ linha.prefixo }}-ddd" value="{{ linha.ddd }}"{% if erros.get(linha.prefixo) %} aria-invalid="true"{% endif %}></label>
-  <label class="campo"><span class="rotulo">Número</span><input class="entrada" type="tel" inputmode="numeric" maxlength="11" name="{{ linha.prefixo }}-numero" value="{{ linha.numero }}"{% if erros.get(linha.prefixo) %} aria-invalid="true"{% endif %}></label>
+  <label class="campo"><span class="rotulo">Número</span><input class="entrada" type="tel" inputmode="numeric" maxlength="10" data-mascara="telefone" name="{{ linha.prefixo }}-numero" value="{{ linha.numero|telefone }}"{% if erros.get(linha.prefixo) %} aria-invalid="true"{% endif %}></label>
   <label class="campo"><span class="rotulo">Tipo</span><select class="entrada" name="{{ linha.prefixo }}-tipo">{% for valor, nome in tipos.items() %}<option value="{{ valor }}"{% if linha.tipo == valor %} selected{% endif %}>{{ nome }}</option>{% endfor %}</select></label>
   <button type="button" class="btn-neutro" data-acao="remover-telefone" aria-label="{{ rotulo_remover }}">Remover</button>
   {% if erros.get(linha.prefixo) %}<p class="ajuda-erro col-span-full m-0" role="alert">{{ erros.get(linha.prefixo) }}</p>{% endif %}

@@ -94,9 +94,12 @@
   </div>
 
   <footer class="sticky bottom-0 mt-4 flex flex-wrap items-center justify-between gap-4 border-t border-borda bg-superficie px-6 py-4">
+    {# Pop-up do salvamento automático, no canto inferior esquerdo, acima do mínimo; some sozinho (cadastro.js). #}
+    <div id="rascunho-estado" role="status" aria-live="polite"
+         class="pointer-events-none absolute bottom-full left-6 mb-3 rounded-lg border border-acao bg-acao-clara px-4 py-2.5 font-bold text-acao-escura shadow-lg empty:hidden"></div>
     <div class="flex flex-col gap-1">
       <p class="m-0 text-base font-bold" aria-live="polite">Mínimo para salvar o paciente: <span class="numero" data-contagem="minimo">—</span> de 3</p>
-      <p class="m-0 max-w-[62ch] text-sm text-suave">Nome, prontuário e início do tratamento. O resto pode ficar para depois e vira pendência. <span id="rascunho-estado" aria-live="polite"></span></p>
+      <p class="m-0 max-w-[62ch] text-sm text-suave">Nome, prontuário e início do tratamento. O resto pode ficar para depois e vira pendência.</p>
     </div>
     <div class="flex flex-wrap gap-3">
       {% if tem_rascunho %}<button type="submit" class="btn-neutro min-h-12" name="acao" value="descartar">Descartar rascunho</button>{% endif %}

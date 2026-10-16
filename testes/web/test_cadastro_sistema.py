@@ -93,3 +93,47 @@ def test_cobertura_sus_mostra_o_cns_e_esconde_o_convenio(
     expect(convenio).to_be_visible()
     expect(carteirinha).to_be_visible()
     expect(resumo).to_be_hidden()
+
+
+@pytest.mark.requisito("RNF-406", "RF-919", "RF-202")
+def test_menu_recolhivel_mascaras_e_aviso_do_rascunho(
+    criar_usuario: CriarUsuario, cadastro_zerado: dict[str, int], endereco: str, page: Page, fabrica: Fabrica
+) -> None:
+    erros: list[str] = []
+    page.on("console", lambda m: erros.append(m.text) if m.type == "error" else None)
+    criar_usuario("sistcad_rec3")
+    entrar_no_navegador(page, endereco, "sistcad_rec3")
+    menu = page.get_by_role("navigation", name="Navegação principal")
+    expect(menu.get_by_role("link", name="Trocar senha")).to_be_visible()
+    abrir = page.get_by_role("button", name="Abrir o menu")
+    expect(abrir).to_be_hidden()  # aberto: só o botão do topo do menu
+    page.get_by_role("button", name="Recolher o menu").click()
+    expect(menu).to_be_hidden()  # recolhido: o menu some por inteiro
+    expect(abrir).to_be_visible()
+    expect(abrir).to_be_focused()  # o foco vai para o botão que ficou visível
+    titulo = page.get_by_role("heading", level=1)
+    assert abrir.bounding_box()["x"] < titulo.bounding_box()["x"]  # ao lado do nome da tela, à esquerda
+    sem_violacao(page)
+    page.reload()  # a escolha fica guardada nesta estação
+    expect(menu).to_be_hidden()
+    page.get_by_role("button", name="Abrir o menu").click()
+    expect(menu.get_by_role("link", name="Novo cadastro")).to_be_visible()
+    expect(page.get_by_role("button", name="Recolher o menu")).to_be_focused()
+
+    menu.get_by_role("link", name="Novo cadastro").click()
+    page.locator('input[name="tel-0-numero"]').press_sequentially("999990001")
+    expect(page.locator('input[name="tel-0-numero"]')).to_have_value("99999-0001")
+    page.locator('input[name="tel-0-numero"]').fill("")
+    page.locator('input[name="tel-0-numero"]').press_sequentially("36310002")
+    expect(page.locator('input[name="tel-0-numero"]')).to_have_value("3631-0002")
+    page.get_by_label("CEP", exact=True).press_sequentially("75800000")
+    expect(page.get_by_label("CEP", exact=True)).to_have_value("75800-000")
+
+    aviso = page.locator("#rascunho-estado")
+    page.get_by_label("Nome completo").fill(fabrica.nome())
+    page.get_by_label("Nome completo").press("Tab")
+    expect(aviso).to_contain_text("Rascunho salvo automaticamente às")
+    expect(aviso).to_be_visible()
+    sem_violacao(page)
+    expect(aviso).to_be_hidden(timeout=8000)  # some sozinho
+    assert erros == []

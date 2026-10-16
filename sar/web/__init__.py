@@ -16,6 +16,7 @@ from sar.modulo_01_acesso.contrato import PermissionGuard, SessaoEncerrada
 from sar.nucleo.contexto import Contexto, Perfil
 from sar.nucleo.erros import AcessoNegado, NaoEncontrado
 from sar.nucleo.logs import campos_do_erro, encerrar_requisicao, identificar_usuario, iniciar_requisicao
+from sar.web import formatos
 from sar.web.configuracao import ConfigWeb, ServicosWeb
 from sar.web.rotulos import PERFIS
 
@@ -79,7 +80,6 @@ MENU: tuple[ItemMenu, ...] = (
             ("acesso.ancora.conferir", None),
         ),
     ),
-    ItemMenu("Minha senha", "acesso.senha", (("acesso.senha.trocar_propria", None),)),
 )
 
 
@@ -95,6 +95,8 @@ def criar_app(servicos: ServicosWeb | None = None, config: ConfigWeb | None = No
     config = config or ConfigWeb(origem="https://localhost")
     app = Flask(__name__, template_folder="modelos", static_folder="static")
     app.config["SAR"] = config
+    app.jinja_env.filters["telefone"] = formatos.telefone  # telas: 99999-0001 e 3631-0002; banco: só dígitos
+    app.jinja_env.filters["cep"] = formatos.cep  # telas: 75800-000
     app.config["SAR_SERVICOS"] = servicos
     if config.proxies_confiaveis:
         n = config.proxies_confiaveis
@@ -171,6 +173,7 @@ def criar_app(servicos: ServicosWeb | None = None, config: ConfigWeb | None = No
             "superusuario": g.get("superusuario", False),
             "perfis": ROTULOS_PERFIL,
             "perfil_atual": contexto.perfil,
+            "trocar_senha": GUARDA.pode(contexto, "acesso.senha.trocar_propria"),  # junto do perfil, no menu
         }
 
     @app.after_request

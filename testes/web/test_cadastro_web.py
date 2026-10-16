@@ -247,3 +247,35 @@ def test_municipio_digitado_com_sugestoes_vira_o_codigo(
     rascunho = post(cliente, "/cadastro/rascunho", {"municipio": JATAI}).get_data(as_text=True)  # código antigo
     assert "Rascunho salvo" in rascunho
     assert re.search(r'id="municipio"[^>]*value="Jataí"', get(cliente, "/cadastro/novo").get_data(as_text=True))
+
+
+@pytest.mark.requisito("RF-202", "RF-101")
+def test_tela_mostra_telefone_e_cep_formatados_e_o_banco_guarda_digitos(
+    criar_usuario: CriarUsuario, cadastro_zerado: dict[str, int], engine_web: Engine, fabrica: Fabrica
+) -> None:
+    cliente = recepcao(engine_web, criar_usuario)
+    telefones = {"tel-0-ddd": "64", "tel-0-numero": "999990001", "tel-0-tipo": "celular",
+                 "tel-1-ddd": "64", "tel-1-numero": "3631-0002", "tel-1-tipo": "fixo"}  # fmt: skip
+    dados = minimo(fabrica, cep="75800000", **telefones)
+    resposta = post(cliente, "/cadastro/novo", {**dados, "acao": "paciente"})
+    ficha = get(cliente, resposta.headers["Location"]).get_data(as_text=True)
+    assert "(64) 99999-0001" in ficha and "(64) 3631-0002" in ficha and ">75800-000</span>" in ficha
+    with engine_web.connect() as c:
+        assert c.execute(text("SELECT cep FROM paciente")).scalar_one() == "75800000"
+        assert sorted(c.execute(text("SELECT numero FROM telefone")).scalars()) == ["36310002", "999990001"]
+    rascunho = post(cliente, "/cadastro/novo", {"cep": "75800000", "tel-0-numero": "999990001", "acao": "rascunho"})
+    corpo = rascunho.get_data(as_text=True)
+    assert 'value="75800-000"' in corpo and 'value="99999-0001"' in corpo and 'data-mascara="telefone"' in corpo
+
+
+@pytest.mark.requisito("RNF-406")
+def test_menu_com_trocar_senha_no_perfil_e_botao_de_recolher(
+    criar_usuario: CriarUsuario, cadastro_zerado: dict[str, int], engine_web: Engine
+) -> None:
+    cliente = recepcao(engine_web, criar_usuario)
+    pagina = get(cliente, "/").get_data(as_text=True)
+    assert "Minha senha" not in pagina and ">Trocar senha</a>" in pagina
+    assert 'data-recolher-menu aria-controls="menu-principal" aria-expanded="true"' in pagina
+    assert 'data-abrir-menu aria-controls="menu-principal"' in pagina  # o de abrir fica no cabeçalho
+    assert pagina.index('data-sobre="perfil-menu"') < pagina.index(">Trocar senha</a>")  # no pé do menu, sob o perfil
+    assert "Trocar senha" in get(cliente, "/senha").get_data(as_text=True)
