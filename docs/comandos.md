@@ -175,6 +175,13 @@ pytest testes --cov                                  # tudo, com cobertura (piso
 pytest testes\modulo_01_acesso -k sessao             # só um módulo, ou só os testes com "sessao" no nome
 ```
 
+Cadastro completo cronometrado pelo navegador (mostra os tempos; roteiro com pessoa em
+`docs\ROTEIRO_cadastro_cronometrado.md`):
+
+```powershell
+pytest testes\web\test_cronometragem_sistema.py -s
+```
+
 Ciclo rápido, durante o desenvolvimento de uma etapa: unidade de tudo mais todos os testes do módulo mexido
 (aqui, o MOD-02). A suíte inteira roda uma vez antes de cada commit, e o pipeline do GitHub roda tudo.
 
