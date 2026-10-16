@@ -15,6 +15,7 @@ from sar.composicao import compor_auditoria, montar_barramento, montar_executor
 from sar.modulo_01_acesso.servicos import ServicoAuditoria, ServicoAutorizacoes
 from sar.modulo_08_dados.relogio import RelogioSistema
 from sar.nucleo.contexto import Contexto, Perfil
+from sar.nucleo.portas import Autorizacao
 from sar.nucleo.uow import UnidadeDeTrabalho
 from testes.apoio.acesso import CriarUsuario
 from testes.apoio.web import get, logado, montar, post
@@ -34,7 +35,7 @@ class ExecutorFalso:
         return 1
 
     def executar(
-        self, uow: UnidadeDeTrabalho, autor: Contexto, autorizador_id: int, parametros: Mapping[str, Any]
+        self, uow: UnidadeDeTrabalho, autor: Contexto, autorizacao: Autorizacao, parametros: Mapping[str, Any]
     ) -> None:
         pass
 

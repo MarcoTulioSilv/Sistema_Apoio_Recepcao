@@ -11,7 +11,7 @@ from sar.modulo_01_acesso.contrato import AuditService, AutorizacaoService, Perm
 from sar.modulo_08_dados.interfaces.pacientes import PacienteGravado, RepositorioPaciente
 from sar.nucleo.contexto import Contexto
 from sar.nucleo.erros import AcessoNegado, NaoEncontrado
-from sar.nucleo.portas import ImpactoAnulacao, ParticipanteAnulacao
+from sar.nucleo.portas import Autorizacao, ImpactoAnulacao, ParticipanteAnulacao
 from sar.nucleo.uow import ExecutorDeOperacao, UnidadeDeTrabalho
 
 GUARDA = PermissionGuard()
@@ -77,7 +77,7 @@ class ExecutorAnularPaciente:
         return paciente.versao if paciente is not None and paciente.anulado_em is None else None
 
     def executar(
-        self, uow: UnidadeDeTrabalho, autor: Contexto, autorizador_id: int, parametros: Mapping[str, Any]
+        self, uow: UnidadeDeTrabalho, autor: Contexto, autorizacao: Autorizacao, parametros: Mapping[str, Any]
     ) -> None:
         paciente = _vivo(uow, int(parametros["paciente_id"]), travar=True)
         for participante in self._participantes:
@@ -85,7 +85,9 @@ class ExecutorAnularPaciente:
         uow.repositorio(RepositorioPaciente).anular(paciente.id, autor.instante)
         # Sem os valores apagados: eles já estão nos registros de criação e edição (DD-89).
         alteracoes = {"anulado": (False, True), "dados_pessoais": (True, False)}
-        self._auditoria.registrar(uow, autor, ANULAR, "paciente", str(paciente.id), alteracoes, None, autorizador_id)
+        self._auditoria.registrar(
+            uow, autor, ANULAR, "paciente", str(paciente.id), alteracoes, None, autorizacao.autorizador_id
+        )
 
 
 class ServicoAnulacao:

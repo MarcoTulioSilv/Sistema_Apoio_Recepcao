@@ -16,7 +16,7 @@ from sar.modulo_02_cadastro.servicos import hoje_na_clinica
 from sar.modulo_08_dados.interfaces.pacientes import PacienteGravado, PeriodoGravado, RepositorioPaciente
 from sar.nucleo.contexto import Contexto
 from sar.nucleo.erros import AcessoNegado, NaoEncontrado, RegraViolada
-from sar.nucleo.portas import OperacaoPeriodo, VerificadorImpedimento
+from sar.nucleo.portas import Autorizacao, OperacaoPeriodo, VerificadorImpedimento
 from sar.nucleo.uow import ExecutorDeOperacao, UnidadeDeTrabalho
 
 GUARDA = PermissionGuard()
@@ -123,7 +123,7 @@ class ExecutorCorrigirEvento:
         return _versao(uow, entidade_id)
 
     def executar(
-        self, uow: UnidadeDeTrabalho, autor: Contexto, autorizador_id: int, parametros: Mapping[str, Any]
+        self, uow: UnidadeDeTrabalho, autor: Contexto, autorizacao: Autorizacao, parametros: Mapping[str, Any]
     ) -> None:
         tipo, data = TipoEvento(parametros["tipo"]), date.fromisoformat(parametros["data"])
         _, periodo, local = _validar_correcao(
@@ -140,7 +140,7 @@ class ExecutorCorrigirEvento:
             "comprovante": (periodo.evento_documento_id is not None, documento is not None),
         }  # fmt: skip
         self._auditoria.registrar(
-            uow, autor, CORRIGIR, "periodo_tratamento", str(periodo.id), alteracoes, None, autorizador_id
+            uow, autor, CORRIGIR, "periodo_tratamento", str(periodo.id), alteracoes, None, autorizacao.autorizador_id
         )
 
 
@@ -174,7 +174,7 @@ class ExecutorRemoverEvento:
         return _versao(uow, entidade_id)
 
     def executar(
-        self, uow: UnidadeDeTrabalho, autor: Contexto, autorizador_id: int, parametros: Mapping[str, Any]
+        self, uow: UnidadeDeTrabalho, autor: Contexto, autorizacao: Autorizacao, parametros: Mapping[str, Any]
     ) -> None:
         periodo = _validar_remocao(uow, int(parametros["periodo_id"]))
         uow.repositorio(RepositorioPaciente).gravar_evento(periodo.id, None, None, None, None, None)
@@ -184,7 +184,7 @@ class ExecutorRemoverEvento:
             "comprovante": (periodo.evento_documento_id is not None, False),
         }  # fmt: skip
         self._auditoria.registrar(
-            uow, autor, REMOVER, "periodo_tratamento", str(periodo.id), alteracoes, None, autorizador_id
+            uow, autor, REMOVER, "periodo_tratamento", str(periodo.id), alteracoes, None, autorizacao.autorizador_id
         )
 
 

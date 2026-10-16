@@ -15,6 +15,7 @@ from sar.composicao import montar_barramento, montar_executor
 from sar.modulo_01_acesso.servicos import ServicoAuditoria, ServicoAutorizacoes
 from sar.nucleo.contexto import Contexto, Perfil
 from sar.nucleo.erros import AcessoNegado, NaoEncontrado, RegraViolada
+from sar.nucleo.portas import Autorizacao
 from sar.nucleo.uow import UnidadeDeTrabalho
 from testes.apoio.acesso import CriarUsuario
 from testes.apoio.relogio_controlado import RelogioControlado
@@ -41,14 +42,14 @@ class ExecutorFalso:
         return self.versoes.get(entidade_id, 1)
 
     def executar(
-        self, uow: UnidadeDeTrabalho, autor: Contexto, autorizador_id: int, parametros: Mapping[str, Any]
+        self, uow: UnidadeDeTrabalho, autor: Contexto, autorizacao: Autorizacao, parametros: Mapping[str, Any]
     ) -> None:
         if self.falhar:
             raise RuntimeError("executor falhou")
-        self.chamadas.append((autor.usuario_id, autor.perfil, autor.sessao_id, autorizador_id))
+        self.chamadas.append((autor.usuario_id, autor.perfil, autor.sessao_id, autorizacao))
         ServicoAuditoria().registrar(
             uow, autor, ANULAR, "paciente", str(parametros["paciente_id"]), {"anulado": (False, True)}, None,
-            autorizador_id,
+            autorizacao.autorizador_id,
         )  # fmt: skip
 
 
@@ -102,7 +103,8 @@ def test_recepcao_pede_administracao_aprova_e_a_trilha_guarda_as_duas_identidade
 
     assert servico.aprovar(admin, sid) == "executada"
     assert estado(engine_web, sid)[:2] == ("executada", admin.usuario_id)
-    assert executor.chamadas == [(recepcao.usuario_id, Perfil.RECEPCAO, None, admin.usuario_id)]
+    assinatura = Autorizacao(sid, admin.usuario_id, "Cadastro duplicado por engano")  # a marca de mês alterado usa
+    assert executor.chamadas == [(recepcao.usuario_id, Perfil.RECEPCAO, None, assinatura)]
     assert auditoria_da_operacao(engine_web) == [(recepcao.usuario_id, admin.usuario_id, None)]
     assert servico.pendentes(admin) == []
 

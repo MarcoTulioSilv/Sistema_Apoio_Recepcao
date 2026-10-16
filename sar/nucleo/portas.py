@@ -45,6 +45,16 @@ class Cifra(Protocol):
 
 
 # ------------------------------------------------------------------ MOD-01: autorização (DEC-42)
+@dataclass(frozen=True, slots=True)
+class Autorizacao:
+    """Quem aprovou e por quê: o executor grava o autorizador em campo próprio (QAS-10) e, se alcançar mês fechado,
+    a marca de mês alterado com o motivo e a solicitação (RF-915, DD-26)."""
+
+    solicitacao_id: str  # 32 hexadecimais
+    autorizador_id: int
+    motivo: str
+
+
 class ExecutorAutorizavel(Protocol):
     tipo: str  # código da operação, ex.: "cadastro.evento.corrigir"
 
@@ -57,7 +67,7 @@ class ExecutorAutorizavel(Protocol):
         ...
 
     def executar(
-        self, uow: UnidadeDeTrabalho, autor: Contexto, autorizador_id: int, parametros: Mapping[str, Any]
+        self, uow: UnidadeDeTrabalho, autor: Contexto, autorizacao: Autorizacao, parametros: Mapping[str, Any]
     ) -> None:
         """Executa na mesma transação da aprovação; grava a marca de mês alterado se alcançar mês fechado."""
         ...

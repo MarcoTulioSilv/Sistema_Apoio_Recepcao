@@ -545,7 +545,8 @@ Executada, Invalidada, Recusada e Cancelada são finais. A aprovação executa p
 `ExecutorAutorizavel` (DD-02), na mesma transação da mudança de estado e da auditoria. O executor recebe
 como autor o solicitante (usuário e perfil atuais, sem sessão, porque ele não está logado na hora) com a
 origem, o instante e a requisição da aprovação, quando a ação acontece; o autorizador vai em campo próprio
-(QAS-10). A linha da solicitação é travada na decisão, para duas decisões simultâneas se serializarem.
+(QAS-10), junto com o id e o motivo da solicitação, que o executor grava na marca de mês alterado quando a
+operação alcança mês fechado (RF-915, DD-26). A linha da solicitação é travada na decisão, para duas decisões simultâneas se serializarem.
 
 **Confirmação automática (P-01).** Quando o solicitante tem perfil de administração, a solicitação
 nasce e é aprovada na mesma operação: não entra na fila nem gera pendência. O motivo continua
