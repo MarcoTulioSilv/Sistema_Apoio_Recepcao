@@ -8,10 +8,8 @@
   {{ texto("bairro", "Bairro", v, erros) }}
   <div class="campo">
     <label class="rotulo" for="municipio">Município (Goiás)</label>
-    <select class="entrada" id="municipio" name="municipio" aria-describedby="municipio-erro"{% if erros.get('municipio') %} aria-invalid="true"{% endif %}>
-      <option value="">Selecione…</option>
-      {% for m in municipios_go %}<option value="{{ m.codigo }}"{% if v.get('municipio') == m.codigo %} selected{% endif %}>{{ m.nome }}</option>{% endfor %}
-    </select>
+    <input class="entrada" id="municipio" name="municipio" type="text" list="municipios-go" autocomplete="off" value="{{ v.get('municipio', '') }}" aria-describedby="municipio-erro"{% if erros.get('municipio') %} aria-invalid="true"{% endif %}>
+    <datalist id="municipios-go">{% with municipios=municipios_go %}{% include "_opcoes_municipios.html" %}{% endwith %}</datalist>
     <p class="ajuda-erro m-0" id="municipio-erro" aria-live="polite">{{ erros.get('municipio', '') }}</p>
   </div>
 </div>

@@ -22,15 +22,14 @@
         {{ texto("rg_orgao", "Órgão emissor do RG", v, erros) }}
         <div class="campo">
           <label class="rotulo" for="naturalidade_uf">Naturalidade: UF</label>
-          <select class="entrada" id="naturalidade_uf" name="naturalidade_uf" hx-get="{{ url_for('cadastro.municipios') }}" hx-trigger="change" hx-target="#naturalidade">
+          <select class="entrada" id="naturalidade_uf" name="naturalidade_uf" hx-get="{{ url_for('cadastro.municipios') }}" hx-trigger="change" hx-target="#municipios-naturalidade">
             {% for uf in ufs %}<option{% if uf == uf_naturalidade %} selected{% endif %}>{{ uf }}</option>{% endfor %}
           </select>
         </div>
         <div class="campo">
           <label class="rotulo" for="naturalidade">Naturalidade: município</label>
-          <select class="entrada" id="naturalidade" name="naturalidade" aria-describedby="naturalidade-erro"{% if erros.get('naturalidade') %} aria-invalid="true"{% endif %}>
-            {% with municipios=municipios_naturalidade, selecionado=v.get('naturalidade', '') %}{% include "_opcoes_municipios.html" %}{% endwith %}
-          </select>
+          <input class="entrada" id="naturalidade" name="naturalidade" type="text" list="municipios-naturalidade" autocomplete="off" value="{{ v.get('naturalidade', '') }}" aria-describedby="naturalidade-erro"{% if erros.get('naturalidade') %} aria-invalid="true"{% endif %}>
+          <datalist id="municipios-naturalidade">{% with municipios=municipios_naturalidade %}{% include "_opcoes_municipios.html" %}{% endwith %}</datalist>
           <p class="ajuda-erro m-0" id="naturalidade-erro" aria-live="polite">{{ erros.get('naturalidade', '') }}</p>
         </div>
       </div>

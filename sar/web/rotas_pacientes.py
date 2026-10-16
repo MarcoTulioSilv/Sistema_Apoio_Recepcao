@@ -27,7 +27,14 @@ from sar.web.mensagens_cadastro import (
     SITUACOES,
     TELEFONES,
 )
-from sar.web.rotas_cadastro import UF_RESIDENCIA, UFS, erro_do_formulario, municipios_da_uf
+from sar.web.rotas_cadastro import (
+    UF_RESIDENCIA,
+    UFS,
+    erro_do_formulario,
+    municipios_da_uf,
+    municipios_para_codigos,
+    municipios_para_nomes,
+)
 
 bp = Blueprint("pacientes", __name__, url_prefix="/pacientes")
 TELEFONES_VALORES = {t.value for t in TipoTelefone}
@@ -206,7 +213,8 @@ def _edicao(contexto: Contexto, paciente_id: int, versao: int, v: dict[str, str]
     uf = v.get("naturalidade_uf") or UF_RESIDENCIA
     uf = uf if uf in UFS else UF_RESIDENCIA
     return render_template(
-        "paciente_editar.html", paciente_id=paciente_id, versao=versao, v=v, ufs=UFS, uf_naturalidade=uf,
+        "paciente_editar.html", paciente_id=paciente_id, versao=versao, v=municipios_para_nomes(contexto, v), ufs=UFS,
+        uf_naturalidade=uf,
         municipios_naturalidade=municipios_da_uf(contexto, uf), municipios_go=municipios_da_uf(contexto, UF_RESIDENCIA),
         erros=extra.pop("erros", {}), **extra,
     )  # fmt: skip
@@ -226,7 +234,7 @@ def editar_enviar(paciente_id: int) -> Response | str:
     v = valores(request.form)
     versao = int(request.form.get("versao", "0") or 0)
     try:
-        cadastro = ler(v)
+        cadastro = ler(municipios_para_codigos(contexto, v))
         _servicos().pacientes.atualizar(contexto, paciente_id, versao, cadastro.dados)
     except ConflitoDeVersao:
         f = _servicos().pacientes.ver_ficha(contexto, paciente_id)

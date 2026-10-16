@@ -40,7 +40,7 @@ def test_tela_aparece_para_quem_cadastra_e_nao_para_o_ti(
     cliente = recepcao(engine_web, criar_usuario)
     pagina = get(cliente, "/cadastro/novo").get_data(as_text=True)
     assert 'href="/cadastro/novo"' in get(cliente, "/").get_data(as_text=True)
-    assert f'<option value="{JATAI}">Jataí</option>' in pagina  # municípios de Goiás na residência
+    assert 'list="municipios-go"' in pagina and '<option value="Jataí"></option>' in pagina  # sugestões de Goiás
     assert "htmx-4.0.0.min.js" in pagina and 'content="history:false' in pagina  # nada da ficha no navegador
     criar_usuario("webcad_ti", perfil="ti")
     ti = logado(montar(engine_web), "webcad_ti")
@@ -155,7 +155,7 @@ def test_cep_preenche_o_endereco_ou_avisa_que_esta_fora_do_ar(
     provedor.enderecos["01001000"] = EnderecoCep("01001000", "Praça da Sé", "Sé", "3550308", "SP", "São Paulo")
     preenchido = post(cliente, "/cadastro/cep", {"cep": "75800-000", "numero": "10"}).get_data(as_text=True)
     assert 'value="Rua Fictícia"' in preenchido and 'value="10"' in preenchido
-    assert f'<option value="{JATAI}" selected>Jataí</option>' in preenchido
+    assert re.search(r'id="municipio"[^>]*value="Jataí"', preenchido)  # o nome, no campo com sugestões
     assert "não é de Goiás" in post(cliente, "/cadastro/cep", {"cep": "01001000"}).get_data(as_text=True)
     assert "não encontrado" in post(cliente, "/cadastro/cep", {"cep": "75899999"}).get_data(as_text=True)
     assert "8 dígitos" in post(cliente, "/cadastro/cep", {"cep": "758"}).get_data(as_text=True)
@@ -180,9 +180,9 @@ def test_municipios_da_naturalidade_por_uf(
     criar_usuario: CriarUsuario, cadastro_zerado: dict[str, int], engine_web: Engine
 ) -> None:
     cliente = recepcao(engine_web, criar_usuario)
-    assert '<option value="3550308">São Paulo</option>' in get(
-        cliente, "/cadastro/municipios?naturalidade_uf=SP"
-    ).get_data(as_text=True)
+    assert '<option value="São Paulo"></option>' in get(cliente, "/cadastro/municipios?naturalidade_uf=SP").get_data(
+        as_text=True
+    )
     assert get(cliente, "/cadastro/municipios?naturalidade_uf=XX").status_code == 404
 
 
@@ -219,3 +219,31 @@ def test_aviso_de_cep_geral_para_cep_terminado_em_000(
     assert ">CEP geral</span>" in ficha
     outra = post(cliente, "/cadastro/novo", {**minimo(fabrica, cep="75803-123"), "acao": "paciente"})
     assert ">CEP geral</span>" not in get(cliente, outra.headers["Location"]).get_data(as_text=True)
+
+
+@pytest.mark.requisito("RF-111", "RF-101")
+def test_municipio_digitado_com_sugestoes_vira_o_codigo(
+    criar_usuario: CriarUsuario, cadastro_zerado: dict[str, int], engine_web: Engine, fabrica: Fabrica
+) -> None:
+    """Pedido em uso: o município era escolhido rolando uma lista; agora é digitado, com sugestões, e o servidor
+    converte o nome no código IBGE da UF certa."""
+    cliente = recepcao(engine_web, criar_usuario)
+    invalido = post(cliente, "/cadastro/novo", {**minimo(fabrica, municipio="Cidade Fictícia"), "acao": "paciente"})
+    corpo = invalido.get_data(as_text=True)
+    assert re.search(r'id="municipio"[^>]*aria-invalid="true"', corpo) and "Escolha o município na lista." in corpo
+    fora = post(cliente, "/cadastro/novo", {**minimo(fabrica, naturalidade_uf="GO", naturalidade="Campinas"),
+                                           "acao": "paciente"}).get_data(as_text=True)  # fmt: skip
+    assert re.search(r'id="naturalidade"[^>]*aria-invalid="true"', fora)  # Campinas não é de Goiás
+    dados = minimo(fabrica, municipio="jatai", naturalidade_uf="SP", naturalidade="sao paulo")
+    resposta = post(cliente, "/cadastro/novo", {**dados, "acao": "paciente"})
+    assert resposta.status_code == 302
+    with engine_web.connect() as c:
+        linha = c.execute(text("SELECT municipio_id, naturalidade_municipio_id FROM paciente")).one()
+    assert tuple(linha) == (JATAI, "3550308")
+    pid = resposta.headers["Location"].split("/")[2].split("?")[0]
+    edicao = get(cliente, f"/pacientes/{pid}/editar").get_data(as_text=True)
+    assert re.search(r'id="municipio"[^>]*value="Jataí"', edicao)
+    assert re.search(r'id="naturalidade"[^>]*value="São Paulo"', edicao)
+    rascunho = post(cliente, "/cadastro/rascunho", {"municipio": JATAI}).get_data(as_text=True)  # código antigo
+    assert "Rascunho salvo" in rascunho
+    assert re.search(r'id="municipio"[^>]*value="Jataí"', get(cliente, "/cadastro/novo").get_data(as_text=True))

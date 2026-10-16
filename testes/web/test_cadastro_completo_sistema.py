@@ -47,7 +47,7 @@ def test_cadastro_com_todos_os_campos_e_localizacao(
     digitar(page, "Cartão do SUS (CNS)", p.cns)
     digitar(page, "RG", "1234567", exato=True)
     digitar(page, "Órgão emissor do RG", "SSP/GO")
-    page.get_by_label("Naturalidade: município").select_option(label="Rio Verde")
+    page.get_by_label("Naturalidade: município").fill("rio verde")  # digitado, com sugestões; sem acento vale
     digitar(page, "CEP", "75800-000", exato=True)
     page.get_by_label("CEP", exact=True).press("Tab")
     expect(page.get_by_label("Logradouro")).to_have_value("Rua Fictícia")  # preenchido pelo CEP

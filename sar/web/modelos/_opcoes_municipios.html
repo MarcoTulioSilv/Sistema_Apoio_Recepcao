@@ -1,2 +1,2 @@
-<option value="">Selecione…</option>
-{% for m in municipios %}<option value="{{ m.codigo }}"{% if selecionado == m.codigo %} selected{% endif %}>{{ m.nome }}</option>{% endfor %}
+{# Sugestões de um campo de município (datalist): o valor é o nome; o servidor converte no código IBGE. #}
+{% for m in municipios %}<option value="{{ m.nome }}"></option>{% endfor %}

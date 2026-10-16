@@ -4,6 +4,7 @@ CEP e confere CPF e CNS na hora, e o script local acrescenta linhas de telefone 
 
 from __future__ import annotations
 
+import unicodedata
 from datetime import datetime
 from typing import Any, Literal
 from zoneinfo import ZoneInfo
@@ -81,7 +82,50 @@ def municipios_da_uf(contexto: Contexto, uf: str) -> list[Municipio]:
     return _servicos().configuracao.listar_municipios(contexto, uf)
 
 
+# Município digitado com sugestões (datalist): a tela trabalha com o nome; o contrato, com o código IBGE.
+CAMPOS_MUNICIPIO = (("municipio", "municipio.inexistente"), ("naturalidade", "naturalidade_municipio.inexistente"))
+
+
+def _chave(nome: str) -> str:
+    sem_acento = "".join(c for c in unicodedata.normalize("NFKD", nome) if not unicodedata.combining(c))
+    return " ".join(sem_acento.casefold().split())
+
+
+def _uf_do_campo(campo: str, v: dict[str, str]) -> str:
+    uf = v.get("naturalidade_uf") or UF_RESIDENCIA
+    return UF_RESIDENCIA if campo == "municipio" or uf not in UFS else uf
+
+
+def municipios_para_codigos(contexto: Contexto, v: dict[str, str]) -> dict[str, str]:
+    """O nome escolhido (sem acento e sem caixa também vale) vira o código da UF certa; código já pronto (rascunho
+    antigo) passa como está. RegraViolada se o nome não está na lista daquela UF."""
+    convertido = dict(v)
+    for campo, codigo_erro in CAMPOS_MUNICIPIO:
+        valor = v.get(campo, "").strip()
+        if not valor or (len(valor) == 7 and valor.isdigit()):
+            continue
+        achado = next(
+            (m for m in municipios_da_uf(contexto, _uf_do_campo(campo, v)) if _chave(m.nome) == _chave(valor)), None
+        )
+        if achado is None:
+            raise RegraViolada(codigo_erro)
+        convertido[campo] = achado.codigo
+    return convertido
+
+
+def municipios_para_nomes(contexto: Contexto, v: dict[str, str]) -> dict[str, str]:
+    """Para mostrar: código (do rascunho antigo ou da ficha) vira o nome que o campo de texto exibe."""
+    exibido = dict(v)
+    for campo, _ in CAMPOS_MUNICIPIO:
+        valor = v.get(campo, "").strip()
+        if len(valor) == 7 and valor.isdigit():
+            achado = next((m for m in municipios_da_uf(contexto, _uf_do_campo(campo, v)) if m.codigo == valor), None)
+            exibido[campo] = achado.nome if achado else ""
+    return exibido
+
+
 def _pagina(contexto: Contexto, v: dict[str, str], **dados: Any) -> str:
+    v = municipios_para_nomes(contexto, v)
     uf_naturalidade = v.get("naturalidade_uf") or UF_RESIDENCIA
     configuracao = _servicos().configuracao
     return render_template(
@@ -165,7 +209,7 @@ def salvar() -> Response | str:
         return _pagina(contexto, v, resultado=f"Rascunho salvo às {_hora(salvo.atualizado_em)}.", tem_rascunho=True)
     cadastro: Cadastro | None = None
     try:
-        cadastro = ler(v)
+        cadastro = ler(municipios_para_codigos(contexto, v))
         paciente_id = _servicos().pacientes.criar(
             contexto, cadastro.dados, cadastro.inicio, confirmar_duplicidade=acao == "confirmar",
             cobertura=cadastro.cobertura, telefones=cadastro.telefones, contatos=cadastro.contatos,
@@ -218,7 +262,7 @@ def cep() -> str:
             v.update(cep=sugerido.cep, logradouro=sugerido.logradouro or v.get("logradouro", ""),
                      bairro=sugerido.bairro or v.get("bairro", ""))  # fmt: skip
             if sugerido.municipio is not None and sugerido.municipio.uf == UF_RESIDENCIA:
-                v["municipio"] = sugerido.municipio.codigo
+                v["municipio"] = sugerido.municipio.nome
                 mensagem = "Endereço preenchido pelo CEP. Confira e complete o número."
             else:
                 mensagem = "Este CEP não é de Goiás: a residência precisa ser em município de Goiás."
