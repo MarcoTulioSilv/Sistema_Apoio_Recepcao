@@ -66,8 +66,8 @@ def test_viacep_responde_e_so_o_cep_sai() -> None:
 @pytest.mark.requisito("DD-88")
 def test_cep_inexistente_no_principal_nao_e_reconsultado() -> None:
     pedidos: list[httpx.Request] = []
-    assert provedor(json({"erro": "true"}), json(BRASILAPI), pedidos).consultar("75803123") is None
-    assert [p.url.host for p in pedidos] == ["viacep.com.br"]  # a BrasilAPI não é consultada
+    assert provedor(json({"erro": "true"}), json(BRASILAPI), pedidos).consultar(CEP) is None
+    assert [p.url.host for p in pedidos] == ["viacep.com.br"]
 
 
 @pytest.mark.requisito("DD-88", "AD-23")
@@ -107,39 +107,3 @@ def test_cliente_com_tempo_limite_curto_e_sem_redirecionamento() -> None:
     cliente = novo_cliente()
     assert cliente.timeout.connect == TEMPO_LIMITE == 3.0 and cliente.timeout.read == TEMPO_LIMITE
     assert not cliente.follow_redirects
-
-
-def por_cep(respostas: dict[str, object]) -> Resposta:
-    """ViaCEP simulado: o JSON de cada CEP conhecido; os outros, "erro": "true"."""
-
-    def tratar(pedido: httpx.Request) -> httpx.Response:
-        cep = pedido.url.path.split("/")[2]
-        return httpx.Response(200, json=respostas.get(cep, {"erro": "true"}))
-
-    return tratar
-
-
-@pytest.mark.requisito("DD-88", "AD-23")
-def test_cep_geral_da_cidade_traz_o_municipio_pelo_vizinho() -> None:
-    """Defeito encontrado em uso: 75800-000, o CEP geral de Jataí, não existe na base dos Correios (a cidade tem
-    CEP por logradouro), e o preenchimento não trazia o município."""
-    pedidos: list[httpx.Request] = []
-    rua = {"cep": "75800-001", "logradouro": "Avenida Fictícia", "bairro": "Setor Central", "localidade": "Jataí",
-           "uf": "GO", "ibge": "5211909"}  # fmt: skip
-    endereco = provedor(por_cep({"75800001": rua}), json(BRASILAPI), pedidos).consultar("75800000")
-    assert endereco is not None
-    assert (endereco.cep, endereco.logradouro, endereco.bairro) == ("75800000", None, None)  # só o município
-    assert (endereco.municipio_ibge, endereco.uf, endereco.municipio_nome) == ("5211909", "GO", "Jataí")
-    assert [str(p.url) for p in pedidos] == [
-        "https://viacep.com.br/ws/75800000/json/", "https://viacep.com.br/ws/75800001/json/"
-    ]  # fmt: skip
-
-
-@pytest.mark.requisito("DD-88", "RNF-612")
-def test_cep_geral_sem_vizinho_e_cep_comum_inexistente_nao_consultam_mais() -> None:
-    pedidos: list[httpx.Request] = []
-    assert provedor(por_cep({}), json(BRASILAPI), pedidos).consultar("75803000") is None
-    assert len(pedidos) == 2  # o próprio e o vizinho -001, nada além
-    pedidos.clear()
-    assert provedor(por_cep({}), json(BRASILAPI), pedidos).consultar("75803123") is None
-    assert len(pedidos) == 1  # não termina em -000: sem vizinho

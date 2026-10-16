@@ -201,15 +201,3 @@ def test_sem_javascript_a_cobertura_salva_mostra_so_os_campos_dela(
     assert re.search(r'data-cobertura="sus" hidden', corpo) and not re.search(
         r'data-cobertura="convenio" hidden', corpo
     )
-
-
-@pytest.mark.requisito("DD-88", "AD-23")
-def test_cep_geral_preenche_so_o_municipio(
-    criar_usuario: CriarUsuario, cadastro_zerado: dict[str, int], engine_web: Engine
-) -> None:
-    provedor = ProvedorCepFalso(fora_do_ar=False)
-    provedor.enderecos["75800000"] = EnderecoCep("75800000", None, None, JATAI, "GO", "Jataí")  # como o vizinho devolve
-    cliente = recepcao(engine_web, criar_usuario, provedor)
-    corpo = post(cliente, "/cadastro/cep", {"cep": "75800-000"}).get_data(as_text=True)
-    assert "CEP geral de Jataí: preencha o logradouro, o número e o bairro." in corpo
-    assert f'<option value="{JATAI}" selected>Jataí</option>' in corpo

@@ -212,10 +212,7 @@ def cep() -> str:
                      bairro=sugerido.bairro or v.get("bairro", ""))  # fmt: skip
             if sugerido.municipio is not None and sugerido.municipio.uf == UF_RESIDENCIA:
                 v["municipio"] = sugerido.municipio.codigo
-                if sugerido.logradouro or sugerido.bairro:
-                    mensagem = "Endereço preenchido pelo CEP. Confira e complete o número."
-                else:  # CEP geral da cidade: só o município (DD-88)
-                    mensagem = f"CEP geral de {sugerido.municipio.nome}: preencha o logradouro, o número e o bairro."
+                mensagem = "Endereço preenchido pelo CEP. Confira e complete o número."
             else:
                 mensagem = "Este CEP não é de Goiás: a residência precisa ser em município de Goiás."
     return render_template(
