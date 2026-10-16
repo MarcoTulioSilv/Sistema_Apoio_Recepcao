@@ -12,7 +12,7 @@ from datetime import date, timedelta
 from enum import StrEnum
 
 from sar.modulo_03_operacao.calendario import Sessao, competencia, limites_da_competencia
-from sar.modulo_03_operacao.contrato import LIMITE_EXTRAS, Escala
+from sar.modulo_03_operacao.contrato import LIMITE_EXTRAS, Escala, OrigemPar
 
 
 def _ordem(sessao: Sessao) -> tuple[date, int, int]:
@@ -90,12 +90,6 @@ class Ligacao:
 
     ausencia: Sessao
     presenca: Sessao
-
-
-class OrigemPar(StrEnum):
-    TROCA = "troca"
-    MANUAL = "manual"
-    AUTOMATICO = "automatico"
 
 
 class Classificacao(StrEnum):

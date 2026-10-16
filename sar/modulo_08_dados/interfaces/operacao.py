@@ -163,6 +163,11 @@ class RepositorioOperacao(Protocol):
         """Grava a confirmação (ou a não realização, com o motivo) se a versão ainda for a informada."""
         ...
 
+    def reabrir_sessao(self, id: int, versao: int) -> bool:
+        """Desfaz a confirmação (ou a não realização) se a versão ainda for a informada; as presenças gravadas
+        ficam, como exceções da sessão reaberta."""
+        ...
+
     def presencas_da_sessao(self, sessao_id: int) -> list[PresencaGravada]: ...
 
     def presenca_por_id(self, id: int) -> PresencaGravada | None: ...
@@ -189,3 +194,22 @@ class RepositorioOperacao(Protocol):
     def remover_ligacoes(self, ids: Sequence[int]) -> None: ...
 
     def ciencias(self, presenca_ids: Sequence[int]) -> list[CienciaGravada]: ...
+
+    def criar_ciencia(self, presenca_id: int, em: datetime, por: int) -> None: ...
+
+    # ---------------------------------------------------------------- marca de mês alterado (RF-915, DD-26)
+    def criar_marca(
+        self,
+        competencia: str,
+        instante: datetime,
+        responsavel_id: int,
+        autorizador_id: int,
+        motivo: str,
+        solicitacao_id: bytes | None,
+    ) -> int:
+        """Só inserção."""
+        ...
+
+    def marcas(self, competencias: Sequence[str]) -> list[MarcaGravada]:
+        """Em ordem de competência e de instante."""
+        ...

@@ -6,7 +6,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from datetime import date, datetime, timedelta
 
-from sar.modulo_01_acesso.contrato import AuditService, PermissionGuard
+from sar.modulo_01_acesso.contrato import AuditService, AutorizacaoService, PermissionGuard
 from sar.modulo_02_cadastro.contrato import LeituraCadastro
 from sar.modulo_03_operacao import dados
 from sar.modulo_03_operacao.apuracao import ListaDaSessao, apurar, lista_da_sessao
@@ -43,6 +43,7 @@ GUARDA = PermissionGuard()
 MARCAR = "operacao.frequencia.marcar_ausencia"
 ACRESCENTAR = "operacao.frequencia.acrescentar_paciente"
 ALTERAR_CONFIRMADA = "operacao.presenca.alterar_confirmada"
+REABRIR = "operacao.sessao.reabrir"
 TAMANHO_MOTIVO = 300
 
 
@@ -54,6 +55,11 @@ def _estado_gravado(sessao: Sessao, gravada: SessaoGravada | None, agora: dateti
     confirmada = gravada is not None and gravada.confirmada_em is not None
     nao_realizada = gravada is not None and gravada.nao_realizada_motivo is not None
     return estado(sessao, agora, ant, confirmada=confirmada, nao_realizada=nao_realizada)
+
+
+def _chave(data: date, escala_id: int) -> str:
+    """Identificador da sessão na solicitação (o mesmo que os executores leem)."""
+    return f"{data.isoformat()}:{escala_id}"
 
 
 def _usuario(contexto: Contexto) -> int:
@@ -69,11 +75,13 @@ class ServicoSessoes:
         auditoria: AuditService,
         leitura: LeituraCadastro,
         parametros: LeitorParametros,
+        autorizacoes: AutorizacaoService,
     ) -> None:
         self._executar = executar
         self._auditoria = auditoria
         self._leitura = leitura
         self._parametros = parametros
+        self._autorizacoes = autorizacoes
 
     # ---------------------------------------------------------------- consulta
     def painel(self, contexto: Contexto) -> PainelTurnos:
@@ -320,6 +328,34 @@ class ServicoSessoes:
             )  # fmt: skip
 
         self._com_conflito(operacao)
+
+    # ---------------------------------------------------------------- por autorização (RF-1008, DD-26)
+    def solicitar_reabertura(self, contexto: Contexto, data: date, escala_id: int, motivo: str) -> str:
+        if not GUARDA.solicitavel(contexto, REABRIR):
+            raise AcessoNegado()
+        self._executar(lambda uow: self._exigir_confirmada(uow, data, escala_id))
+        parametros = {"data": data.isoformat(), "escala_id": escala_id}
+        return self._autorizacoes.solicitar(contexto, REABRIR, _chave(data, escala_id), parametros, motivo)
+
+    def solicitar_alteracao_confirmada(
+        self, contexto: Contexto, data: date, escala_id: int, paciente_id: int, presente: bool, motivo: str
+    ) -> str:
+        if not GUARDA.solicitavel(contexto, ALTERAR_CONFIRMADA):
+            raise AcessoNegado()
+        self._executar(lambda uow: self._exigir_confirmada(uow, data, escala_id))
+        parametros = {
+            "data": data.isoformat(),
+            "escala_id": escala_id,
+            "paciente_id": paciente_id,
+            "presente": presente,
+        }
+        return self._autorizacoes.solicitar(contexto, ALTERAR_CONFIRMADA, _chave(data, escala_id), parametros, motivo)
+
+    def _exigir_confirmada(self, uow: UnidadeDeTrabalho, data: date, escala_id: int) -> None:
+        self._sessao(uow, data, escala_id)
+        gravada = uow.repositorio(RepositorioOperacao).sessao(data, escala_id)
+        if gravada is None or gravada.confirmada_em is None:
+            raise RegraViolada("sessao.nao_confirmada")
 
     # ---------------------------------------------------------------- apoio
     def _antecedencias(self) -> Antecedencias:

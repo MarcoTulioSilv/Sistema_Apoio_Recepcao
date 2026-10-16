@@ -16,6 +16,7 @@ from sar.modulo_08_dados.interfaces.operacao import (
     EscalaGravada,
     ExtraGravada,
     LigacaoGravada,
+    MarcaGravada,
     PresencaGravada,
     SessaoGravada,
     SituacaoPresenca,
@@ -27,6 +28,7 @@ from sar.modulo_08_dados.modelos.operacao import (
     Escala,
     ExtraPlanejada,
     LigacaoManual,
+    MesAlterado,
     Presenca,
     SessaoTurno,
     TrocaPontual,
@@ -53,6 +55,11 @@ def _extra(e: ExtraPlanejada) -> ExtraGravada:
 def _sessao(s: SessaoTurno) -> SessaoGravada:
     return SessaoGravada(s.id, s.data, s.escala_id, _utc(s.confirmada_em), s.confirmada_por, s.nao_realizada_motivo,
                          s.versao)  # fmt: skip
+
+
+def _marca(m: MesAlterado) -> MarcaGravada:
+    return MarcaGravada(m.id, m.competencia, m.instante.replace(tzinfo=UTC), m.responsavel_id, m.autorizador_id,
+                        m.motivo, m.solicitacao_id)  # fmt: skip
 
 
 _PRESENCA = select(Presenca, SessaoTurno.data, SessaoTurno.escala_id).join(
@@ -200,6 +207,15 @@ class RepositorioOperacaoSQL:
         )  # fmt: skip
         return bool(getattr(resultado, "rowcount", 0) == 1)
 
+    def reabrir_sessao(self, id: int, versao: int) -> bool:
+        resultado = self._s.execute(
+            update(SessaoTurno)
+            .where(SessaoTurno.id == id, SessaoTurno.versao == versao)
+            .values(confirmada_em=None, confirmada_por=None, nao_realizada_motivo=None, versao=SessaoTurno.versao + 1),
+            execution_options={"synchronize_session": False},
+        )
+        return bool(getattr(resultado, "rowcount", 0) == 1)
+
     # ---------------------------------------------------------------- presenças
     @staticmethod
     def _presencas(linhas: Select[tuple[Presenca, date, int]], s: Session) -> list[PresencaGravada]:
@@ -272,3 +288,33 @@ class RepositorioOperacaoSQL:
             CienciaGravada(c.presenca_id, c.registrada_em.replace(tzinfo=UTC), c.registrada_por)
             for c in self._s.scalars(consulta.order_by(CienciaEnfermagem.presenca_id))
         ]
+
+    def criar_ciencia(self, presenca_id: int, em: datetime, por: int) -> None:
+        self._s.add(CienciaEnfermagem(presenca_id=presenca_id, registrada_em=_gravar(em), registrada_por=por))
+        self._s.flush()
+
+    # ---------------------------------------------------------------- marcas
+    def criar_marca(
+        self,
+        competencia: str,
+        instante: datetime,
+        responsavel_id: int,
+        autorizador_id: int,
+        motivo: str,
+        solicitacao_id: bytes | None,
+    ) -> int:
+        linha = MesAlterado(competencia=competencia, instante=_gravar(instante), responsavel_id=responsavel_id,
+                            autorizador_id=autorizador_id, motivo=motivo, solicitacao_id=solicitacao_id)  # fmt: skip
+        self._s.add(linha)
+        self._s.flush()
+        return linha.id
+
+    def marcas(self, competencias: Sequence[str]) -> list[MarcaGravada]:
+        if not competencias:
+            return []
+        consulta = (
+            select(MesAlterado)
+            .where(MesAlterado.competencia.in_(list(competencias)))
+            .order_by(MesAlterado.competencia, MesAlterado.instante, MesAlterado.id)
+        )
+        return [_marca(m) for m in self._s.scalars(consulta)]

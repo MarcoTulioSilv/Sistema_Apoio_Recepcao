@@ -16,13 +16,13 @@ from sar.modulo_03_operacao.compensacao import (
     Classificacao,
     Ligacao,
     Marcacao,
-    OrigemPar,
     Periodo,
     Troca,
     Vigencia,
     compensar,
     vagas_previstas,
 )
+from sar.modulo_03_operacao.contrato import OrigemPar
 from testes.apoio.operacao import POR_CODIGO
 
 OUT = "2026-10"

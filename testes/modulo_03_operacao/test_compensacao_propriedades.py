@@ -14,13 +14,13 @@ from sar.modulo_03_operacao.calendario import Sessao, limites_da_competencia, se
 from sar.modulo_03_operacao.compensacao import (
     Ligacao,
     Marcacao,
-    OrigemPar,
     Periodo,
     Troca,
     Vigencia,
     compensar,
     vagas_previstas,
 )
+from sar.modulo_03_operacao.contrato import OrigemPar
 from testes.apoio.operacao import ESCALAS
 
 IMPLANTADO = date(2025, 1, 1)

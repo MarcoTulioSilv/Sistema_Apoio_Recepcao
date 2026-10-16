@@ -48,8 +48,10 @@ from sar.modulo_02_cadastro.pendencias import FONTES as FONTES_CADASTRO
 from sar.modulo_02_cadastro.pendencias import ServicoMarcoRetencao
 from sar.modulo_02_cadastro.rascunhos import FonteRascunhoProximoDoDescarte, ServicoRascunhos
 from sar.modulo_02_cadastro.servicos import ServicoCep, ServicoContatos, ServicoLeituraCadastro, ServicoPacientes
-from sar.modulo_03_operacao.contrato import EscalaService, SessaoTurnoService
+from sar.modulo_03_operacao.contrato import EscalaService, FrequenciaService, SessaoTurnoService
 from sar.modulo_03_operacao.escalas import ServicoEscalas
+from sar.modulo_03_operacao.executores import executores as executores_operacao
+from sar.modulo_03_operacao.frequencia import ServicoFrequencia
 from sar.modulo_03_operacao.integracao import VerificadorUsoImplantacao
 from sar.modulo_03_operacao.sessoes import ServicoSessoes
 from sar.modulo_06_configuracao.contrato import ConfiguracaoService, Referencias
@@ -183,6 +185,7 @@ class Componentes:
     leitura_cadastro: LeituraCadastro
     escalas: EscalaService
     turnos: SessaoTurnoService
+    frequencia: FrequenciaService
 
 
 # Verificadores de uso dos parâmetros imutáveis (DD-51): a data de implantação trava na primeira sessão confirmada.
@@ -216,16 +219,18 @@ def compor(
     hasher = hasher or Hasher()
     referencias = ServicoReferencias()
     cep = provedor_cep or provedor_padrao()
+    leitura_cadastro = ServicoLeituraCadastro()
     executores = dict(EXECUTORES_AUTORIZAVEIS)
-    for executor in (
+    dos_modulos: list[ExecutorAutorizavel] = [
         ExecutorCorrigirEvento(auditoria, VERIFICADORES_IMPEDIMENTO),
         ExecutorRemoverEvento(auditoria),
         ExecutorAnularPaciente(auditoria, PARTICIPANTES_ANULACAO),
-    ):
+        *executores_operacao(auditoria, leitura_cadastro, parametros),
+    ]
+    for executor in dos_modulos:
         executores.setdefault(executor.tipo, executor)
     autorizacoes = ServicoAutorizacoes(executar, auditoria, executores)
     cifra = CifraAesGcm(chave_mestra)
-    leitura_cadastro = ServicoLeituraCadastro()
     return Componentes(
         relogio=relogio,
         cifra=cifra,
@@ -250,8 +255,9 @@ def compor(
         fontes_pendencia=(*FONTES_CADASTRO, FonteRascunhoProximoDoDescarte(parametros)),
         marco_retencao=ServicoMarcoRetencao(),
         leitura_cadastro=leitura_cadastro,
-        escalas=ServicoEscalas(executar, auditoria, leitura_cadastro, parametros),
-        turnos=ServicoSessoes(executar, auditoria, leitura_cadastro, parametros),
+        escalas=ServicoEscalas(executar, auditoria, leitura_cadastro, parametros, autorizacoes),
+        turnos=ServicoSessoes(executar, auditoria, leitura_cadastro, parametros, autorizacoes),
+        frequencia=ServicoFrequencia(executar, auditoria, leitura_cadastro, parametros, autorizacoes),
     )
 
 

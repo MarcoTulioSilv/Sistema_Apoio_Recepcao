@@ -7,10 +7,12 @@ from datetime import date, datetime, time
 
 from sqlalchemy import Engine, text
 
-from sar.modulo_01_acesso.servicos import ServicoAuditoria
+from sar.modulo_01_acesso.servicos import ServicoAuditoria, ServicoAutorizacoes
 from sar.modulo_03_operacao.calendario import Antecedencias
 from sar.modulo_03_operacao.contrato import Escala
 from sar.modulo_03_operacao.escalas import ServicoEscalas
+from sar.modulo_03_operacao.executores import executores as executores_operacao
+from sar.modulo_03_operacao.frequencia import ServicoFrequencia
 from sar.modulo_03_operacao.sessoes import ServicoSessoes
 from sar.modulo_06_configuracao.servicos import LeitorParametrosSQL
 from sar.modulo_08_dados.relogio import FUSO_CLINICA
@@ -41,6 +43,8 @@ class Operacao:
     cadastro: Cadastro
     escalas: ServicoEscalas
     turnos: ServicoSessoes
+    frequencia: ServicoFrequencia
+    autorizacoes: ServicoAutorizacoes
     parametros: LeitorParametrosSQL
 
 
@@ -49,10 +53,15 @@ def montar(engine: Engine) -> Operacao:
     cadastro = montar_cadastro(engine)
     parametros = LeitorParametrosSQL(cadastro.executar)
     auditoria = ServicoAuditoria()
+    executores = {e.tipo: e for e in executores_operacao(auditoria, cadastro.leitura, parametros)}
+    autorizacoes = ServicoAutorizacoes(cadastro.executar, auditoria, executores)
+    executar, leitura = cadastro.executar, cadastro.leitura
     return Operacao(
         cadastro,
-        ServicoEscalas(cadastro.executar, auditoria, cadastro.leitura, parametros),
-        ServicoSessoes(cadastro.executar, auditoria, cadastro.leitura, parametros),
+        ServicoEscalas(executar, auditoria, leitura, parametros, autorizacoes),
+        ServicoSessoes(executar, auditoria, leitura, parametros, autorizacoes),
+        ServicoFrequencia(executar, auditoria, leitura, parametros, autorizacoes),
+        autorizacoes,
         parametros,
     )
 

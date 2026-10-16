@@ -68,6 +68,15 @@ def limites_da_competencia(comp: str) -> tuple[date, date]:
     return primeiro, seguinte - timedelta(days=1)
 
 
+def competencias_entre(inicio: date, fim: date) -> list[str]:
+    """Os meses "AAAA-MM" de inicio até fim, inclusive."""
+    meses, ano, mes = [], inicio.year, inicio.month
+    while (ano, mes) <= (fim.year, fim.month):
+        meses.append(f"{ano}-{mes:02d}")
+        ano, mes = (ano + 1, 1) if mes == 12 else (ano, mes + 1)
+    return meses
+
+
 def existe(data: date, escala: Escala, implantacao: date | None) -> bool:
     """Há sessão nessa data e escala: dia da escala, a partir da implantação (DD-23, DD-91)."""
     return implantacao is not None and data >= implantacao and escala.atende(data)

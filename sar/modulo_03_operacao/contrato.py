@@ -61,6 +61,14 @@ class Origem(StrEnum):
     ACRESCENTADO = "acrescentado"  # pela recepção, vindo das presenças gravadas (DD-24)
 
 
+class OrigemPar(StrEnum):
+    """Prioridade do pareamento (§7.4): troca pontual, ligação manual, automático cronológico (RF-918)."""
+
+    TROCA = "troca"
+    MANUAL = "manual"
+    AUTOMATICO = "automatico"
+
+
 @dataclass(frozen=True, slots=True)
 class ContagemEscalas:
     """RF-404, sem limite; os sem alocação aparecem explicitamente (RF-403)."""
@@ -113,6 +121,17 @@ class EscalaService(Protocol):
 
     def cancelar_extra(self, contexto: Contexto, extra_id: int, motivo: str | None = None) -> None:
         """RequerAutorizacao("operacao.sessao.reabrir") se a sessão já foi confirmada. NaoEncontrado."""
+        ...
+
+    def solicitar_alocacao_retroativa(
+        self, contexto: Contexto, paciente_id: int, escala_id: int | None, inicio: date, motivo: str
+    ) -> str:
+        """Pedido à administração quando o alocar pediu autorização; devolve o id da solicitação. As regras do
+        alocar são conferidas no pedido e de novo na aprovação, que grava a marca se alcançar mês fechado."""
+        ...
+
+    def solicitar_cancelamento_troca(self, contexto: Contexto, troca_id: int, motivo: str) -> str:
+        """Cancelar troca já realizada (origem ou destino confirmados), por autorização."""
         ...
 
 
@@ -234,4 +253,82 @@ class SessaoTurnoService(Protocol):
 
     def devidas_nao_confirmadas(self, contexto: Contexto) -> list[ResumoSessao]:
         """Sessões já começadas e ainda não confirmadas, da mais antiga para a mais nova."""
+        ...
+
+    def solicitar_reabertura(self, contexto: Contexto, data: date, escala_id: int, motivo: str) -> str:
+        """Reabrir sessão confirmada (ou não realizada), por autorização; as presenças ficam como exceções."""
+        ...
+
+    def solicitar_alteracao_confirmada(
+        self, contexto: Contexto, data: date, escala_id: int, paciente_id: int, presente: bool, motivo: str
+    ) -> str:
+        """Mudar a presença de um paciente em sessão confirmada, ou incluir quem ficou de fora, por autorização."""
+        ...
+
+
+# ------------------------------------------------------------------ frequência do paciente (§7.4, §7.5)
+@dataclass(frozen=True, slots=True)
+class BalancoMes:
+    """RF-916. Extras provisórias com o mês aberto, definitivas com o mês fechado."""
+
+    competencia: str
+    previstas: int
+    realizadas: int
+    ausencias_nao_compensadas: int
+    reposicoes: int
+    extras: int
+    a_realizar: int  # sessões do mês que ainda não aconteceram
+    provisorio: bool
+
+    @property
+    def extra_alem_do_limite(self) -> bool:
+        return self.extras > LIMITE_EXTRAS  # RN-01: sinaliza, nunca bloqueia
+
+
+@dataclass(frozen=True, slots=True)
+class ItemFrequencia:
+    data: date
+    escala: Escala
+    presenca_id: int | None  # a linha gravada, quando há
+
+
+@dataclass(frozen=True, slots=True)
+class ParDoMes:
+    ausencia: ItemFrequencia
+    presenca: ItemFrequencia
+    origem: OrigemPar
+
+
+@dataclass(frozen=True, slots=True)
+class PareamentoDoMes:
+    balanco: BalancoMes
+    pares: tuple[ParDoMes, ...]
+    ausencias_livres: tuple[ItemFrequencia, ...]
+    extras: tuple[ItemFrequencia, ...]
+    ligacoes_ignoradas: int  # deixaram de valer por alteração posterior (§7.4, item 6)
+    mes_fechado: bool
+
+
+class FrequenciaService(Protocol):
+    def balanco(self, contexto: Contexto, paciente_id: int, competencia: str) -> BalancoMes: ...
+
+    def pareamento_do_mes(self, contexto: Contexto, paciente_id: int, competencia: str) -> PareamentoDoMes:
+        """Os pares com a origem de cada um (RF-918). NaoEncontrado."""
+        ...
+
+    def refazer(
+        self, contexto: Contexto, paciente_id: int, competencia: str, ligacoes: Sequence[tuple[int, int]]
+    ) -> None:
+        """Troca as ligações manuais do paciente no mês pelas informadas, cada uma (ausência, presença) pelos ids
+        das presenças gravadas; o automático refaz o resto. RegraViolada("ligacao.invalida").
+        RequerAutorizacao("operacao.pareamento.refazer") em mês fechado."""
+        ...
+
+    def solicitar_refazer(
+        self, contexto: Contexto, paciente_id: int, competencia: str, ligacoes: Sequence[tuple[int, int]], motivo: str
+    ) -> str: ...
+
+    def dar_ciencia(self, contexto: Contexto, presenca_id: int) -> None:
+        """A enfermagem toma ciência da presença acrescentada pela recepção sem troca nem extra planejada (RF-921).
+        RegraViolada: "ciencia.desnecessaria", "ciencia.ja_registrada". NaoEncontrado."""
         ...
