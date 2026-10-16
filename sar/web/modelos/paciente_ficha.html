@@ -1,0 +1,229 @@
+{% extends "layout.html" %}
+{% macro fone(t) %}({{ t.ddd }}) {{ t.numero|telefone }}{% endmacro %}
+{% macro data(d) %}{{ d.strftime('%d/%m/%Y') if d else '' }}{% endmacro %}
+{% macro campo_cobertura(convenios, sufixo) %}
+<label class="campo"><span class="rotulo">Cobertura</span>
+  <select class="entrada" name="cobertura"><option value="sus">SUS</option><option value="convenio">Convênio</option></select></label>
+<label class="campo"><span class="rotulo">Convênio (se for convênio)</span>
+  <select class="entrada" name="convenio"><option value="">Selecione…</option>{% for c in convenios %}<option value="{{ c.id }}">{{ c.nome }}</option>{% endfor %}</select></label>
+<label class="campo"><span class="rotulo">Carteirinha (se for convênio)</span><input class="entrada" type="text" name="carteirinha"></label>
+{% endmacro %}
+{% macro campos_telefone(t=none) %}
+<label class="campo"><span class="rotulo">DDD</span><input class="entrada w-20" type="text" inputmode="numeric" name="ddd" value="{{ t.ddd if t else '' }}" required></label>
+<label class="campo"><span class="rotulo">Número</span><input class="entrada" type="tel" inputmode="numeric" maxlength="10" data-mascara="telefone" name="numero" value="{{ t.numero|telefone if t else '' }}" required></label>
+<label class="campo"><span class="rotulo">Tipo</span><select class="entrada" name="tipo">{% for valor, nome in [("celular", "Celular"), ("fixo", "Fixo"), ("recado", "Recado")] %}<option value="{{ valor }}"{% if t and t.tipo.value == valor %} selected{% endif %}>{{ nome }}</option>{% endfor %}</select></label>
+{% endmacro %}
+{# Um telefone na ficha: o número, o tipo e, para quem gere contatos, editar e remover. O dono não muda (INV-12). #}
+{% macro item_telefone(ficha, t, tipos, pode_gerir, de="") %}
+<div class="flex flex-col gap-2" data-telefone="{{ t.id }}">
+  <form class="flex flex-wrap items-center gap-3" method="post" action="{{ url_for('pacientes.remover_telefone', paciente_id=ficha.paciente_id, telefone_id=t.id) }}">
+    <span class="numero">{{ fone(t) }}</span> <span class="text-suave">{{ tipos[t.tipo] }}</span>
+    {% if pode_gerir %}<button class="btn-neutro" type="submit">Remover<span class="sr-only"> o telefone {{ fone(t) }}{{ de }}</span></button>{% endif %}
+  </form>
+  {% if pode_gerir %}
+  <details><summary class="cursor-pointer font-bold text-acao">Editar<span class="sr-only"> o telefone {{ fone(t) }}{{ de }}</span></summary>
+    <form class="mt-2 flex flex-wrap items-end gap-3" method="post" action="{{ url_for('pacientes.alterar_telefone', paciente_id=ficha.paciente_id, telefone_id=t.id) }}">
+      {{ campos_telefone(t) }}<button class="btn-secundario" type="submit">Salvar telefone</button>
+    </form>
+  </details>
+  {% endif %}
+</div>
+{% endmacro %}
+{% set d = ficha.dados %}
+{% block titulo_pagina %}{{ d.nome }}{% endblock %}
+{% block subtitulo %}Prontuário {{ d.prontuario }} · {{ situacoes[ficha.situacao] }}{% if ficha.idade is not none %} · {{ ficha.idade }} anos{% endif %}{% endblock %}
+{% block conteudo %}
+<div class="flex max-w-5xl flex-col gap-5">
+  {% include "_avisos.html" %}
+  {% if impedimentos %}
+  <section class="rounded-xl border border-urgencia-borda bg-urgencia-fundo p-4" aria-labelledby="impedimentos-t">
+    <h2 id="impedimentos-t" class="m-0 text-lg text-urgencia">O que impede o evento</h2>
+    <ul class="m-0 mt-2 flex flex-col gap-1 pl-5">
+      {% for i in impedimentos %}<li>{{ i.descricao }}{% if i.datas %}: {% for dia in i.datas %}{{ data(dia) }}{% if not loop.last %}, {% endif %}{% endfor %}{% endif %}</li>{% endfor %}
+    </ul>
+  </section>
+  {% endif %}
+
+  {% if ficha.pendencias %}
+  <section class="cartao flex flex-col gap-2 p-5" aria-labelledby="pend-t">
+    <h2 id="pend-t" class="m-0 text-xl">Pendências do cadastro</h2>
+    {% set faltam = ficha.pendencias | reject("equalto", "cep_nao_verificado") | list %}
+    {% if faltam %}<p class="m-0">Falta: {% for p in faltam %}{{ pendencias[p] }}{% if not loop.last %}, {% endif %}{% endfor %}.</p>{% endif %}
+    {% if "cep_nao_verificado" in ficha.pendencias %}
+    <form class="flex flex-wrap items-center gap-3" method="post" action="{{ url_for('pacientes.verificar_cep', paciente_id=ficha.paciente_id) }}">
+      <span><span class="etiqueta-a">CEP não verificado</span> O serviço de CEP estava fora do ar, ou não conhecia o número.</span>
+      {% if pode.atualizar %}<button class="btn-secundario" type="submit">Verificar o CEP de novo</button>{% endif %}
+    </form>
+    {% endif %}
+  </section>
+  {% endif %}
+
+  {% if ficha.possiveis_duplicatas %}
+  <section class="flex flex-col gap-3 rounded-xl border border-borda-forte bg-superficie p-4" aria-labelledby="dup-t">
+    <h2 id="dup-t" class="m-0 text-lg">Possível duplicidade: mesmo nome, nascimento e nome da mãe</h2>
+    {% for outro in ficha.possiveis_duplicatas %}
+    <form class="flex flex-wrap items-center gap-3" method="post" action="{{ url_for('pacientes.descartar_duplicidade', paciente_id=ficha.paciente_id, outro_id=outro.paciente_id) }}">
+      <span>{{ outro.nome }}, prontuário <span class="numero">{{ outro.prontuario }}</span>{% if pode.ficha %} — <a href="{{ url_for('pacientes.ficha', paciente_id=outro.paciente_id) }}">abrir a ficha</a>{% endif %}</span>
+      {% if pode.duplicidade %}<button class="btn-secundario" type="submit">Não é a mesma pessoa</button>{% endif %}
+    </form>
+    {% endfor %}
+    <p class="m-0 text-sm text-suave">Se for a mesma pessoa, peça a anulação do cadastro feito por engano.</p>
+  </section>
+  {% endif %}
+
+  <section class="cartao flex flex-col gap-3 p-5" aria-labelledby="dados-t">
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      <h2 id="dados-t" class="m-0 text-xl">Dados</h2>
+      {% if pode.atualizar %}<a class="btn-secundario" href="{{ url_for('pacientes.editar', paciente_id=ficha.paciente_id) }}">Editar dados</a>{% endif %}
+    </div>
+    <dl class="m-0 grid grid-cols-1 gap-x-6 gap-y-2 sm:grid-cols-[12rem_minmax(0,1fr)]">
+      <dt class="font-bold">Nascimento</dt><dd class="m-0">{{ data(d.data_nascimento) or "—" }}</dd>
+      <dt class="font-bold">Sexo</dt><dd class="m-0">{{ {"F": "Feminino", "M": "Masculino"}.get(d.sexo.value if d.sexo else "", "—") }}</dd>
+      <dt class="font-bold">Nome da mãe</dt><dd class="m-0">{{ d.nome_mae or "—" }}</dd>
+      <dt class="font-bold">CPF</dt><dd class="m-0 numero">{{ d.cpf or "—" }}</dd>
+      <dt class="font-bold">CNS</dt><dd class="m-0 numero">{{ d.cns or "—" }}</dd>
+      <dt class="font-bold">RG</dt><dd class="m-0">{{ d.rg or "—" }}{% if d.rg_orgao %} ({{ d.rg_orgao }}){% endif %}</dd>
+      <dt class="font-bold">Naturalidade</dt><dd class="m-0">{{ ficha.naturalidade.nome ~ "/" ~ ficha.naturalidade.uf if ficha.naturalidade else "—" }}</dd>
+      <dt class="font-bold">Endereço</dt><dd class="m-0">{{ [d.logradouro, d.numero, d.complemento, d.bairro] | select | join(", ") or "—" }}{% if ficha.residencia %} — {{ ficha.residencia.nome }}/{{ ficha.residencia.uf }}{% endif %}</dd>
+      <dt class="font-bold">CEP</dt><dd class="m-0"><span class="numero">{{ d.cep|cep if d.cep else "—" }}</span>{% if d.cep and d.cep.endswith("000") %} <span class="etiqueta-a" title="Terminado em 000: costuma ser o CEP da cidade inteira">CEP geral</span>{% endif %}</dd>
+    </dl>
+  </section>
+
+  <section class="cartao flex flex-col gap-4 p-5" aria-labelledby="trat-t">
+    <h2 id="trat-t" class="m-0 text-xl">Tratamento</h2>
+    {% for p in ficha.periodos | reverse %}
+    <div class="flex flex-col gap-2 rounded-lg border border-borda p-4" data-periodo="{{ p.id }}">
+      <h3 class="m-0 text-lg">Desde {{ data(p.inicio) }}{% if p.evento_tipo %} até {{ data(p.evento_data) }}{% else %} <span class="etiqueta-n">Aberto</span>{% endif %}</h3>
+      {% if p.evento_tipo %}
+      <p class="m-0">{{ eventos[p.evento_tipo] }} em {{ data(p.evento_data) }}{% if p.evento_local %}: {{ p.evento_local }}{% endif %}
+        {% if not p.comprovante_anexado %} <span class="etiqueta-a">Comprovante pendente</span>{% endif %}</p>
+      {% endif %}
+      {% if p.coberturas %}
+      <table class="w-full border-collapse text-left">
+        <caption class="sr-only">Coberturas do período iniciado em {{ data(p.inicio) }}</caption>
+        <thead><tr class="text-sm text-suave"><th scope="col" class="py-1 pr-4 font-bold">Vigência</th><th scope="col" class="py-1 pr-4 font-bold">Cobertura</th><th scope="col" class="py-1 font-bold">Carteirinha</th></tr></thead>
+        <tbody>
+        {% for c in p.coberturas %}
+          <tr class="border-t border-linha"><td class="py-1 pr-4">De {{ data(c.inicio) }}{% if c.ate %} a {{ data(c.ate) }}{% else %} em diante{% endif %}</td>
+            <td class="py-1 pr-4">{{ coberturas[c.tipo] }}{% if c.convenio_nome %}: {{ c.convenio_nome }}{% if c.convenio_ativo == false %} (inativado){% endif %}{% endif %}</td>
+            <td class="py-1">{{ c.carteirinha or ("CNS " ~ d.cns if c.tipo.value == "sus" and d.cns else "") }}</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+      {% else %}<p class="m-0 text-suave">Sem cobertura registrada.</p>{% endif %}
+
+      {% if pode.cobertura %}
+      <details class="flex flex-col gap-2"><summary class="cursor-pointer font-bold text-acao">Registrar nova cobertura neste período</summary>
+        <form class="mt-2 flex flex-wrap items-end gap-3" method="post" action="{{ url_for('pacientes.registrar_cobertura', paciente_id=ficha.paciente_id, periodo_id=p.id) }}">
+          <label class="campo"><span class="rotulo">A partir de</span><input class="entrada" type="date" name="inicio" required></label>
+          {{ campo_cobertura(convenios, p.id) }}
+          <button class="btn-secundario" type="submit">Registrar cobertura</button>
+        </form>
+      </details>
+      {% endif %}
+
+      {% if p.evento_tipo is none and pode.evento %}
+      <details><summary class="cursor-pointer font-bold text-acao">Registrar evento: óbito, alta, transferência, transplante ou desistência</summary>
+        <form class="mt-2 flex flex-wrap items-end gap-3" method="post" action="{{ url_for('pacientes.registrar_evento', paciente_id=ficha.paciente_id) }}">
+          <label class="campo"><span class="rotulo">Evento</span><select class="entrada" name="tipo">{% for t, nome in eventos.items() %}<option value="{{ t.value }}">{{ nome }}</option>{% endfor %}</select></label>
+          <label class="campo"><span class="rotulo">Data</span><input class="entrada" type="date" name="data" required></label>
+          <label class="campo"><span class="rotulo">Local (óbito, transferência ou transplante)</span><input class="entrada w-72" type="text" name="local" maxlength="150"></label>
+          <button class="btn-urgente" type="submit">Registrar evento</button>
+        </form>
+        <p class="m-0 mt-2 text-sm text-suave">O evento encerra o período. O documento que o comprova fica pendente até ser digitalizado.</p>
+      </details>
+      {% endif %}
+
+      {% if p.evento_tipo and pode.corrigir_evento and ultimo and p.id == ultimo.id %}
+      <details><summary class="cursor-pointer font-bold text-acao">Pedir correção ou remoção do evento</summary>
+        <form class="mt-2 flex flex-wrap items-end gap-3" method="post" action="{{ url_for('pacientes.corrigir_evento', paciente_id=ficha.paciente_id, periodo_id=p.id) }}">
+          <label class="campo"><span class="rotulo">Evento correto</span><select class="entrada" name="tipo">{% for t, nome in eventos.items() %}<option value="{{ t.value }}"{% if t == p.evento_tipo %} selected{% endif %}>{{ nome }}</option>{% endfor %}</select></label>
+          <label class="campo"><span class="rotulo">Data correta</span><input class="entrada" type="date" name="data" value="{{ p.evento_data.isoformat() }}" required></label>
+          <label class="campo"><span class="rotulo">Local</span><input class="entrada" type="text" name="local" value="{{ p.evento_local or '' }}" maxlength="150"></label>
+          <label class="campo"><span class="rotulo">Motivo da correção</span><input class="entrada w-80" type="text" name="motivo" maxlength="500" required></label>
+          <button class="btn-secundario" type="submit">Pedir correção</button>
+        </form>
+        <form class="mt-3 flex flex-wrap items-end gap-3" method="post" action="{{ url_for('pacientes.remover_evento', paciente_id=ficha.paciente_id, periodo_id=p.id) }}">
+          <label class="campo"><span class="rotulo">Motivo da remoção (evento registrado por engano)</span><input class="entrada w-96" type="text" name="motivo" maxlength="500" required></label>
+          <button class="btn-urgente" type="submit">Pedir remoção do evento</button>
+        </form>
+        <p class="m-0 mt-2 text-sm text-suave">A administração decide em Autorizações. Quando ela mesma pede, a mudança vale na hora.</p>
+      </details>
+      {% endif %}
+    </div>
+    {% else %}<p class="m-0 text-suave">Nenhum período de tratamento.</p>
+    {% endfor %}
+
+    {% if aberto is none and pode.periodo and ficha.situacao.value != "falecido" %}
+    <details><summary class="cursor-pointer font-bold text-acao">Registrar retorno: abrir novo período de tratamento</summary>
+      <form class="mt-2 flex flex-wrap items-end gap-3" method="post" action="{{ url_for('pacientes.abrir_periodo', paciente_id=ficha.paciente_id) }}">
+        <label class="campo"><span class="rotulo">Início do novo período</span><input class="entrada" type="date" name="inicio" required></label>
+        {{ campo_cobertura(convenios, "novo") }}
+        <button class="btn-primario" type="submit">Abrir período</button>
+      </form>
+    </details>
+    {% endif %}
+  </section>
+
+  <section class="cartao flex flex-col gap-3 p-5" aria-labelledby="tel-t">
+    <h2 id="tel-t" class="m-0 text-xl">Telefones do paciente</h2>
+    {% for t in ficha.telefones %}
+    {{ item_telefone(ficha, t, telefones, pode.contatos) }}
+    {% else %}<p class="m-0 text-suave">Nenhum telefone do paciente.</p>
+    {% endfor %}
+    {% if pode.contatos %}
+    <details><summary class="cursor-pointer font-bold text-acao">Incluir telefone do paciente</summary>
+      <form class="mt-2 flex flex-wrap items-end gap-3" method="post" action="{{ url_for('pacientes.incluir_telefone', paciente_id=ficha.paciente_id) }}">
+        {{ campos_telefone() }}<button class="btn-secundario" type="submit">Incluir telefone</button>
+      </form>
+    </details>
+    {% endif %}
+  </section>
+
+  <section class="cartao flex flex-col gap-3 p-5" aria-labelledby="cont-t">
+    <h2 id="cont-t" class="m-0 text-xl">Contatos</h2>
+    {% for c in ficha.contatos %}
+    <div class="flex flex-col gap-2 rounded-lg border border-borda p-4" data-contato="{{ c.id }}">
+      <form class="flex flex-wrap items-center justify-between gap-3" method="post" action="{{ url_for('pacientes.remover_contato', paciente_id=ficha.paciente_id, contato_id=c.id) }}">
+        <h3 class="m-0 text-lg">{{ c.nome }}{% if c.parentesco %} <span class="text-base font-normal text-suave">· {{ c.parentesco }}</span>{% endif %}</h3>
+        {% if pode.contatos %}<button class="btn-neutro" type="submit">Remover contato<span class="sr-only"> {{ c.nome }}</span></button>{% endif %}
+      </form>
+      {% if pode.contatos %}
+      <details><summary class="cursor-pointer font-bold text-acao">Editar o contato<span class="sr-only"> {{ c.nome }}</span></summary>
+        <form class="mt-2 flex flex-wrap items-end gap-3" method="post" action="{{ url_for('pacientes.alterar_contato', paciente_id=ficha.paciente_id, contato_id=c.id) }}">
+          <label class="campo"><span class="rotulo">Nome do contato</span><input class="entrada w-72" type="text" name="nome" value="{{ c.nome }}" maxlength="150" required></label>
+          <label class="campo"><span class="rotulo">Parentesco</span><input class="entrada" type="text" name="parentesco" value="{{ c.parentesco or '' }}" maxlength="40"></label>
+          <button class="btn-secundario" type="submit">Salvar contato</button>
+        </form>
+      </details>
+      {% endif %}
+      {% for t in c.telefones %}
+      {{ item_telefone(ficha, t, telefones, pode.contatos, " de " ~ c.nome) }}
+      {% endfor %}
+      {% if pode.contatos %}
+      <details><summary class="cursor-pointer font-bold text-acao">Incluir telefone de {{ c.nome }}</summary>
+        <form class="mt-2 flex flex-wrap items-end gap-3" method="post" action="{{ url_for('pacientes.incluir_telefone', paciente_id=ficha.paciente_id) }}">
+          <input type="hidden" name="contato_id" value="{{ c.id }}">
+          {{ campos_telefone() }}<button class="btn-secundario" type="submit">Incluir telefone</button>
+        </form>
+      </details>
+      {% endif %}
+    </div>
+    {% else %}<p class="m-0 text-suave">Nenhum contato.</p>
+    {% endfor %}
+    {% if pode.contatos %}
+    <details><summary class="cursor-pointer font-bold text-acao">Incluir contato</summary>
+      <form class="mt-2 flex flex-wrap items-end gap-3" method="post" action="{{ url_for('pacientes.incluir_contato', paciente_id=ficha.paciente_id) }}">
+        <label class="campo"><span class="rotulo">Nome do contato</span><input class="entrada w-72" type="text" name="nome" maxlength="150" required></label>
+        <label class="campo"><span class="rotulo">Parentesco</span><input class="entrada" type="text" name="parentesco" maxlength="40"></label>
+        <button class="btn-secundario" type="submit">Incluir contato</button>
+      </form>
+    </details>
+    {% endif %}
+  </section>
+
+  {% if pode.anular %}
+  <div><a class="btn-neutro" href="{{ url_for('pacientes.anular', paciente_id=ficha.paciente_id) }}">Pedir anulação deste cadastro</a></div>
+  {% endif %}
+</div>
+{% endblock %}

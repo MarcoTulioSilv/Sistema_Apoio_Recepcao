@@ -1,0 +1,22 @@
+{# Linhas de uma página da lista de pacientes. A última linha, enquanto houver mais, pede a próxima página quando
+   aparece na rolagem (ou quando o botão é acionado pelo teclado) e é trocada por ela. #}
+{% for p in pacientes %}
+<tr class="border-t border-linha" data-paciente="{{ p.paciente_id }}">
+  <td class="px-4 py-2.5">{{ p.nome }}</td>
+  <td class="px-4 py-2.5 numero">{{ p.prontuario }}</td>
+  <td class="px-4 py-2.5">{{ p.data_nascimento.strftime('%d/%m/%Y') if p.data_nascimento else '' }}</td>
+  <td class="px-4 py-2.5">{{ p.nome_mae or '' }}</td>
+  <td class="px-4 py-2.5 text-right">{% if pode.ficha %}<a href="{{ url_for('pacientes.ficha', paciente_id=p.paciente_id) }}">Abrir ficha<span class="sr-only"> de {{ p.nome }}</span></a>{% endif %}</td>
+</tr>
+{% else %}
+{% if proximo == 0 %}<tr class="border-t border-linha"><td class="px-4 py-2.5 text-suave" colspan="5">Nenhum paciente encontrado. Confira a grafia, ou busque pelo prontuário.</td></tr>{% endif %}
+{% endfor %}
+{% if tem_mais %}
+<tr class="border-t border-linha" data-mais hx-post="{{ url_for('pacientes.lista', deslocamento=proximo) }}" hx-include="#termo" hx-trigger="intersect once" hx-target="this" hx-swap="outerHTML">
+  <td class="px-4 py-3 text-center" colspan="5">
+    <button class="btn-neutro" type="button" hx-post="{{ url_for('pacientes.lista', deslocamento=proximo) }}" hx-include="#termo" hx-target="closest tr" hx-swap="outerHTML">Mostrar mais pacientes</button>
+  </td>
+</tr>
+{% elif proximo > 0 %}
+<tr class="border-t border-linha" data-fim><td class="px-4 py-2.5 text-sm text-suave" colspan="5">Fim da lista: {{ proximo }} paciente{{ 's' if proximo != 1 }}.</td></tr>
+{% endif %}

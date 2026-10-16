@@ -14,6 +14,7 @@ from werkzeug.serving import WSGIRequestHandler, make_server
 from sar.web import criar_app
 from sar.web.configuracao import ConfigWeb
 from testes.apoio.acesso import SENHA
+from testes.apoio.cadastro import ProvedorCepFalso
 from testes.apoio.web import servicos_web
 
 PORTA = 18765
@@ -27,9 +28,15 @@ class SemLogDeAcesso(WSGIRequestHandler):
 
 
 @pytest.fixture
-def endereco(engine_web: Engine) -> Iterator[str]:
+def provedor_cep() -> ProvedorCepFalso:
+    """O CEP do servidor de teste: começa fora do ar (nenhum teste acessa a internet); o teste pode ligá-lo."""
+    return ProvedorCepFalso()
+
+
+@pytest.fixture
+def endereco(engine_web: Engine, provedor_cep: ProvedorCepFalso) -> Iterator[str]:
     origem = f"http://127.0.0.1:{PORTA}"  # HTTP só em desenvolvimento (DD-80); o cookie é Secure mesmo assim
-    app = criar_app(servicos_web(engine_web), ConfigWeb(origem=origem, desenvolvimento=True))
+    app = criar_app(servicos_web(engine_web, provedor_cep), ConfigWeb(origem=origem, desenvolvimento=True))
     servidor = make_server("127.0.0.1", PORTA, app, request_handler=SemLogDeAcesso)
     linha = threading.Thread(target=servidor.serve_forever, daemon=True)
     linha.start()

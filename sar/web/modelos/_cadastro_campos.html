@@ -1,0 +1,33 @@
+{# Peças do formulário do cadastro. Erro com aria-invalid e mensagem ligada por aria-describedby (guia, Campos). #}
+{% macro texto(nome, rotulo, v, erros, tipo="text", obrigatorio=False, extra="") -%}
+<div class="campo">
+  <label class="rotulo" for="{{ nome }}">{{ rotulo }}{% if obrigatorio %} <span class="text-urgencia" aria-hidden="true">*</span>{% endif %}</label>
+  <input class="entrada" id="{{ nome }}" name="{{ nome }}" type="{{ tipo }}" value="{{ v.get(nome, '') }}"{% if obrigatorio %} required data-minimo{% endif %}{% if erros.get(nome) %} aria-invalid="true"{% endif %} aria-describedby="{{ nome }}-erro" {{ extra|safe }}>
+  <p class="ajuda-erro m-0" id="{{ nome }}-erro" aria-live="polite">{{ erros.get(nome, '') }}</p>
+</div>
+{%- endmacro %}
+
+{% macro telefone(linha, tipos, erros, rotulo_remover="Remover este telefone") -%}
+<div class="grid grid-cols-[5rem_minmax(0,1fr)] items-end gap-3 sm:grid-cols-[5rem_minmax(0,1fr)_9rem_auto]" data-telefone>
+  <label class="campo"><span class="rotulo">DDD</span><input class="entrada" type="text" inputmode="numeric" maxlength="4" name="{{ linha.prefixo }}-ddd" value="{{ linha.ddd }}"{% if erros.get(linha.prefixo) %} aria-invalid="true"{% endif %}></label>
+  <label class="campo"><span class="rotulo">Número</span><input class="entrada" type="tel" inputmode="numeric" maxlength="10" data-mascara="telefone" name="{{ linha.prefixo }}-numero" value="{{ linha.numero|telefone }}"{% if erros.get(linha.prefixo) %} aria-invalid="true"{% endif %}></label>
+  <label class="campo"><span class="rotulo">Tipo</span><select class="entrada" name="{{ linha.prefixo }}-tipo">{% for valor, nome in tipos.items() %}<option value="{{ valor }}"{% if linha.tipo == valor %} selected{% endif %}>{{ nome }}</option>{% endfor %}</select></label>
+  <button type="button" class="btn-neutro" data-acao="remover-telefone" aria-label="{{ rotulo_remover }}">Remover</button>
+  {% if erros.get(linha.prefixo) %}<p class="ajuda-erro col-span-full m-0" role="alert">{{ erros.get(linha.prefixo) }}</p>{% endif %}
+</div>
+{%- endmacro %}
+
+{% macro contato(bloco, parentescos, tipos, erros) -%}
+<div class="flex flex-col gap-3 rounded-lg border border-borda p-4" data-contato data-prefixo="{{ bloco.prefixo }}">
+  <div class="grid grid-cols-1 items-end gap-3 sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_auto]">
+    <label class="campo"><span class="rotulo">Nome do contato</span><input class="entrada" type="text" name="{{ bloco.prefixo }}-nome" value="{{ bloco.nome }}"{% if erros.get(bloco.prefixo) %} aria-invalid="true"{% endif %}></label>
+    <label class="campo"><span class="rotulo">Parentesco</span><select class="entrada" name="{{ bloco.prefixo }}-parentesco"><option value="">Selecione…</option>{% for p in parentescos %}<option{% if bloco.parentesco == p %} selected{% endif %}>{{ p }}</option>{% endfor %}</select></label>
+    <button type="button" class="btn-neutro" data-acao="remover-contato" aria-label="Remover este contato">Remover contato</button>
+  </div>
+  {% if erros.get(bloco.prefixo) %}<p class="ajuda-erro m-0" role="alert">{{ erros.get(bloco.prefixo) }}</p>{% endif %}
+  <div class="flex flex-col gap-3" data-lista-telefones>
+    {% for linha in bloco.telefones %}{{ telefone(linha, tipos, erros, "Remover este telefone do contato") }}{% endfor %}
+  </div>
+  <button type="button" class="btn-secundario self-start" data-acao="adicionar-telefone">Adicionar telefone do contato</button>
+</div>
+{%- endmacro %}

@@ -1,0 +1,15 @@
+{# Endereço com o CEP (AD-23): tela de novo cadastro e edição na ficha. #}
+    <fieldset class="cartao m-0 flex flex-col gap-3 px-5 pt-3 pb-5">
+      <legend class="px-1.5 text-[17px] font-bold">Endereço</legend>
+      <div class="campo max-w-xs">
+        <label class="rotulo" for="cep">CEP</label>
+        <span class="flex gap-2">
+          <input class="entrada" id="cep" name="cep" type="text" inputmode="numeric" maxlength="9" data-mascara="cep" value="{{ v.get('cep', '')|cep }}" aria-describedby="cep-erro"{% if erros.get('cep') %} aria-invalid="true"{% endif %}
+                 hx-post="{{ url_for('cadastro.cep') }}" hx-trigger="change" hx-target="#endereco-campos" hx-swap="outerHTML">
+          <button type="button" class="btn-secundario shrink-0" hx-post="{{ url_for('cadastro.cep') }}" hx-target="#endereco-campos" hx-swap="outerHTML">Buscar</button>
+        </span>
+        <p class="ajuda-erro m-0" id="cep-erro" aria-live="polite">{{ erros.get('cep', '') }}</p>
+      </div>
+      {% include "_endereco_campos.html" %}
+    </fieldset>
+

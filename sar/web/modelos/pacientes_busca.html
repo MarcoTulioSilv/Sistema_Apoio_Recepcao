@@ -1,0 +1,31 @@
+{% extends "layout.html" %}
+{% block cabeca %}
+  <meta name="htmx-config" content="history:false includeIndicatorCSS:false">
+  <script src="{{ url_for('static', filename='js/htmx-4.0.0.min.js') }}" defer></script>
+{% endblock %}
+{% block titulo_pagina %}Pacientes{% endblock %}
+{% block subtitulo %}Em ordem de nome. Digite para filtrar pelo nome, prontuário, CPF ou CNS{% endblock %}
+{% block conteudo %}
+<div class="flex flex-col gap-4">
+  {% include "_avisos.html" %}
+  <form class="flex flex-wrap items-end gap-2" method="post" action="{{ url_for('pacientes.buscar') }}" role="search">
+    <label class="campo"><span class="rotulo">Nome, prontuário, CPF ou CNS</span>
+      <input class="entrada w-80" id="termo" type="search" name="termo" value="{{ termo }}" autocomplete="off"
+             hx-post="{{ url_for('pacientes.lista') }}" hx-trigger="input changed delay:500ms, search" hx-target="#linhas" hx-swap="innerHTML"></label>
+    <button class="btn-primario" type="submit">Buscar</button>
+  </form>
+  <div class="cartao overflow-x-auto">
+    <table class="w-full border-collapse text-left">
+      <caption class="sr-only">Pacientes</caption>
+      <thead><tr class="text-sm text-suave">
+        <th scope="col" class="px-4 py-2 font-bold">Nome</th>
+        <th scope="col" class="px-4 py-2 font-bold">Prontuário</th>
+        <th scope="col" class="px-4 py-2 font-bold">Nascimento</th>
+        <th scope="col" class="px-4 py-2 font-bold">Nome da mãe</th>
+        <th scope="col" class="px-4 py-2 font-bold"><span class="sr-only">Ações</span></th>
+      </tr></thead>
+      <tbody id="linhas">{% include "_linhas_pacientes.html" %}</tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import date
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from flask import Blueprint, current_app, redirect, render_template, request, url_for
 from werkzeug.wrappers import Response
@@ -18,12 +19,14 @@ GUARDA = PermissionGuard()
 autorizacoes = Blueprint("autorizacoes", __name__, url_prefix="/autorizacoes")
 trilha = Blueprint("trilha", __name__, url_prefix="/trilha")
 integridade = Blueprint("integridade", __name__, url_prefix="/integridade")
+FUSO = ZoneInfo("America/Sao_Paulo")
+LIMITE_FINALIZADAS = 50
 
 ESTADOS = {
     "pendente": "Pendente",
     "executada": "Executada",
     "invalidada": "Invalidada: o registro mudou desde o pedido",
-    "recusada": "Recusada",
+    "recusada": "Negada",
     "cancelada": "Cancelada",
 }
 RESULTADOS = {
@@ -32,12 +35,12 @@ RESULTADOS = {
         "O registro mudou desde o pedido: a solicitação foi invalidada sem executar. "
         "Peça de novo, se ainda for preciso."
     ),
-    "recusada": "Solicitação recusada.",
+    "recusada": "Solicitação negada.",
     "cancelada": "Solicitação cancelada.",
 }
 ERROS = {
     "autorizacao.ja_decidida": "Esta solicitação já foi decidida.",
-    "autorizacao.motivo_obrigatorio": "Informe o motivo, com até 500 caracteres.",
+    "autorizacao.motivo_obrigatorio": ("Informe o motivo, com até 500 caracteres. Para negar, o motivo é obrigatório."),
     "autorizacao.motivo": "O motivo pode ter até 500 caracteres.",
     "aviso.explicacao_obrigatoria": "Informe a explicação recebida do TI.",
     "aviso.ja_encerrado": "Este aviso já foi encerrado.",
@@ -66,16 +69,37 @@ def _pagina_autorizacoes(contexto: Contexto, **dados: Any) -> str:
     return render_template(
         "autorizacoes.html",
         pendentes=servicos.autorizacoes.pendentes(contexto) if decide else [],
-        minhas=servicos.autorizacoes.minhas(contexto) if pede else [],
+        # Quem decide vê a fila e todas as finalizadas; quem pede, as suas pendentes e finalizadas.
+        minhas=[s for s in servicos.autorizacoes.minhas(contexto) if s.estado == "pendente"]
+        if pede and not decide
+        else [],
+        finalizadas=servicos.autorizacoes.finalizadas(contexto, LIMITE_FINALIZADAS) if decide or pede else [],
+        limite_finalizadas=LIMITE_FINALIZADAS,
         decide=decide,
         estados=ESTADOS,
+        fuso=FUSO,
         **dados,
     )
+
+
+def _pagina_analise(contexto: Contexto, solicitacao_id: str, **dados: Any) -> str:
+    """Tela de análise de um pedido: a justificativa e, para quem decide, aprovar ou reprovar com comentário."""
+    solicitacao = _servicos().autorizacoes.detalhe(contexto, solicitacao_id)
+    decide = GUARDA.pode(contexto, "acesso.autorizacao.decidir") and solicitacao.estado == "pendente"
+    return render_template(
+        "autorizacao.html", s=solicitacao, decide=decide, estados=ESTADOS, fuso=FUSO,
+        propria=solicitacao.solicitante_id == contexto.usuario_id, **dados,
+    )  # fmt: skip
 
 
 @autorizacoes.get("")
 def lista() -> str:
     return _pagina_autorizacoes(contexto_atual(), resultado=RESULTADOS.get(request.args.get("resultado", "")))
+
+
+@autorizacoes.get("/<solicitacao_id>")
+def analise(solicitacao_id: str) -> str:
+    return _pagina_analise(contexto_atual(), solicitacao_id)
 
 
 def _decidir(acao: str, solicitacao_id: str) -> Response | str:
@@ -92,8 +116,27 @@ def _decidir(acao: str, solicitacao_id: str) -> Response | str:
             servico.cancelar(contexto, solicitacao_id)
             estado = "cancelada"
     except RegraViolada as erro:
-        return _pagina_autorizacoes(contexto, erro=ERROS.get(erro.codigo, erro.codigo))
+        decisao = "aprovar" if acao == "aprovar" else "negar"
+        return _pagina_analise(
+            contexto, solicitacao_id, erro=ERROS.get(erro.codigo, erro.codigo), comentario=motivo, decisao=decisao,
+            confirmar=acao != "cancelar",
+        )  # fmt: skip
     return redirect(url_for("autorizacoes.lista", resultado=estado))
+
+
+@autorizacoes.post("/<solicitacao_id>/decidir")
+def decidir(solicitacao_id: str) -> Response | str:
+    """A decisão da tela de análise, em dois passos: a escolha (aprovar ou negar) e a confirmação, com o motivo.
+    Com JavaScript, a confirmação é um diálogo na própria tela; sem ele, a tela volta com o diálogo aberto."""
+    contexto = contexto_atual()
+    decisao = request.form.get("decisao", "")
+    if decisao not in ("aprovar", "negar"):
+        return _pagina_analise(contexto, solicitacao_id, erro="Escolha aprovar ou negar antes de confirmar.")
+    if request.form.get("confirmado") != "1":
+        return _pagina_analise(
+            contexto, solicitacao_id, decisao=decisao, confirmar=True, comentario=request.form.get("motivo", "")
+        )
+    return _decidir("aprovar" if decisao == "aprovar" else "recusar", solicitacao_id)
 
 
 @autorizacoes.post("/<solicitacao_id>/aprovar")

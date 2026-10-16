@@ -175,6 +175,13 @@ pytest testes --cov                                  # tudo, com cobertura (piso
 pytest testes\modulo_01_acesso -k sessao             # só um módulo, ou só os testes com "sessao" no nome
 ```
 
+Ciclo rápido, durante o desenvolvimento de uma etapa: unidade de tudo mais todos os testes do módulo mexido
+(aqui, o MOD-02). A suíte inteira roda uma vez antes de cada commit, e o pipeline do GitHub roda tudo.
+
+```powershell
+pytest testes -m "not integracao and not sistema"; pytest testes\modulo_02_cadastro
+```
+
 As mesmas etapas do pipeline do GitHub (PT §8), na ordem:
 
 ```powershell

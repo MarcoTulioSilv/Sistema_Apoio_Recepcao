@@ -16,6 +16,7 @@ from sar.modulo_01_acesso.contrato import PermissionGuard, SessaoEncerrada
 from sar.nucleo.contexto import Contexto, Perfil
 from sar.nucleo.erros import AcessoNegado, NaoEncontrado
 from sar.nucleo.logs import campos_do_erro, encerrar_requisicao, identificar_usuario, iniciar_requisicao
+from sar.web import formatos
 from sar.web.configuracao import ConfigWeb, ServicosWeb
 from sar.web.rotulos import PERFIS
 
@@ -50,6 +51,8 @@ class ItemMenu:
 # Cada item aparece só para quem pode a operação da tela (AD-20). As telas dos incrementos seguintes entram aqui.
 MENU: tuple[ItemMenu, ...] = (
     ItemMenu("Início", "acesso.inicio"),
+    ItemMenu("Pacientes", "pacientes.busca", (("cadastro.paciente.buscar", None),)),
+    ItemMenu("Novo cadastro", "cadastro.novo", (("cadastro.paciente.criar", None),)),
     ItemMenu("Usuários", "usuarios.lista", (("acesso.usuario.consultar", None),)),
     ItemMenu(
         "Parâmetros",
@@ -59,6 +62,7 @@ MENU: tuple[ItemMenu, ...] = (
             ("config.parametro.alterar", "técnicos"),
         ),
     ),
+    ItemMenu("Convênios", "convenios.lista", (("config.convenio.gerir", None),)),
     ItemMenu(
         "Autorizações",
         "autorizacoes.lista",
@@ -76,7 +80,6 @@ MENU: tuple[ItemMenu, ...] = (
             ("acesso.ancora.conferir", None),
         ),
     ),
-    ItemMenu("Minha senha", "acesso.senha", (("acesso.senha.trocar_propria", None),)),
 )
 
 
@@ -92,12 +95,17 @@ def criar_app(servicos: ServicosWeb | None = None, config: ConfigWeb | None = No
     config = config or ConfigWeb(origem="https://localhost")
     app = Flask(__name__, template_folder="modelos", static_folder="static")
     app.config["SAR"] = config
+    app.jinja_env.filters["telefone"] = formatos.telefone  # telas: 99999-0001 e 3631-0002; banco: só dígitos
+    app.jinja_env.filters["cep"] = formatos.cep  # telas: 75800-000
     app.config["SAR_SERVICOS"] = servicos
     if config.proxies_confiaveis:
         n = config.proxies_confiaveis
         app.wsgi_app = ProxyFix(app.wsgi_app, x_for=n, x_proto=n, x_host=n)  # type: ignore[method-assign]
 
     from sar.web.rotas_acesso import bp as acesso
+    from sar.web.rotas_cadastro import bp as cadastro
+    from sar.web.rotas_convenios import bp as convenios
+    from sar.web.rotas_pacientes import bp as pacientes
     from sar.web.rotas_parametros import bp as parametros
     from sar.web.rotas_saude import bp as saude
     from sar.web.rotas_trilha_integridade import autorizacoes, integridade, trilha
@@ -105,7 +113,17 @@ def criar_app(servicos: ServicosWeb | None = None, config: ConfigWeb | None = No
 
     app.register_blueprint(saude)
     if servicos is not None:
-        for blueprint in (acesso, usuarios, parametros, autorizacoes, trilha, integridade):
+        for blueprint in (
+            acesso,
+            cadastro,
+            pacientes,
+            usuarios,
+            parametros,
+            convenios,
+            autorizacoes,
+            trilha,
+            integridade,
+        ):
             app.register_blueprint(blueprint)
 
     @app.before_request
@@ -155,6 +173,7 @@ def criar_app(servicos: ServicosWeb | None = None, config: ConfigWeb | None = No
             "superusuario": g.get("superusuario", False),
             "perfis": ROTULOS_PERFIL,
             "perfil_atual": contexto.perfil,
+            "trocar_senha": GUARDA.pode(contexto, "acesso.senha.trocar_propria"),  # junto do perfil, no menu
         }
 
     @app.after_request

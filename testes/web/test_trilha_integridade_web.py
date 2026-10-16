@@ -131,14 +131,125 @@ def test_administracao_aprova_pela_fila(
 
     admin = logado(app, "webt_adm3")
     fila = get(admin, "/autorizacoes").get_data(as_text=True)
-    assert "Anular o cadastro 42" in fila and "Cadastro duplicado" in fila
+    assert "Anular o cadastro 42" in fila
     solicitacao = re.search(r'data-solicitacao="([0-9a-f]{32})"', fila)
-    assert solicitacao is not None
+    assert solicitacao is not None and f'href="/autorizacoes/{solicitacao.group(1)}"' in fila  # botão Analisar
+    analise = get(admin, f"/autorizacoes/{solicitacao.group(1)}").get_data(as_text=True)
+    assert "Cadastro duplicado" in analise and 'value="aprovar"' in analise and 'value="negar"' in analise
     sem_motivo = post(admin, f"/autorizacoes/{solicitacao.group(1)}/recusar", {"motivo": ""})
-    assert "Informe o motivo" in sem_motivo.get_data(as_text=True)
+    corpo = sem_motivo.get_data(as_text=True)
+    assert "Para negar, o motivo é obrigatório" in corpo and "Análise do pedido" in corpo  # volta à análise
     aprovada = post(admin, f"/autorizacoes/{solicitacao.group(1)}/aprovar", {"motivo": ""})
     assert "resultado=executada" in aprovada.headers["Location"]
     assert "Nenhuma solicitação aguardando" in get(admin, "/autorizacoes").get_data(as_text=True)
 
     minhas = get(logado(app, "webt_r3"), "/autorizacoes").get_data(as_text=True)
     assert "Minhas solicitações" in minhas and "Executada" in minhas and "Aguardando decisão" not in minhas
+
+
+@pytest.mark.requisito("RF-1008", "DEC-42", "RNF-623")
+def test_tela_de_analise_do_pedido(
+    criar_usuario: CriarUsuario, engine_web: Engine, monkeypatch: pytest.MonkeyPatch, limpar: None
+) -> None:
+    monkeypatch.setitem(sar.composicao.EXECUTORES_AUTORIZAVEIS, ANULAR, ExecutorFalso())
+    criar_usuario("webt_adm4", perfil="administracao")
+    recepcao = criar_usuario("webt_r4")
+    criar_usuario("webt_r5")
+    criar_usuario("webt_ti4", perfil="ti")
+    pedidos = ServicoAutorizacoes(
+        montar_executor(engine_web, montar_barramento(RelogioSistema())), ServicoAuditoria(), {ANULAR: ExecutorFalso()}
+    )
+    contexto = Contexto(recepcao, Perfil.RECEPCAO, None, "10.0.0.5", datetime.now(UTC), "d" * 32)
+    primeiro = pedidos.solicitar(contexto, ANULAR, "42", {"paciente_id": 42}, "Cadastro duplicado")
+    segundo = pedidos.solicitar(contexto, ANULAR, "43", {"paciente_id": 43}, "Paciente errado")
+    app = montar(engine_web)
+
+    autora = logado(app, "webt_r4")
+    minhas = get(autora, "/autorizacoes").get_data(as_text=True)
+    assert f'href="/autorizacoes/{primeiro}"' in minhas and "Ver detalhes" in minhas
+    detalhe = get(autora, f"/autorizacoes/{primeiro}").get_data(as_text=True)
+    assert "Cadastro duplicado" in detalhe and "Cancelar este pedido" in detalhe and 'value="aprovar"' not in detalhe
+
+    admin = logado(app, "webt_adm4")
+    reprovado = post(admin, f"/autorizacoes/{primeiro}/recusar", {"motivo": "Não é duplicata: são irmãos gêmeos"})
+    assert "resultado=recusada" in reprovado.headers["Location"]
+    assert "Solicitação negada." in get(admin, reprovado.headers["Location"]).get_data(as_text=True)
+    decidido = get(autora, f"/autorizacoes/{primeiro}").get_data(as_text=True)
+    assert "Negada" in decidido and "Não é duplicata: são irmãos gêmeos" in decidido
+    assert "Cancelar este pedido" not in decidido
+
+    post(autora, f"/autorizacoes/{segundo}/cancelar", {})
+    assert "Cancelada" in get(autora, f"/autorizacoes/{segundo}").get_data(as_text=True)
+
+    assert get(logado(app, "webt_r5"), f"/autorizacoes/{primeiro}").status_code == 404  # não é dela
+    assert get(admin, "/autorizacoes/" + "0" * 32).status_code == 404
+    assert get(admin, "/autorizacoes/nao-e-hex").status_code == 404
+    assert get(logado(app, "webt_ti4"), f"/autorizacoes/{primeiro}").status_code == 403
+
+
+@pytest.mark.requisito("RF-1008", "DEC-42")
+def test_decisao_em_dois_passos_sem_javascript(
+    criar_usuario: CriarUsuario, engine_web: Engine, monkeypatch: pytest.MonkeyPatch, limpar: None
+) -> None:
+    """A escolha não decide: a tela volta com o diálogo de confirmação aberto, na cor da escolha, e só o botão do
+    diálogo (confirmado=1) decide. Negar exige o motivo (§5.3)."""
+    monkeypatch.setitem(sar.composicao.EXECUTORES_AUTORIZAVEIS, ANULAR, ExecutorFalso())
+    criar_usuario("webt_adm6", perfil="administracao")
+    recepcao = criar_usuario("webt_r6")
+    pedidos = ServicoAutorizacoes(
+        montar_executor(engine_web, montar_barramento(RelogioSistema())), ServicoAuditoria(), {ANULAR: ExecutorFalso()}
+    )
+    contexto = Contexto(recepcao, Perfil.RECEPCAO, None, "10.0.0.5", datetime.now(UTC), "d" * 32)
+    negar = pedidos.solicitar(contexto, ANULAR, "44", {"paciente_id": 44}, "Duplicado")
+    aprovar = pedidos.solicitar(contexto, ANULAR, "45", {"paciente_id": 45}, "Duplicado")
+    admin = logado(montar(engine_web), "webt_adm6")
+
+    sem_escolha = post(admin, f"/autorizacoes/{negar}/decidir", {}).get_data(as_text=True)
+    assert "Escolha aprovar ou negar antes de confirmar." in sem_escolha
+    passo = post(admin, f"/autorizacoes/{negar}/decidir", {"decisao": "negar"}).get_data(as_text=True)
+    assert re.search(r'id="confirmar-decisao"[^>]*\bopen\b', passo) and "Negar este pedido?" in passo
+    assert 'class="btn-urgente" type="submit" name="confirmado"' in passo and "required" in passo
+    sem_motivo = post(admin, f"/autorizacoes/{negar}/decidir", {"decisao": "negar", "confirmado": "1", "motivo": " "})
+    assert "Para negar, o motivo é obrigatório" in sem_motivo.get_data(as_text=True)
+    negado = post(admin, f"/autorizacoes/{negar}/decidir", {"decisao": "negar", "confirmado": "1", "motivo": "Não"})
+    assert "resultado=recusada" in negado.headers["Location"]
+
+    passo = post(admin, f"/autorizacoes/{aprovar}/decidir", {"decisao": "aprovar"}).get_data(as_text=True)
+    assert "Aprovar este pedido?" in passo and 'class="btn-aprovar" type="submit" name="confirmado"' in passo
+    aprovado = post(admin, f"/autorizacoes/{aprovar}/decidir", {"decisao": "aprovar", "confirmado": "1"})
+    assert "resultado=executada" in aprovado.headers["Location"]  # motivo opcional ao aprovar
+
+
+@pytest.mark.requisito("RF-1008", "DEC-42")
+def test_finalizadas_da_mais_recente_para_a_mais_antiga(
+    criar_usuario: CriarUsuario, engine_web: Engine, monkeypatch: pytest.MonkeyPatch, limpar: None
+) -> None:
+    monkeypatch.setitem(sar.composicao.EXECUTORES_AUTORIZAVEIS, ANULAR, ExecutorFalso())
+    admin_id = criar_usuario("webt_adm7", perfil="administracao")
+    rita, ana = criar_usuario("webt_r7"), criar_usuario("webt_r8")
+    servico = ServicoAutorizacoes(
+        montar_executor(engine_web, montar_barramento(RelogioSistema())), ServicoAuditoria(), {ANULAR: ExecutorFalso()}
+    )
+
+    def em(usuario: int, perfil: Perfil, hora: int) -> Contexto:
+        return Contexto(usuario, perfil, None, "10.0.0.5", datetime(2026, 10, 14, hora, 0, tzinfo=UTC), "d" * 32)
+
+    antiga = servico.solicitar(em(rita, Perfil.RECEPCAO, 10), ANULAR, "50", {"paciente_id": 50}, "Pedido A")
+    meio = servico.solicitar(em(ana, Perfil.RECEPCAO, 10), ANULAR, "51", {"paciente_id": 51}, "Pedido B")
+    nova = servico.solicitar(em(rita, Perfil.RECEPCAO, 10), ANULAR, "52", {"paciente_id": 52}, "Pedido C")
+    pendente = servico.solicitar(em(rita, Perfil.RECEPCAO, 10), ANULAR, "53", {"paciente_id": 53}, "Pedido D")
+    servico.recusar(em(admin_id, Perfil.ADMINISTRACAO, 11), antiga, "Não")
+    servico.aprovar(em(admin_id, Perfil.ADMINISTRACAO, 12), meio)
+    servico.cancelar(em(rita, Perfil.RECEPCAO, 13), nova)
+    app = montar(engine_web)
+
+    tela = get(logado(app, "webt_adm7"), "/autorizacoes").get_data(as_text=True)
+    ordem = re.findall(r'data-finalizada="([0-9a-f]{32})"', tela)
+    assert ordem == [nova, meio, antiga]  # cancelada às 13h, aprovada às 12h, negada às 11h
+    assert "Finalizadas" in tela and f'data-solicitacao="{pendente}"' in tela  # a fila continua acima
+    assert f'data-finalizada="{pendente}"' not in tela
+
+    da_rita = get(logado(app, "webt_r7"), "/autorizacoes").get_data(as_text=True)
+    assert re.findall(r'data-finalizada="([0-9a-f]{32})"', da_rita) == [nova, antiga]  # só as dela
+    assert "Minhas solicitações finalizadas" in da_rita and f'data-minha="{pendente}"' in da_rita
+    assert "Negada" in da_rita and "Cancelada" in da_rita

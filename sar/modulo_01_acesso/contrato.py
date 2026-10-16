@@ -284,6 +284,7 @@ class SolicitacaoResumo:
     decisor_id: int | None
     decidida_em: datetime | None
     motivo_decisao: str | None
+    solicitante_nome: str = ""  # para a tela de análise; o id continua sendo a referência
 
 
 class AutorizacaoService(Protocol):
@@ -307,6 +308,16 @@ class AutorizacaoService(Protocol):
     def pendentes(self, contexto: Contexto) -> list[SolicitacaoResumo]: ...
 
     def minhas(self, contexto: Contexto) -> list[SolicitacaoResumo]: ...
+
+    def finalizadas(self, contexto: Contexto, limite: int = 50) -> list[SolicitacaoResumo]:
+        """Executadas, invalidadas, negadas e canceladas, da decisão mais recente para a mais antiga: todas para
+        quem decide; só as próprias para quem pede."""
+        ...
+
+    def detalhe(self, contexto: Contexto, solicitacao_id: str) -> SolicitacaoResumo:
+        """Para a tela de análise: quem decide vê qualquer uma; quem pediu vê as suas. Para os demais, e para id
+        inexistente, NaoEncontrado (não revela que a solicitação existe)."""
+        ...
 
 
 class SessionManager(Protocol):

@@ -31,25 +31,63 @@ from sar.modulo_01_acesso.servicos import (
     manipulador_aviso_integridade,
     manipulador_encerrar_sessoes,
 )
-from sar.modulo_06_configuracao.contrato import ConfiguracaoService
-from sar.modulo_06_configuracao.servicos import LeitorParametrosSQL, ServicoConfiguracao
+from sar.modulo_02_cadastro.anulacao import ExecutorAnularPaciente, ServicoAnulacao
+from sar.modulo_02_cadastro.cep import provedor_padrao
+from sar.modulo_02_cadastro.comprovante import manipulador_comprovante, manipulador_revinculo
+from sar.modulo_02_cadastro.contrato import (
+    AnulacaoService,
+    CepService,
+    ContatoService,
+    EventoService,
+    LeituraCadastro,
+    PacienteService,
+    RascunhoService,
+)
+from sar.modulo_02_cadastro.eventos import ExecutorCorrigirEvento, ExecutorRemoverEvento, ServicoEventos
+from sar.modulo_02_cadastro.pendencias import FONTES as FONTES_CADASTRO
+from sar.modulo_02_cadastro.pendencias import ServicoMarcoRetencao
+from sar.modulo_02_cadastro.rascunhos import FonteRascunhoProximoDoDescarte, ServicoRascunhos
+from sar.modulo_02_cadastro.servicos import ServicoCep, ServicoContatos, ServicoLeituraCadastro, ServicoPacientes
+from sar.modulo_06_configuracao.contrato import ConfiguracaoService, Referencias
+from sar.modulo_06_configuracao.servicos import LeitorParametrosSQL, ServicoConfiguracao, ServicoReferencias
 from sar.modulo_08_dados.cadeia import gravar_encadeado
 from sar.modulo_08_dados.cifra import CifraAesGcm
 from sar.modulo_08_dados.interfaces.autorizacoes import RepositorioAutorizacao
+from sar.modulo_08_dados.interfaces.pacientes import RepositorioPaciente
 from sar.modulo_08_dados.interfaces.parametros import RepositorioParametro
+from sar.modulo_08_dados.interfaces.rascunhos import RepositorioRascunho
+from sar.modulo_08_dados.interfaces.referencias import RepositorioConvenio, RepositorioMunicipio
 from sar.modulo_08_dados.interfaces.sessoes import RepositorioSessao
 from sar.modulo_08_dados.interfaces.trilha import RepositorioExpurgo, RepositorioTrilha
 from sar.modulo_08_dados.interfaces.usuarios import RepositorioUsuario
 from sar.modulo_08_dados.relogio import RelogioSistema
 from sar.modulo_08_dados.repositorios.autorizacoes import RepositorioAutorizacaoSQL
+from sar.modulo_08_dados.repositorios.pacientes import RepositorioPacienteSQL
 from sar.modulo_08_dados.repositorios.parametros import RepositorioParametroSQL
+from sar.modulo_08_dados.repositorios.rascunhos import RepositorioRascunhoSQL
+from sar.modulo_08_dados.repositorios.referencias import RepositorioConvenioSQL, RepositorioMunicipioSQL
 from sar.modulo_08_dados.repositorios.sessoes import RepositorioSessaoSQL
 from sar.modulo_08_dados.repositorios.trilha import RepositorioExpurgoSQL, RepositorioTrilhaSQL
 from sar.modulo_08_dados.repositorios.usuarios import RepositorioUsuarioSQL
 from sar.modulo_08_dados.uow import ExecutorSQL, FabricaRepositorio, GravadorAuditoria, UnidadeDeTrabalhoSQL
-from sar.nucleo.eventos import Barramento, CadeiaDivergente, UsuarioInativado
+from sar.nucleo.eventos import (
+    Barramento,
+    CadeiaDivergente,
+    DocumentoIncorporado,
+    DocumentoRevinculado,
+    UsuarioInativado,
+)
 from sar.nucleo.parametros import LeitorParametros, VerificadorUso
-from sar.nucleo.portas import Cifra, ExecutorAutorizavel, Relogio
+from sar.nucleo.portas import (
+    Cifra,
+    ExecutorAutorizavel,
+    FonteMarcoRetencao,
+    FontePendencia,
+    ParticipanteAnulacao,
+    ProvedorCep,
+    Relogio,
+    VerificadorImpedimento,
+)
 from sar.nucleo.uow import ExecutorDeOperacao, UnidadeDeTrabalho
 
 
@@ -73,9 +111,13 @@ REPOSITORIOS: dict[type, FabricaRepositorio] = {
     RepositorioTrilha: RepositorioTrilhaSQL,
     RepositorioExpurgo: RepositorioExpurgoSQL,
     RepositorioParametro: RepositorioParametroSQL,
+    RepositorioConvenio: RepositorioConvenioSQL,
+    RepositorioMunicipio: RepositorioMunicipioSQL,
     RepositorioUsuario: RepositorioUsuarioSQL,
     RepositorioSessao: RepositorioSessaoSQL,
     RepositorioAutorizacao: RepositorioAutorizacaoSQL,
+    RepositorioPaciente: RepositorioPacienteSQL,
+    RepositorioRascunho: RepositorioRascunhoSQL,
 }
 
 
@@ -84,6 +126,9 @@ def montar_barramento(relogio: Relogio) -> Barramento:
     barramento = Barramento()
     barramento.assinar(CadeiaDivergente, manipulador_aviso_integridade(relogio))
     barramento.assinar(UsuarioInativado, manipulador_encerrar_sessoes(relogio))
+    auditoria = ServicoAuditoria()  # só registra na unidade de trabalho de quem publicou
+    barramento.assinar(DocumentoIncorporado, manipulador_comprovante(relogio, auditoria))
+    barramento.assinar(DocumentoRevinculado, manipulador_revinculo(relogio, auditoria))
     return barramento
 
 
@@ -115,18 +160,35 @@ class Componentes:
     integridade: IntegridadeService
     parametros: LeitorParametros
     configuracao: ConfiguracaoService
+    referencias: Referencias
     autenticacao: AuthService
     sessoes: SessionManager
     usuarios: UsuarioService
     autorizacoes: AutorizacaoService
+    pacientes: PacienteService
+    contatos: ContatoService
+    eventos: EventoService
+    anulacao: AnulacaoService
+    rascunhos: RascunhoService
+    cep: CepService
+    fontes_pendencia: tuple[FontePendencia, ...]
+    marco_retencao: FonteMarcoRetencao
+    leitura_cadastro: LeituraCadastro
 
 
 # Verificadores de uso dos parâmetros imutáveis (DD-51). A data de implantação ganha o seu com a sessão
 # confirmada, no Incremento 3 (MOD-03); até lá não há sessão confirmada, e ela pode ser definida.
 VERIFICADORES_USO: dict[str, VerificadorUso] = {}
 
-# Executores das operações sujeitas à autorização (DEC-42), por tipo. Chegam com os módulos 02 a 04.
+# Executores das operações sujeitas à autorização (DEC-42), por tipo, além dos que o compor() monta com as
+# dependências de cada módulo. Um tipo registrado aqui prevalece (os testes da web põem um executor falso).
 EXECUTORES_AUTORIZAVEIS: dict[str, ExecutorAutorizavel] = {}
+
+# Quem tem fatos datados que impedem encerrar o período (DD-31, DD-74). O MOD-03 entra no Incremento 3.
+VERIFICADORES_IMPEDIMENTO: list[VerificadorImpedimento] = []
+
+# Quem descarta o que está ligado ao cadastro anulado (§6.9, DD-74). MOD-03 e MOD-04 entram nos Incrementos 3 e 4.
+PARTICIPANTES_ANULACAO: list[ParticipanteAnulacao] = []
 
 
 def compor(
@@ -134,27 +196,51 @@ def compor(
     chave_mestra: bytes,
     gravar_auditoria: GravadorAuditoria = gravar_encadeado,
     hasher: Hasher | None = None,
+    provedor_cep: ProvedorCep | None = None,
 ) -> Componentes:
-    """O hasher só muda nos testes, que usam um custo menor; em produção é bcrypt com custo 12 (DD-83)."""
+    """O hasher só muda nos testes, que usam um custo menor; em produção é bcrypt com custo 12 (DD-83). O provedor
+    de CEP também, para os testes nunca acessarem a internet; em produção é ViaCEP com BrasilAPI (DD-88)."""
     relogio = RelogioSistema()
     barramento = montar_barramento(relogio)
     executar = montar_executor(engine, barramento, gravar_auditoria)
     auditoria = ServicoAuditoria(executar)
     parametros = LeitorParametrosSQL(executar)
     hasher = hasher or Hasher()
+    referencias = ServicoReferencias()
+    cep = provedor_cep or provedor_padrao()
+    executores = dict(EXECUTORES_AUTORIZAVEIS)
+    for executor in (
+        ExecutorCorrigirEvento(auditoria, VERIFICADORES_IMPEDIMENTO),
+        ExecutorRemoverEvento(auditoria),
+        ExecutorAnularPaciente(auditoria, PARTICIPANTES_ANULACAO),
+    ):
+        executores.setdefault(executor.tipo, executor)
+    autorizacoes = ServicoAutorizacoes(executar, auditoria, executores)
+    cifra = CifraAesGcm(chave_mestra)
     return Componentes(
         relogio=relogio,
-        cifra=CifraAesGcm(chave_mestra),
+        cifra=cifra,
         barramento=barramento,
         executar=executar,
         auditoria=auditoria,
         integridade=ServicoIntegridade(executar, auditoria),
         parametros=parametros,
         configuracao=ServicoConfiguracao(executar, auditoria, VERIFICADORES_USO),
+        referencias=referencias,
         autenticacao=ServicoAutenticacao(executar, auditoria, parametros, relogio, hasher),
         sessoes=GerenciadorSessao(executar, auditoria, parametros, relogio),
         usuarios=ServicoUsuarios(executar, auditoria, hasher),
-        autorizacoes=ServicoAutorizacoes(executar, auditoria, EXECUTORES_AUTORIZAVEIS),
+        autorizacoes=autorizacoes,
+        pacientes=ServicoPacientes(executar, auditoria, referencias, cep),
+        contatos=ServicoContatos(executar, auditoria),
+        eventos=ServicoEventos(executar, auditoria, autorizacoes, VERIFICADORES_IMPEDIMENTO),
+        anulacao=ServicoAnulacao(executar, autorizacoes, PARTICIPANTES_ANULACAO),
+        rascunhos=ServicoRascunhos(executar, auditoria, cifra, parametros),
+        cep=ServicoCep(executar, referencias, cep),
+        # DD-54: o MOD-07 agrega as fontes de todos os módulos
+        fontes_pendencia=(*FONTES_CADASTRO, FonteRascunhoProximoDoDescarte(parametros)),
+        marco_retencao=ServicoMarcoRetencao(),
+        leitura_cadastro=ServicoLeituraCadastro(),
     )
 
 

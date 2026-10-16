@@ -1,4 +1,4 @@
-"""Telas de usuários e de parâmetros no navegador: teclado e axe-core (RNF-406)."""
+"""Telas de usuários, parâmetros e convênios no navegador: teclado e axe-core (RNF-406)."""
 
 from __future__ import annotations
 
@@ -57,3 +57,27 @@ def test_administracao_altera_parametro_pelo_teclado(
             for comando in ZERAR_TRILHA:
                 c.execute(text(comando))
             c.execute(text("DELETE FROM parametro"))
+
+
+@pytest.mark.requisito("RNF-406", "RF-1204")
+def test_administracao_inclui_e_inativa_convenio_pelo_teclado(
+    criar_usuario: CriarUsuario, endereco: str, page: Page, trilha_zerada: Engine
+) -> None:
+    criar_usuario("sisu_admin2", perfil="administracao")
+    try:
+        entrar_no_navegador(page, endereco, "sisu_admin2")
+        page.get_by_role("link", name="Convênios").click()
+        sem_violacao(page)
+        campo = page.get_by_label("Nome do convênio", exact=True)
+        campo.fill("Ipasgo")
+        campo.press("Enter")
+        expect(page.get_by_role("status")).to_contain_text("Convênio incluído.")
+        page.get_by_role("button", name="Inativar Ipasgo").click()
+        expect(page.get_by_role("status")).to_contain_text("Convênio inativado.")
+        expect(page.get_by_role("button", name="Reativar Ipasgo")).to_be_visible()
+        sem_violacao(page)
+    finally:
+        with trilha_zerada.begin() as c:
+            for comando in ZERAR_TRILHA:
+                c.execute(text(comando))
+            c.execute(text("DELETE FROM convenio"))

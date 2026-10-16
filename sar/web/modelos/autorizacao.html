@@ -1,0 +1,61 @@
+{% extends "layout.html" %}
+{% block cabeca %}<script src="{{ url_for('static', filename='js/decisao.js') }}" defer></script>{% endblock %}
+{% block titulo_pagina %}Análise do pedido{% endblock %}
+{% block subtitulo %}{{ estados.get(s.estado, s.estado) }}{% endblock %}
+{% block conteudo %}
+<div class="flex max-w-3xl flex-col gap-5">
+  {% include "_avisos.html" %}
+  <section class="cartao flex flex-col gap-3 p-5" aria-labelledby="pedido-t">
+    <h2 id="pedido-t" class="m-0 text-xl">{{ s.descricao }}</h2>
+    <dl class="m-0 grid grid-cols-1 gap-x-6 gap-y-2 sm:grid-cols-[10rem_minmax(0,1fr)]">
+      <dt class="font-bold">Solicitante</dt><dd class="m-0">{{ s.solicitante_nome }}</dd>
+      <dt class="font-bold">Pedida em</dt><dd class="m-0">{{ s.solicitada_em.astimezone(fuso).strftime("%d/%m/%Y às %H:%M") }}</dd>
+      <dt class="font-bold">Justificativa</dt><dd class="m-0" data-justificativa>{{ s.motivo }}</dd>
+      <dt class="font-bold">Situação</dt><dd class="m-0">{{ estados.get(s.estado, s.estado) }}</dd>
+      {% if s.decidida_em and s.estado != "pendente" %}
+      <dt class="font-bold">Decidida em</dt><dd class="m-0">{{ s.decidida_em.astimezone(fuso).strftime("%d/%m/%Y às %H:%M") }}</dd>
+      {% endif %}
+      {% if s.motivo_decisao %}<dt class="font-bold">Comentário da decisão</dt><dd class="m-0">{{ s.motivo_decisao }}</dd>{% endif %}
+    </dl>
+  </section>
+
+  {% if decide %}
+  {# Decisão em dois passos, para não aprovar o que se queria negar: a escolha no seletor e a confirmação no diálogo,
+     com o motivo e o botão na cor da escolha. Sem JavaScript, o servidor devolve a tela com o diálogo aberto. #}
+  <form class="cartao flex flex-col gap-4 p-5" method="post" action="{{ url_for('autorizacoes.decidir', solicitacao_id=s.id) }}" data-decisao novalidate>
+    <fieldset class="m-0 flex flex-col gap-3 border-0 p-0">
+      <legend class="mb-1 p-0 text-xl font-bold">Sua decisão</legend>
+      <div class="flex flex-wrap gap-3">
+        <label class="opcao-decisao has-checked:border-aprovar has-checked:bg-aprovar-fundo has-checked:text-aprovar-escura">
+          <input class="sr-only" type="radio" name="decisao" value="aprovar"{% if decisao == 'aprovar' %} checked{% endif %}> Aprovar</label>
+        <label class="opcao-decisao has-checked:border-urgencia has-checked:bg-urgencia-fundo has-checked:text-urgencia">
+          <input class="sr-only" type="radio" name="decisao" value="negar"{% if decisao == 'negar' %} checked{% endif %}> Negar</label>
+      </div>
+      <p class="ajuda-erro m-0" data-aviso-decisao aria-live="polite"></p>
+    </fieldset>
+    <div><button class="btn-primario" type="submit">Confirmar decisão</button></div>
+    <p class="m-0 text-sm text-suave">Ao aprovar, a operação é executada na hora, em nome de quem pediu e com o seu nome como autorizador. Se o registro mudou desde o pedido, ela é invalidada sem executar.</p>
+
+    {% set negar = decisao == 'negar' %}
+    <dialog class="m-auto w-[min(32rem,calc(100%-2rem))] rounded-xl border border-borda-forte bg-superficie p-0 text-tinta backdrop:bg-tinta/50"
+            id="confirmar-decisao" aria-labelledby="confirmar-t"{% if confirmar %} open{% endif %}>
+      <div class="flex flex-col gap-4 p-5">
+        <h2 id="confirmar-t" class="m-0 text-xl" data-titulo>{% if negar %}Negar este pedido?{% else %}Aprovar este pedido?{% endif %}</h2>
+        <p class="m-0">{{ s.descricao }}</p>
+        <label class="campo"><span class="rotulo" data-rotulo-motivo>{% if negar %}Motivo (obrigatório para negar){% else %}Motivo (opcional){% endif %}</span>
+          <textarea class="entrada min-h-24" name="motivo" maxlength="500"{% if negar %} required{% endif %}>{{ comentario or '' }}</textarea></label>
+        <div class="flex flex-wrap justify-end gap-3">
+          <a class="btn-neutro" href="{{ url_for('autorizacoes.analise', solicitacao_id=s.id) }}" data-voltar>Voltar</a>
+          <button class="{{ 'btn-urgente' if negar else 'btn-aprovar' }}" type="submit" name="confirmado" value="1" data-confirmar>{% if negar %}Negar{% else %}Aprovar{% endif %}</button>
+        </div>
+      </div>
+    </dialog>
+  </form>
+  {% elif propria and s.estado == "pendente" %}
+  <form method="post" action="{{ url_for('autorizacoes.cancelar', solicitacao_id=s.id) }}">
+    <button class="btn-neutro" type="submit">Cancelar este pedido</button>
+  </form>
+  {% endif %}
+  <div><a class="btn-neutro" href="{{ url_for('autorizacoes.lista') }}">Voltar às autorizações</a></div>
+</div>
+{% endblock %}

@@ -80,6 +80,21 @@ ZERAR_TRILHA = (
 )
 
 
+# Cadastro (MOD-02), na ordem das chaves estrangeiras. A aplicação não apaga paciente; só os testes.
+ZERAR_CADASTRO = (
+    "DELETE FROM solicitacao_autorizacao",
+    "DELETE FROM telefone",
+    "DELETE FROM contato",
+    "DELETE FROM cobertura",
+    "DELETE FROM periodo_tratamento",
+    "DELETE FROM documento",
+    "DELETE FROM duplicidade_descartada",
+    "DELETE FROM rascunho_cadastro",
+    "DELETE FROM paciente",
+    "DELETE FROM convenio",
+)
+
+
 @pytest.fixture
 def trilha_zerada(engine_migracao: Engine) -> Iterator[Engine]:
     """Cadeia vazia no começo e no fim do teste. A aplicação nunca apaga a trilha; só o usuário de migração,
@@ -176,3 +191,15 @@ def criar_usuario(trilha_zerada: Engine) -> Iterator[CriarUsuario]:
         for id_ in criados:
             c.execute(text("DELETE FROM sessao_usuario WHERE usuario_id = :u"), {"u": id_})
             c.execute(text("DELETE FROM usuario WHERE id = :u"), {"u": id_})
+
+
+@pytest.fixture
+def cadastro_zerado(usuarios: dict[str, int], trilha_zerada: Engine) -> Iterator[dict[str, int]]:
+    """Cadastro vazio no começo e no fim, com os usuários de teste; o cadastro sai antes deles."""
+    with trilha_zerada.begin() as c:
+        for comando in ZERAR_CADASTRO:
+            c.execute(text(comando))
+    yield usuarios
+    with trilha_zerada.begin() as c:
+        for comando in ZERAR_CADASTRO:
+            c.execute(text(comando))

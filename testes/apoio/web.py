@@ -12,12 +12,14 @@ from sar.composicao import compor
 from sar.web import criar_app
 from sar.web.configuracao import ConfigWeb, ServicosWeb
 from testes.apoio.acesso import HASHER, SENHA
+from testes.apoio.cadastro import ProvedorCepFalso
 
 ORIGEM = "https://sar.teste"
 
 
-def servicos_web(engine: Engine) -> ServicosWeb:
-    componentes = compor(engine, bytes(32), hasher=HASHER)
+def servicos_web(engine: Engine, provedor_cep: ProvedorCepFalso | None = None) -> ServicosWeb:
+    """O provedor de CEP é sempre falso: nenhum teste acessa a internet. Quem quiser controlá-lo passa o seu."""
+    componentes = compor(engine, bytes(32), hasher=HASHER, provedor_cep=provedor_cep or ProvedorCepFalso())
     return ServicosWeb(
         componentes.autenticacao,
         componentes.sessoes,
@@ -26,11 +28,17 @@ def servicos_web(engine: Engine) -> ServicosWeb:
         componentes.autorizacoes,
         componentes.auditoria,
         componentes.integridade,
+        componentes.pacientes,
+        componentes.contatos,
+        componentes.rascunhos,
+        componentes.cep,
+        componentes.eventos,
+        componentes.anulacao,
     )
 
 
-def montar(engine: Engine, **config: object) -> Flask:
-    return criar_app(servicos_web(engine), ConfigWeb(origem=ORIGEM, **config))  # type: ignore[arg-type]
+def montar(engine: Engine, provedor_cep: ProvedorCepFalso | None = None, **config: object) -> Flask:
+    return criar_app(servicos_web(engine, provedor_cep), ConfigWeb(origem=ORIGEM, **config))  # type: ignore[arg-type]
 
 
 def get(c: FlaskClient, caminho: str) -> TestResponse:
