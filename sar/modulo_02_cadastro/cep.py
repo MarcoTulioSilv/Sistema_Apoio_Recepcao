@@ -101,13 +101,27 @@ class ClienteBrasilApi(_Fonte):
 
 class ProvedorCepComReserva:
     """Implementa a porta ProvedorCep (AD-23): o alternativo só quando o principal falha. CEP declarado
-    inexistente pelo principal não é reconsultado (DD-88)."""
+    inexistente pelo principal não é reconsultado (DD-88).
+
+    CEP geral: o "CEP da cidade" terminado em -000 (75800-000, Jataí) não existe na base dos Correios quando a
+    cidade tem CEP por logradouro. Nesse caso consulta-se o vizinho -001, do mesmo prefixo, e só o município dele
+    é aproveitado; logradouro e bairro ficam para a pessoa preencher. Uma consulta a mais, individual (DD-88)."""
 
     def __init__(self, principal: ProvedorCep, alternativo: ProvedorCep) -> None:
         self._principal = principal
         self._alternativo = alternativo
 
     def consultar(self, cep: str) -> EnderecoCep | None:
+        endereco = self._com_reserva(cep)
+        if endereco is not None or not cep.endswith("000"):
+            return endereco
+        vizinho = self._com_reserva(f"{cep[:5]}001")
+        if vizinho is None:
+            return None
+        log.info("cadastro.cep.geral", extra={"resultado": "municipio_pelo_vizinho"})
+        return EnderecoCep(cep, None, None, vizinho.municipio_ibge, vizinho.uf, vizinho.municipio_nome)
+
+    def _com_reserva(self, cep: str) -> EnderecoCep | None:
         try:
             return self._principal.consultar(cep)
         except IndisponivelExterno:
