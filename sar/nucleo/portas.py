@@ -108,7 +108,16 @@ class ParticipanteAnulacao(Protocol):
         """Mostrado à administração antes da decisão (§6.9)."""
         ...
 
-    def descartar(self, uow: UnidadeDeTrabalho, contexto: Contexto, paciente_id: int) -> None: ...
+    def descartar(self, uow: UnidadeDeTrabalho, contexto: Contexto, paciente_id: int, autorizacao: Autorizacao) -> None:
+        """Na aprovação da anulação; com a autorização, grava a marca de mês alterado se alcançar mês fechado."""
+        ...
+
+
+# ------------------------------------------------------------------ MOD-03: alocação, para a situação da ficha (§6.3)
+class FonteAlocacao(Protocol):
+    def alocados(self, uow: UnidadeDeTrabalho, paciente_ids: Sequence[int], data: date) -> set[int]:
+        """Os que têm escala vigente na data, no período que a cobre (DD-27). Numa consulta só (§11.3)."""
+        ...
 
 
 # ------------------------------------------------------------------ MOD-04: retenção (DD-01)

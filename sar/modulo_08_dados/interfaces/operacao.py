@@ -197,6 +197,44 @@ class RepositorioOperacao(Protocol):
 
     def criar_ciencia(self, presenca_id: int, em: datetime, por: int) -> None: ...
 
+    def presencas_fora_da_escala(
+        self, paciente_ids: Sequence[int] | None, inicio: date, fim: date, *, sem_planejamento: bool, sem_ciencia: bool
+    ) -> list[PresencaGravada]:
+        """Presenças (situação presente) em sessão que não é a da escala vigente do paciente na data. Com
+        sem_planejamento, só as que não têm troca chegando nem extra planejada para a sessão (RF-921); com
+        sem_ciencia, só as ainda sem ciência da enfermagem."""
+        ...
+
+    # ---------------------------------------------------------------- termos (RF-805, RF-809, DD-28)
+    def ligar_documento_troca(self, troca_id: int, documento_id: bytes | None) -> None: ...
+
+    def trocas_do_documento(self, documento_id: bytes) -> list[TrocaGravada]: ...
+
+    def trocas_sem_documento(self, paciente_ids: Sequence[int] | None) -> list[TrocaGravada]:
+        """Não canceladas e sem o termo assinado, em ordem de paciente e de origem."""
+        ...
+
+    def gravar_termo(self, paciente_id: int, competencia: str, documento_id: bytes) -> None:
+        """Um por paciente e mês: o documento novo (nova versão) substitui o anterior."""
+        ...
+
+    def termos(self, paciente_ids: Sequence[int] | None) -> list[tuple[int, str, bytes]]:
+        """(paciente, competência, documento)."""
+        ...
+
+    def remover_termos_do_documento(self, documento_id: bytes) -> list[tuple[int, str]]:
+        """Remove e devolve (paciente, competência) dos termos que apontavam para o documento."""
+        ...
+
+    # ---------------------------------------------------------------- anulação (§7.8, DEC-61)
+    def contagens_do_paciente(self, paciente_id: int, periodo_ids: Sequence[int]) -> dict[str, int]:
+        """Quantas presenças, alocações, trocas, extras, ligações, ciências e termos o paciente tem."""
+        ...
+
+    def remover_do_paciente(self, paciente_id: int, periodo_ids: Sequence[int]) -> None:
+        """Descarta tudo o que é do MOD-03 e está ligado ao paciente, na ordem das chaves estrangeiras."""
+        ...
+
     # ---------------------------------------------------------------- marca de mês alterado (RF-915, DD-26)
     def criar_marca(
         self,

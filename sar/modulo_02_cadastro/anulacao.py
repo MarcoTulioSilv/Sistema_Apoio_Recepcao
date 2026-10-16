@@ -81,7 +81,7 @@ class ExecutorAnularPaciente:
     ) -> None:
         paciente = _vivo(uow, int(parametros["paciente_id"]), travar=True)
         for participante in self._participantes:
-            participante.descartar(uow, autor, paciente.id)
+            participante.descartar(uow, autor, paciente.id, autorizacao)
         uow.repositorio(RepositorioPaciente).anular(paciente.id, autor.instante)
         # Sem os valores apagados: eles já estão nos registros de criação e edição (DD-89).
         alteracoes = {"anulado": (False, True), "dados_pessoais": (True, False)}

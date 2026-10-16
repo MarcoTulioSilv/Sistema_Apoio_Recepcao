@@ -48,12 +48,20 @@ from sar.modulo_02_cadastro.pendencias import FONTES as FONTES_CADASTRO
 from sar.modulo_02_cadastro.pendencias import ServicoMarcoRetencao
 from sar.modulo_02_cadastro.rascunhos import FonteRascunhoProximoDoDescarte, ServicoRascunhos
 from sar.modulo_02_cadastro.servicos import ServicoCep, ServicoContatos, ServicoLeituraCadastro, ServicoPacientes
-from sar.modulo_03_operacao.contrato import EscalaService, FrequenciaService, SessaoTurnoService
+from sar.modulo_03_operacao.contrato import EscalaService, FrequenciaService, LeituraOperacao, SessaoTurnoService
 from sar.modulo_03_operacao.escalas import ServicoEscalas
 from sar.modulo_03_operacao.executores import executores as executores_operacao
 from sar.modulo_03_operacao.frequencia import ServicoFrequencia
-from sar.modulo_03_operacao.integracao import VerificadorUsoImplantacao
+from sar.modulo_03_operacao.integracao import (
+    AlocacaoDaFicha,
+    ParticipanteAnulacaoOperacao,
+    VerificadorImpedimentoOperacao,
+    VerificadorUsoImplantacao,
+)
+from sar.modulo_03_operacao.leitura import ServicoLeituraOperacao
+from sar.modulo_03_operacao.pendencias import fontes as fontes_operacao
 from sar.modulo_03_operacao.sessoes import ServicoSessoes
+from sar.modulo_03_operacao.termos import manipulador_revinculo_termos, manipulador_termos
 from sar.modulo_06_configuracao.contrato import ConfiguracaoService, Referencias
 from sar.modulo_06_configuracao.servicos import LeitorParametrosSQL, ServicoConfiguracao, ServicoReferencias
 from sar.modulo_08_dados.cadeia import gravar_encadeado
@@ -138,6 +146,8 @@ def montar_barramento(relogio: Relogio) -> Barramento:
     auditoria = ServicoAuditoria()  # só registra na unidade de trabalho de quem publicou
     barramento.assinar(DocumentoIncorporado, manipulador_comprovante(relogio, auditoria))
     barramento.assinar(DocumentoRevinculado, manipulador_revinculo(relogio, auditoria))
+    barramento.assinar(DocumentoIncorporado, manipulador_termos(relogio, auditoria))
+    barramento.assinar(DocumentoRevinculado, manipulador_revinculo_termos(relogio, auditoria))
     return barramento
 
 
@@ -186,6 +196,7 @@ class Componentes:
     escalas: EscalaService
     turnos: SessaoTurnoService
     frequencia: FrequenciaService
+    leitura_operacao: LeituraOperacao
 
 
 # Verificadores de uso dos parâmetros imutáveis (DD-51): a data de implantação trava na primeira sessão confirmada.
@@ -195,10 +206,11 @@ VERIFICADORES_USO: dict[str, VerificadorUso] = {v.parametro: v for v in (Verific
 # dependências de cada módulo. Um tipo registrado aqui prevalece (os testes da web põem um executor falso).
 EXECUTORES_AUTORIZAVEIS: dict[str, ExecutorAutorizavel] = {}
 
-# Quem tem fatos datados que impedem encerrar o período (DD-31, DD-74). O MOD-03 entra no Incremento 3.
+# Quem tem fatos datados que impedem encerrar o período (DD-31, DD-74), além do MOD-03, que o compor() monta.
 VERIFICADORES_IMPEDIMENTO: list[VerificadorImpedimento] = []
 
-# Quem descarta o que está ligado ao cadastro anulado (§6.9, DD-74). MOD-03 e MOD-04 entram nos Incrementos 3 e 4.
+# Quem descarta o que está ligado ao cadastro anulado (§6.9, DD-74), além do MOD-03, que o compor() monta. O MOD-04
+# entra no Incremento 4.
 PARTICIPANTES_ANULACAO: list[ParticipanteAnulacao] = []
 
 
@@ -220,11 +232,16 @@ def compor(
     referencias = ServicoReferencias()
     cep = provedor_cep or provedor_padrao()
     leitura_cadastro = ServicoLeituraCadastro()
+    verificadores = [*VERIFICADORES_IMPEDIMENTO, VerificadorImpedimentoOperacao(auditoria)]
+    participantes = [
+        *PARTICIPANTES_ANULACAO,
+        ParticipanteAnulacaoOperacao(auditoria, leitura_cadastro, parametros, relogio),
+    ]
     executores = dict(EXECUTORES_AUTORIZAVEIS)
     dos_modulos: list[ExecutorAutorizavel] = [
-        ExecutorCorrigirEvento(auditoria, VERIFICADORES_IMPEDIMENTO),
+        ExecutorCorrigirEvento(auditoria, verificadores),
         ExecutorRemoverEvento(auditoria),
-        ExecutorAnularPaciente(auditoria, PARTICIPANTES_ANULACAO),
+        ExecutorAnularPaciente(auditoria, participantes),
         *executores_operacao(auditoria, leitura_cadastro, parametros),
     ]
     for executor in dos_modulos:
@@ -245,19 +262,24 @@ def compor(
         sessoes=GerenciadorSessao(executar, auditoria, parametros, relogio),
         usuarios=ServicoUsuarios(executar, auditoria, hasher),
         autorizacoes=autorizacoes,
-        pacientes=ServicoPacientes(executar, auditoria, referencias, cep),
+        pacientes=ServicoPacientes(executar, auditoria, referencias, cep, AlocacaoDaFicha(leitura_cadastro)),
         contatos=ServicoContatos(executar, auditoria),
-        eventos=ServicoEventos(executar, auditoria, autorizacoes, VERIFICADORES_IMPEDIMENTO),
-        anulacao=ServicoAnulacao(executar, autorizacoes, PARTICIPANTES_ANULACAO),
+        eventos=ServicoEventos(executar, auditoria, autorizacoes, verificadores),
+        anulacao=ServicoAnulacao(executar, autorizacoes, participantes),
         rascunhos=ServicoRascunhos(executar, auditoria, cifra, parametros),
         cep=ServicoCep(executar, referencias, cep),
         # DD-54: o MOD-07 agrega as fontes de todos os módulos
-        fontes_pendencia=(*FONTES_CADASTRO, FonteRascunhoProximoDoDescarte(parametros)),
+        fontes_pendencia=(
+            *FONTES_CADASTRO,
+            FonteRascunhoProximoDoDescarte(parametros),
+            *fontes_operacao(leitura_cadastro, parametros),
+        ),
         marco_retencao=ServicoMarcoRetencao(),
         leitura_cadastro=leitura_cadastro,
         escalas=ServicoEscalas(executar, auditoria, leitura_cadastro, parametros, autorizacoes),
         turnos=ServicoSessoes(executar, auditoria, leitura_cadastro, parametros, autorizacoes),
         frequencia=ServicoFrequencia(executar, auditoria, leitura_cadastro, parametros, autorizacoes),
+        leitura_operacao=ServicoLeituraOperacao(leitura_cadastro, parametros),
     )
 
 

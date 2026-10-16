@@ -16,7 +16,7 @@ from sar.nucleo.contexto import Perfil
 from sar.nucleo.erros import AcessoNegado, RegraViolada, RequerAutorizacao
 from testes.apoio.cadastro import dados_completos, pessoa
 from testes.apoio.fabrica import Fabrica
-from testes.apoio.operacao import Operacao, contexto, definir_implantacao, local, montar
+from testes.apoio.operacao import Operacao, confirmar, contexto, definir_implantacao, local, montar
 
 pytestmark = pytest.mark.integracao
 
@@ -35,13 +35,6 @@ def alocado(op: Operacao, ids: dict[str, int], fabrica: Fabrica, escala: int = S
     pid = op.cadastro.pacientes.criar(pessoa(ids), dados_completos(fabrica), date(2026, 9, 1))
     op.escalas.alocar(contexto(ids, "enfermagem", Perfil.ENFERMAGEM), pid, escala, date(2026, 9, 1))
     return pid
-
-
-def confirmar(op: Operacao, ids: dict[str, int], data: date, escala: int) -> None:
-    """Pela confirmação de verdade, na última hora do turno: ela grava a presença de todos (DD-24)."""
-    fim = {1: 10, 2: 10, 3: 15, 4: 15, 5: 20, 6: 20}[escala]
-    quando = contexto(ids, "recepcao", Perfil.RECEPCAO, local(data, fim - 1, 30))
-    op.turnos.confirmar(quando, data, escala, op.turnos.tela_do_turno(quando, data, escala).versao)
 
 
 def fechar_setembro(op: Operacao, ids: dict[str, int]) -> None:

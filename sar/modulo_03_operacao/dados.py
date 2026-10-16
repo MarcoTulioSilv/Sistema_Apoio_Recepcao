@@ -7,6 +7,7 @@ from collections.abc import Callable, Sequence
 from datetime import date
 
 from sar.modulo_02_cadastro.contrato import LeituraCadastro, PeriodoRef
+from sar.modulo_03_operacao.calendario import Antecedencias
 from sar.modulo_03_operacao.compensacao import Periodo, Vigencia
 from sar.modulo_03_operacao.contrato import Escala
 from sar.modulo_08_dados.interfaces.operacao import RepositorioOperacao
@@ -46,6 +47,15 @@ def implantacao(parametros: LeitorParametros) -> date | None:
     """Vazia: nenhuma sessão existe ainda (DD-91)."""
     valor = parametros.valor("data_implantacao")
     return valor if isinstance(valor, date) else None
+
+
+def antecedencias(parametros: LeitorParametros) -> Antecedencias:
+    """Preparação e confirmação do turno, do MOD-06 (DD-30, DD-32)."""
+    preparacao = parametros.valor("preparacao_turno_antecedencia")
+    confirmacao = parametros.valor("confirmacao_turno_antecedencia")
+    if not isinstance(preparacao, int) or not isinstance(confirmacao, int):
+        raise RuntimeError("antecedências do turno fora do tipo declarado")
+    return Antecedencias.em_minutos(preparacao, confirmacao)
 
 
 def obito(periodos: Sequence[PeriodoRef]) -> date | None:

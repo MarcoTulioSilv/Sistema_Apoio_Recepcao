@@ -12,3 +12,7 @@ DOCUMENTO_DO_EVENTO: dict[str, str] = {
     "transplante": "documento_transplante",
     "desistencia": "termo_interrupcao",
 }
+
+# Termos assinados que o MOD-03 liga à troca e ao mês do paciente (RF-805, RF-809).
+DOCUMENTO_DA_TROCA = "declaracao_troca"  # DOC-03
+DOCUMENTO_DA_EXTRA = "termo_extra"  # DOC-07

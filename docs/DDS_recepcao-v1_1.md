@@ -251,7 +251,8 @@ Assinaturas completas em `sar/nucleo/portas.py`, `sar/nucleo/parametros.py` e `s
 | `LeitorParametros` | Núcleo | MOD-06 | Valor vigente de cada parâmetro declarado (DD-48, DD-73) |
 | `ExecutorAutorizavel` | Núcleo, usada pelo MOD-01 | MOD-02, MOD-03, MOD-04 | Executa a operação aprovada (DEC-42) |
 | `VerificadorImpedimento` | Núcleo, usada pelo MOD-02 | MOD-03, MOD-04 | Impedimentos e efeitos automáticos do encerramento de período (§7.8, DD-31) |
-| `ParticipanteAnulacao` | Núcleo, usada pelo MOD-02 | MOD-03, MOD-04 | Impacto e descarte na anulação (§6.9) |
+| `ParticipanteAnulacao` | Núcleo, usada pelo MOD-02 | MOD-03, MOD-04 | Impacto e descarte na anulação (§6.9); o descarte recebe a autorização, para a marca de mês alterado (RF-915) |
+| `FonteAlocacao` | Núcleo, usada pelo MOD-02 | MOD-03 | Escala vigente, para a situação da ficha: ativo ou sem alocação (§6.3, DD-27) |
 | `FonteMarcoRetencao` | Núcleo, usada pelo MOD-04 | MOD-02 | Marco da retenção (DD-01) |
 | `ProvedorCep` | Núcleo, usada pelo MOD-02 | Adaptadores ViaCEP e alternativo | Strategy (AD-23) |
 | `FontePendencia` | Núcleo, usada pelo MOD-07 | MOD-01 a MOD-04, MOD-09, MOD-11 | Pendências por perfil (DD-54) |

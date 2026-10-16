@@ -359,11 +359,7 @@ class ServicoSessoes:
 
     # ---------------------------------------------------------------- apoio
     def _antecedencias(self) -> Antecedencias:
-        preparacao = self._parametros.valor("preparacao_turno_antecedencia")
-        confirmacao = self._parametros.valor("confirmacao_turno_antecedencia")
-        if not isinstance(preparacao, int) or not isinstance(confirmacao, int):
-            raise RuntimeError("antecedências do turno fora do tipo declarado")
-        return Antecedencias.em_minutos(preparacao, confirmacao)
+        return dados.antecedencias(self._parametros)
 
     def _sessao(self, uow: UnidadeDeTrabalho, data: date, escala_id: int) -> Sessao:
         implantada = dados.implantacao(self._parametros)

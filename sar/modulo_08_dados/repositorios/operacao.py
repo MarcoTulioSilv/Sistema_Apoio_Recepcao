@@ -6,9 +6,9 @@ from collections.abc import Sequence
 from datetime import UTC, date, datetime
 from typing import cast
 
-from sqlalchemy import Select, delete, or_, select, update
+from sqlalchemy import Select, delete, exists, func, or_, select, update
 from sqlalchemy.dialects.mysql import insert as mysql_insert
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, aliased
 
 from sar.modulo_08_dados.interfaces.operacao import (
     AlocacaoGravada,
@@ -22,6 +22,7 @@ from sar.modulo_08_dados.interfaces.operacao import (
     SituacaoPresenca,
     TrocaGravada,
 )
+from sar.modulo_08_dados.modelos.cadastro import PeriodoTratamento
 from sar.modulo_08_dados.modelos.operacao import (
     Alocacao,
     CienciaEnfermagem,
@@ -31,6 +32,7 @@ from sar.modulo_08_dados.modelos.operacao import (
     MesAlterado,
     Presenca,
     SessaoTurno,
+    TermoExtra,
     TrocaPontual,
 )
 
@@ -292,6 +294,124 @@ class RepositorioOperacaoSQL:
     def criar_ciencia(self, presenca_id: int, em: datetime, por: int) -> None:
         self._s.add(CienciaEnfermagem(presenca_id=presenca_id, registrada_em=_gravar(em), registrada_por=por))
         self._s.flush()
+
+    def presencas_fora_da_escala(
+        self, paciente_ids: Sequence[int] | None, inicio: date, fim: date, *, sem_planejamento: bool, sem_ciencia: bool
+    ) -> list[PresencaGravada]:
+        alocacao, periodo = aliased(Alocacao), aliased(PeriodoTratamento)
+        vigente = (
+            select(alocacao.escala_id)
+            .join(periodo, periodo.id == alocacao.periodo_id)
+            .where(
+                periodo.paciente_id == Presenca.paciente_id,
+                periodo.inicio <= SessaoTurno.data,
+                or_(periodo.evento_data.is_(None), periodo.evento_data >= SessaoTurno.data),
+                alocacao.vigencia_inicio <= SessaoTurno.data,
+            )
+            .order_by(alocacao.vigencia_inicio.desc())
+            .limit(1)
+            .correlate(Presenca, SessaoTurno)
+            .scalar_subquery()
+        )
+        consulta = _PRESENCA.where(
+            Presenca.situacao == "presente",
+            SessaoTurno.data.between(inicio, fim),
+            func.coalesce(vigente, 0) != SessaoTurno.escala_id,  # sem escala vigente também é fora da escala
+        )
+        if sem_planejamento:
+            troca = exists().where(
+                TrocaPontual.paciente_id == Presenca.paciente_id,
+                TrocaPontual.cancelada_em.is_(None),
+                TrocaPontual.data_destino == SessaoTurno.data,
+                TrocaPontual.escala_destino_id == SessaoTurno.escala_id,
+            )
+            extra = exists().where(
+                ExtraPlanejada.paciente_id == Presenca.paciente_id,
+                ExtraPlanejada.cancelada_em.is_(None),
+                ExtraPlanejada.data == SessaoTurno.data,
+                ExtraPlanejada.escala_id == SessaoTurno.escala_id,
+            )
+            consulta = consulta.where(~troca, ~extra)
+        if sem_ciencia:
+            consulta = consulta.where(~exists().where(CienciaEnfermagem.presenca_id == Presenca.id))
+        if paciente_ids is not None:
+            consulta = consulta.where(Presenca.paciente_id.in_(list(paciente_ids)))
+        return self._presencas(consulta.order_by(SessaoTurno.data, SessaoTurno.escala_id, Presenca.id), self._s)
+
+    # ---------------------------------------------------------------- termos
+    def ligar_documento_troca(self, troca_id: int, documento_id: bytes | None) -> None:
+        self._s.execute(
+            update(TrocaPontual).where(TrocaPontual.id == troca_id).values(documento_id=documento_id),
+            execution_options={"synchronize_session": False},
+        )
+
+    def trocas_do_documento(self, documento_id: bytes) -> list[TrocaGravada]:
+        consulta = select(TrocaPontual).where(TrocaPontual.documento_id == documento_id).order_by(TrocaPontual.id)
+        return [_troca(t) for t in self._s.scalars(consulta)]
+
+    def trocas_sem_documento(self, paciente_ids: Sequence[int] | None) -> list[TrocaGravada]:
+        consulta = select(TrocaPontual).where(TrocaPontual.cancelada_em.is_(None), TrocaPontual.documento_id.is_(None))
+        if paciente_ids is not None:
+            consulta = consulta.where(TrocaPontual.paciente_id.in_(list(paciente_ids)))
+        consulta = consulta.order_by(TrocaPontual.paciente_id, TrocaPontual.data_origem, TrocaPontual.id)
+        return [_troca(t) for t in self._s.scalars(consulta)]
+
+    def gravar_termo(self, paciente_id: int, competencia: str, documento_id: bytes) -> None:
+        self._s.execute(
+            mysql_insert(TermoExtra)
+            .values(paciente_id=paciente_id, competencia=competencia, documento_id=documento_id)
+            .on_duplicate_key_update(documento_id=documento_id)
+        )
+
+    def termos(self, paciente_ids: Sequence[int] | None) -> list[tuple[int, str, bytes]]:
+        consulta = select(TermoExtra.paciente_id, TermoExtra.competencia, TermoExtra.documento_id)
+        if paciente_ids is not None:
+            consulta = consulta.where(TermoExtra.paciente_id.in_(list(paciente_ids)))
+        ordem = (TermoExtra.paciente_id, TermoExtra.competencia)
+        return [(p, c, d) for p, c, d in self._s.execute(consulta.order_by(*ordem))]
+
+    def remover_termos_do_documento(self, documento_id: bytes) -> list[tuple[int, str]]:
+        consulta = select(TermoExtra.paciente_id, TermoExtra.competencia).where(TermoExtra.documento_id == documento_id)
+        removidos = [(p, c) for p, c in self._s.execute(consulta)]
+        self._s.execute(delete(TermoExtra).where(TermoExtra.documento_id == documento_id))
+        return removidos
+
+    # ---------------------------------------------------------------- anulação
+    @staticmethod
+    def _presencas_do_paciente(paciente_id: int) -> Select[tuple[int]]:
+        return select(Presenca.id).where(Presenca.paciente_id == paciente_id)
+
+    def contagens_do_paciente(self, paciente_id: int, periodo_ids: Sequence[int]) -> dict[str, int]:
+        presencas = self._presencas_do_paciente(paciente_id)
+
+        def contar(consulta: Select[tuple[int]]) -> int:
+            return int(self._s.scalar(select(func.count()).select_from(consulta.subquery())) or 0)
+
+        dos_lados = or_(LigacaoManual.ausencia_id.in_(presencas), LigacaoManual.presenca_id.in_(presencas))
+        return {
+            "presencas": contar(presencas),
+            "alocacoes": contar(select(Alocacao.id).where(Alocacao.periodo_id.in_(list(periodo_ids) or [0]))),
+            "trocas": contar(select(TrocaPontual.id).where(TrocaPontual.paciente_id == paciente_id)),
+            "extras": contar(select(ExtraPlanejada.id).where(ExtraPlanejada.paciente_id == paciente_id)),
+            "ligacoes": contar(select(LigacaoManual.id).where(dos_lados)),
+            "ciencias": contar(
+                select(CienciaEnfermagem.presenca_id).where(CienciaEnfermagem.presenca_id.in_(presencas))
+            ),
+            "termos": contar(select(TermoExtra.id).where(TermoExtra.paciente_id == paciente_id)),
+        }
+
+    def remover_do_paciente(self, paciente_id: int, periodo_ids: Sequence[int]) -> None:
+        presencas = list(self._s.scalars(self._presencas_do_paciente(paciente_id)))
+        if presencas:
+            dos_lados = or_(LigacaoManual.ausencia_id.in_(presencas), LigacaoManual.presenca_id.in_(presencas))
+            self._s.execute(delete(LigacaoManual).where(dos_lados))
+            self._s.execute(delete(CienciaEnfermagem).where(CienciaEnfermagem.presenca_id.in_(presencas)))
+            self._s.execute(delete(Presenca).where(Presenca.id.in_(presencas)))
+        if periodo_ids:
+            self._s.execute(delete(Alocacao).where(Alocacao.periodo_id.in_(list(periodo_ids))))
+        self._s.execute(delete(TrocaPontual).where(TrocaPontual.paciente_id == paciente_id))
+        self._s.execute(delete(ExtraPlanejada).where(ExtraPlanejada.paciente_id == paciente_id))
+        self._s.execute(delete(TermoExtra).where(TermoExtra.paciente_id == paciente_id))
 
     # ---------------------------------------------------------------- marcas
     def criar_marca(

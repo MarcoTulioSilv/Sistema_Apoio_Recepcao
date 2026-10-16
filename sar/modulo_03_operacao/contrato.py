@@ -4,11 +4,12 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from datetime import date, time
+from datetime import date, datetime, time
 from enum import StrEnum
 from typing import Protocol
 
 from sar.nucleo.contexto import Contexto
+from sar.nucleo.uow import UnidadeDeTrabalho
 
 DIAS_SEMANA = ("seg", "ter", "qua", "qui", "sex", "sab", "dom")  # na ordem de date.weekday()
 ROTULOS_TURNO = {1: "Primeiro turno", 2: "Segundo turno", 3: "Terceiro turno"}  # DD-75
@@ -331,4 +332,60 @@ class FrequenciaService(Protocol):
     def dar_ciencia(self, contexto: Contexto, presenca_id: int) -> None:
         """A enfermagem toma ciência da presença acrescentada pela recepção sem troca nem extra planejada (RF-921).
         RegraViolada: "ciencia.desnecessaria", "ciencia.ja_registrada". NaoEncontrado."""
+        ...
+
+
+# ------------------------------------------------------------------ vínculos dos termos (RF-809, DD-28)
+PREFIXO_VINCULO_TROCA = "troca:"
+PREFIXO_VINCULO_EXTRA = "extra:"
+
+
+def vinculo_da_troca(troca_id: int) -> str:
+    """Vínculo opaco da ingestão aberta a partir da pendência de termo de troca (DOC-03): o MOD-04 guarda sem
+    interpretar e devolve no DocumentoIncorporado, como o do comprovante de evento (§6.5)."""
+    return f"{PREFIXO_VINCULO_TROCA}{troca_id}"
+
+
+def vinculo_da_extra(competencia: str) -> str:
+    """Vínculo do termo de diálise extra (DOC-07): um por paciente e mês (RF-805)."""
+    return f"{PREFIXO_VINCULO_EXTRA}{competencia}"
+
+
+# ------------------------------------------------------------------ leituras para os outros módulos (§7.10)
+@dataclass(frozen=True, slots=True)
+class SituacaoDoMes:
+    """RF-913: o relatório mensal só sai com o mês fechado; senão, informa quantas e quais sessões faltam."""
+
+    fechado: bool
+    pendentes: tuple[ResumoSessao, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class MarcaAlteracao:
+    """RF-915: exibida em todo relatório de frequência que inclua o mês."""
+
+    competencia: str
+    instante: datetime
+    responsavel_id: int
+    autorizador_id: int
+    motivo: str
+
+
+class LeituraOperacao(Protocol):
+    """Somente leitura, na unidade de trabalho de quem chama (MOD-05, MOD-07). Paciente anulado não aparece."""
+
+    def mes_fechado(self, uow: UnidadeDeTrabalho, competencia: str, hoje: date) -> SituacaoDoMes: ...
+
+    def sessoes_nao_confirmadas(
+        self, uow: UnidadeDeTrabalho, inicio: date, fim: date, agora: datetime
+    ) -> list[ResumoSessao]:
+        """RF-914: sessões já começadas e não confirmadas no intervalo, da mais antiga para a mais nova."""
+        ...
+
+    def marcas_alteracao(self, uow: UnidadeDeTrabalho, competencias: Sequence[str]) -> list[MarcaAlteracao]: ...
+
+    def frequencia_do_mes(
+        self, uow: UnidadeDeTrabalho, competencia: str, agora: datetime
+    ) -> dict[int, PareamentoDoMes]:
+        """Balanço e pares de todos os pacientes com período no mês, por paciente (relatório mensal)."""
         ...

@@ -57,6 +57,25 @@ def _balanco(comp: str, apurado: Apurado | None, fechado: bool) -> BalancoMes:
                       b.a_realizar, b.provisorio)  # fmt: skip
 
 
+def montar_pareamento(comp: str, apurado: Apurado | None, fechado: bool) -> PareamentoDoMes:
+    """Os pares com a origem de cada um, as ausências livres e as extras, para a ficha e para o relatório."""
+    if apurado is None:
+        return PareamentoDoMes(_balanco(comp, None, fechado), (), (), (), 0, fechado)
+    linhas, c = apurado.presencas, apurado.compensacao
+
+    def item(s: Sessao) -> ItemFrequencia:
+        return ItemFrequencia(s.data, s.escala, linhas[s].id if s in linhas else None)
+
+    return PareamentoDoMes(
+        _balanco(comp, apurado, fechado),
+        tuple(ParDoMes(item(p.ausencia), item(p.presenca), p.origem) for p in c.pares),
+        tuple(item(a) for a in c.ausencias_livres),
+        tuple(item(e) for e in c.extras),
+        len(c.ligacoes_ignoradas),
+        fechado,
+    )
+
+
 def _texto(ligacoes: Sequence[tuple[int, int]]) -> str:
     return ";".join(f"{a}>{p}" for a, p in sorted(ligacoes))
 
@@ -130,20 +149,7 @@ class ServicoFrequencia:
 
         def operacao(uow: UnidadeDeTrabalho) -> PareamentoDoMes:
             apurado = _apurado(uow, self._leitura, self._parametros, contexto, paciente_id, comp)
-            fechado = self._fechado(uow, comp, contexto)
-            if apurado is None:
-                return PareamentoDoMes(_balanco(comp, None, fechado), (), (), (), 0, fechado)
-            linhas = apurado.presencas
-
-            def item(s: Sessao) -> ItemFrequencia:
-                return ItemFrequencia(s.data, s.escala, linhas[s].id if s in linhas else None)
-
-            c = apurado.compensacao
-            pares = tuple(ParDoMes(item(p.ausencia), item(p.presenca), p.origem) for p in c.pares)
-            return PareamentoDoMes(
-                _balanco(comp, apurado, fechado), pares, tuple(item(a) for a in c.ausencias_livres),
-                tuple(item(e) for e in c.extras), len(c.ligacoes_ignoradas), fechado,
-            )  # fmt: skip
+            return montar_pareamento(comp, apurado, self._fechado(uow, comp, contexto))
 
         return self._executar(operacao)
 

@@ -66,7 +66,7 @@ from sar.nucleo.erros import (
     RegraViolada,
 )
 from sar.nucleo.logs import campos_do_erro
-from sar.nucleo.portas import EnderecoCep, ProvedorCep
+from sar.nucleo.portas import EnderecoCep, FonteAlocacao, ProvedorCep
 from sar.nucleo.uow import ExecutorDeOperacao, UnidadeDeTrabalho
 
 GUARDA = PermissionGuard()
@@ -217,13 +217,20 @@ def _cep_existe(provedor: ProvedorCep, cep: str | None) -> bool:
 
 class ServicoPacientes:
     def __init__(
-        self, executar: ExecutorDeOperacao, auditoria: AuditService, referencias: Referencias, cep: ProvedorCep
+        self,
+        executar: ExecutorDeOperacao,
+        auditoria: AuditService,
+        referencias: Referencias,
+        cep: ProvedorCep,
+        alocacao: FonteAlocacao | None = None,
     ) -> None:
+        """Sem a fonte de alocação (o MOD-03, ligado na composição), a ficha trata o paciente como sem alocação."""
         self._executar = executar
         self._auditoria = auditoria
         self._referencias = referencias
         self._verificar = _Verificacoes(referencias)
         self._cep = cep
+        self._alocacao = alocacao
 
     # ---------------------------------------------------------------- escrita
     def criar(
@@ -306,6 +313,9 @@ class ServicoPacientes:
             return versao + 1
 
         return _com_unicidade(lambda: self._executar(operacao))
+
+    def _alocado(self, uow: UnidadeDeTrabalho, paciente_id: int, hoje: date) -> bool:
+        return self._alocacao is not None and paciente_id in self._alocacao.alocados(uow, [paciente_id], hoje)
 
     def _gravar_telefones_e_contatos(
         self,
@@ -567,7 +577,7 @@ class ServicoPacientes:
                 dados=dados,
                 cep_verificado=paciente.cep_verificado,
                 idade=idade(dados.data_nascimento, hoje) if dados.data_nascimento else None,
-                situacao=situacao([_evento(p) for p in periodos], alocado=False),  # alocação: MOD-03
+                situacao=situacao([_evento(p) for p in periodos], alocado=self._alocado(uow, paciente_id, hoje)),
                 pendencias=pendencias(dados, paciente.cep_verificado),
                 residencia=self._municipio(uow, dados.municipio),
                 naturalidade=self._municipio(uow, dados.naturalidade_municipio),
