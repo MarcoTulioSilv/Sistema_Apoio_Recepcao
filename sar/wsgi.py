@@ -64,6 +64,10 @@ def montar() -> Flask:
         componentes.cep,
         componentes.eventos,
         componentes.anulacao,
+        componentes.escalas,
+        componentes.turnos,
+        componentes.frequencia,
+        componentes.relatorios,
     )
     return criar_app(servicos, config)
 

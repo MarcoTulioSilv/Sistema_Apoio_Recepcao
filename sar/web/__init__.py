@@ -109,6 +109,7 @@ def criar_app(servicos: ServicosWeb | None = None, config: ConfigWeb | None = No
     from sar.web.rotas_parametros import bp as parametros
     from sar.web.rotas_saude import bp as saude
     from sar.web.rotas_trilha_integridade import autorizacoes, integridade, trilha
+    from sar.web.rotas_turnos import bp as turnos
     from sar.web.rotas_usuarios import bp as usuarios
 
     app.register_blueprint(saude)
@@ -123,6 +124,7 @@ def criar_app(servicos: ServicosWeb | None = None, config: ConfigWeb | None = No
             autorizacoes,
             trilha,
             integridade,
+            turnos,
         ):
             app.register_blueprint(blueprint)
 

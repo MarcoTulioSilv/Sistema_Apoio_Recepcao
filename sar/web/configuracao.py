@@ -22,6 +22,8 @@ from sar.modulo_02_cadastro.contrato import (
     PacienteService,
     RascunhoService,
 )
+from sar.modulo_03_operacao.contrato import EscalaService, FrequenciaService, SessaoTurnoService
+from sar.modulo_05_emissao.contrato import RelatorioService
 from sar.modulo_06_configuracao.contrato import ConfiguracaoService
 
 
@@ -61,3 +63,7 @@ class ServicosWeb:
     cep: CepService
     eventos: EventoService
     anulacao: AnulacaoService
+    escalas: EscalaService
+    turnos: SessaoTurnoService
+    frequencia: FrequenciaService
+    relatorios: RelatorioService

@@ -213,3 +213,15 @@ def cadastro_zerado(usuarios: dict[str, int], trilha_zerada: Engine) -> Iterator
     with trilha_zerada.begin() as c:
         for comando in ZERAR_CADASTRO:
             c.execute(text(comando))
+
+
+@pytest.fixture
+def operacao_zerada(
+    cadastro_zerado: dict[str, int], criar_usuario: CriarUsuario, trilha_zerada: Engine
+) -> Iterator[dict[str, int]]:
+    ids = dict(cadastro_zerado)
+    ids["enfermagem"] = criar_usuario("teste_enfermagem", perfil="enfermagem")
+    yield ids
+    with trilha_zerada.begin() as c:  # antes dos usuários, que as sessões, ciências e parâmetros referenciam
+        for comando in (*ZERAR_CADASTRO, "DELETE FROM parametro"):
+            c.execute(text(comando))

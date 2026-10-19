@@ -62,6 +62,8 @@ from sar.modulo_03_operacao.leitura import ServicoLeituraOperacao
 from sar.modulo_03_operacao.pendencias import fontes as fontes_operacao
 from sar.modulo_03_operacao.sessoes import ServicoSessoes
 from sar.modulo_03_operacao.termos import manipulador_revinculo_termos, manipulador_termos
+from sar.modulo_05_emissao.contrato import RelatorioService
+from sar.modulo_05_emissao.relatorios import ServicoRelatorios
 from sar.modulo_06_configuracao.contrato import ConfiguracaoService, Referencias
 from sar.modulo_06_configuracao.servicos import LeitorParametrosSQL, ServicoConfiguracao, ServicoReferencias
 from sar.modulo_08_dados.cadeia import gravar_encadeado
@@ -197,6 +199,7 @@ class Componentes:
     turnos: SessaoTurnoService
     frequencia: FrequenciaService
     leitura_operacao: LeituraOperacao
+    relatorios: RelatorioService
 
 
 # Verificadores de uso dos parâmetros imutáveis (DD-51): a data de implantação trava na primeira sessão confirmada.
@@ -220,10 +223,12 @@ def compor(
     gravar_auditoria: GravadorAuditoria = gravar_encadeado,
     hasher: Hasher | None = None,
     provedor_cep: ProvedorCep | None = None,
+    relogio: Relogio | None = None,
 ) -> Componentes:
     """O hasher só muda nos testes, que usam um custo menor; em produção é bcrypt com custo 12 (DD-83). O provedor
-    de CEP também, para os testes nunca acessarem a internet; em produção é ViaCEP com BrasilAPI (DD-88)."""
-    relogio = RelogioSistema()
+    de CEP também, para os testes nunca acessarem a internet; em produção é ViaCEP com BrasilAPI (DD-88). O relógio
+    também: a tela inicial depende da hora, e o teste a fixa."""
+    relogio = relogio or RelogioSistema()
     barramento = montar_barramento(relogio)
     executar = montar_executor(engine, barramento, gravar_auditoria)
     auditoria = ServicoAuditoria(executar)
@@ -280,6 +285,7 @@ def compor(
         turnos=ServicoSessoes(executar, auditoria, leitura_cadastro, parametros, autorizacoes),
         frequencia=ServicoFrequencia(executar, auditoria, leitura_cadastro, parametros, autorizacoes),
         leitura_operacao=ServicoLeituraOperacao(leitura_cadastro, parametros),
+        relatorios=ServicoRelatorios(executar, leitura_cadastro),
     )
 
 

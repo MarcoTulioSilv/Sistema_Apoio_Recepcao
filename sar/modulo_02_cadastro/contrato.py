@@ -393,6 +393,11 @@ class LeituraCadastro(Protocol):
 
     def pacientes_com_periodo_aberto_em(self, uow: UnidadeDeTrabalho, data: date) -> list[int]: ...
 
+    def aniversariantes(self, uow: UnidadeDeTrabalho, data: date) -> list[Identificacao]:
+        """Em tratamento na data e nascidos nesse dia e mês, em ordem de nome (RF-909). Quem nasceu em 29/02 aparece
+        em 28/02 nos anos que não são bissextos."""
+        ...
+
     def periodos_de(self, uow: UnidadeDeTrabalho, paciente_ids: Sequence[int] | None) -> dict[int, list[PeriodoRef]]:
         """Períodos de cada paciente, em ordem de início, numa consulta só (§11.3); de todos com None."""
         ...

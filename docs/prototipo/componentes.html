@@ -234,7 +234,7 @@
                   <span class="flex flex-wrap gap-1"><span class="etiqueta-a">Termo de extra a emitir</span></span>
                   <button type="button" class="btn-mover" data-acao="mover" aria-label="Mover para faltantes: Osvaldo Tavares Lemos">Mover para faltantes</button>
                 </li></ul></div>
-              <p class="m-0 max-w-[75ch] text-sm text-suave">Nome e prontuário sempre; origem (troca ou extra) e pendências só quando existem. <code>data-situacao="faltante"</code> muda a borda e o fundo. Com <code>data-travado</code> na sessão, nada se move.</p>
+              <p class="m-0 max-w-[75ch] text-sm text-suave">Nome e prontuário sempre; origem (troca ou extra) e pendências só quando existem. <code>data-situacao="faltante"</code> muda a borda e o fundo. Com <code>data-travado</code> na sessão, nada se move. No sistema, o botão "Mover" é o envio de um formulário pequeno (htmx, que devolve o painel atualizado); o arraste e o clique no cartão só acionam esse mesmo botão (<code>turnos.js</code>), e o foco volta ao cartão movido. Sem permissão de marcar, a sessão vem travada e sem formulários.</p>
               <pre class="codigo" tabindex="0"><code>&lt;ul class=&quot;grade-cartoes w-full&quot;&gt;                &lt;li class=&quot;cartao-paciente&quot; draggable=&quot;true&quot; data-paciente=&quot;901&quot; data-situacao=&quot;presente&quot;&gt;
                   &lt;span class=&quot;text-base font-bold&quot; data-nome&gt;Joana Pereira Lima&lt;/span&gt;
                   &lt;span class=&quot;numero text-sm text-suave&quot;&gt;Prontuário 010245&lt;/span&gt;

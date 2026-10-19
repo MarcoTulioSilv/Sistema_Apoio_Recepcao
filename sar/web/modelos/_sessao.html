@@ -1,0 +1,103 @@
+{# Uma sessão de turno com os quadros de presentes e faltantes (DD-76, guia: "Cartão de paciente e quadros").
+   Cada cartão tem um formulário com o botão "Mover"; o turnos.js aciona esse mesmo botão no arraste e no clique
+   do cartão. Sem permissão de marcar, ou fora da marcação, a sessão fica travada e não há formulários. #}
+{% set chave = tela.data.isoformat() ~ '-' ~ tela.escala.id %}
+{% set atributo, rotulo_estado, passo = estados[tela.estado] %}
+{% set marcavel = tela.estado.value in ('em_preparacao', 'devida', 'confirmacao_liberada', 'urgencia') %}
+{% set travado = not (pode.marcar and marcavel) %}
+{% set presentes = tela.pacientes | selectattr('presente') | list %}
+{% set faltantes = tela.pacientes | rejectattr('presente') | list %}
+{% set base = '/turnos/' ~ tela.data.isoformat() ~ '/' ~ tela.escala.id %}
+<section class="sessao" data-sessao="{{ chave }}" data-quadros data-estado="{{ atributo }}"{% if travado %} data-travado="true"{% endif %} aria-labelledby="sessao-{{ chave }}-titulo">
+  <div class="flex flex-wrap items-start justify-between gap-3">
+    <div class="flex flex-col gap-1">
+      <h2 id="sessao-{{ chave }}-titulo" class="m-0 text-xl">{{ tela.escala.rotulo }}{% if tela.data != hoje %} de {{ tela.data.strftime('%d/%m') }}{% endif %}
+        <span class="font-normal text-suave">das {{ tela.escala.inicio.strftime('%H:%M') }} às {{ tela.escala.fim.strftime('%H:%M') }}</span></h2>
+      <p class="m-0 text-[15px] text-suave">
+        {%- if tela.estado.value == 'em_preparacao' %}Separe fichas e crachás. Quem avisou que vai faltar vai para Faltantes.
+        {%- elif tela.estado.value == 'devida' %}Marque as faltas. A confirmação é liberada na última hora do turno.
+        {%- elif tela.estado.value == 'confirmacao_liberada' %}Confira com a ficha assinada e confirme a sessão.
+        {%- elif tela.estado.value == 'urgencia' %}Terminou às {{ tela.escala.fim.strftime('%H:%M') }}. Confirme com a ficha assinada.
+        {%- elif tela.estado.value == 'nao_realizada' %}Registrada como não realizada: {{ tela.nao_realizada_motivo }}
+        {%- elif tela.estado.value == 'confirmada' %}Confirmada. Mudanças só com autorização da administração.
+        {%- else %}A preparação começa uma hora antes do início.{% endif %}</p>
+    </div>
+    <span class="selo-sessao">{{ rotulo_estado }}</span>
+  </div>
+  <ol class="passos" aria-label="Etapas da sessão">
+    {% for item, nome in (('preparacao', 'Em preparação'), ('aberta', 'Aberta'), ('confirmada', 'Confirmada')) %}
+    {% set atual = loop.index0 == ('preparacao', 'aberta', 'confirmada').index(passo) if passo else false %}
+    {% set feito = passo and loop.index0 < ('preparacao', 'aberta', 'confirmada').index(passo) %}
+    <li{% if atual %} aria-current="step"{% endif %}{% if feito %} data-feito{% endif %}>{{ nome }}</li>
+    {% endfor %}
+  </ol>
+  <div class="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+    {% for zona, titulo, lista, vazio in (('presentes', 'Presentes', presentes, 'Nenhum paciente presente.'), ('faltantes', 'Faltantes', faltantes, 'Ninguém faltou.')) %}
+    <section class="quadro" data-zona="{{ zona }}" aria-label="{{ titulo }}">
+      <h3 class="m-0 flex items-center gap-2 text-lg {{ 'text-tinta' if zona == 'presentes' else 'text-ausente' }}">{{ titulo }}
+        <span class="numero rounded-full bg-superficie px-2.5 py-0.5 text-sm" data-contagem="{{ zona }}">{{ lista | length }}</span>
+      </h3>
+      <ul class="grade-cartoes" data-lista="{{ zona }}">
+        {% for p in lista %}
+        {% set destino = 'faltantes' if p.presente else 'presentes' %}
+        <li class="cartao-paciente" draggable="{{ 'false' if travado else 'true' }}" data-paciente="{{ p.paciente_id }}" data-situacao="{{ 'presente' if p.presente else 'faltante' }}">
+          <span class="text-base font-bold" data-nome>{{ p.nome }}</span>
+          <span class="numero text-sm text-suave">Prontuário {{ p.prontuario }}</span>
+          {% if origens.get(p.origem) %}<span class="text-sm font-bold text-acao">{{ origens[p.origem] }}</span>
+          {% elif not p.presente and tela.estado.value == 'em_preparacao' %}<span class="text-sm font-bold text-acao">Avisou que vai faltar</span>{% endif %}
+          {% if p.extras_no_mes %}<span class="flex flex-wrap gap-1"><span class="{{ 'etiqueta-a' if p.aviso_extra else 'etiqueta-n' }}">{{ p.extras_no_mes }} {{ 'extra' if p.extras_no_mes == 1 else 'extras' }} no mês</span></span>{% endif %}
+          {% if not travado %}
+          <form class="mt-auto flex flex-wrap gap-2" method="post" action="{{ base }}/presenca" hx-post="{{ base }}/presenca" hx-target="#turnos" hx-swap="innerHTML">
+            <input type="hidden" name="paciente_id" value="{{ p.paciente_id }}">
+            <input type="hidden" name="presente" value="{{ '0' if p.presente else '1' }}">
+            <button type="submit" class="btn-mover" id="paciente-{{ chave }}-{{ p.paciente_id }}" data-acao="mover" aria-label="Mover para {{ destino }}: {{ p.nome }}">Mover para {{ destino }}</button>
+          </form>
+          {% if p.origem.value == 'acrescentado' and pode.acrescentar %}
+          <form method="post" action="{{ base }}/retirar" hx-post="{{ base }}/retirar" hx-target="#turnos" hx-swap="innerHTML">
+            <input type="hidden" name="paciente_id" value="{{ p.paciente_id }}">
+            <button type="submit" class="btn-neutro min-h-9 text-sm" aria-label="Retirar da sessão: {{ p.nome }}">Retirar da sessão</button>
+          </form>
+          {% endif %}
+          {% endif %}
+        </li>
+        {% endfor %}
+      </ul>
+      {% if not lista %}<p class="m-0 text-sm text-suave">{{ vazio }}</p>{% endif %}
+    </section>
+    {% endfor %}
+  </div>
+  {% if pode.acrescentar and marcavel %}
+  <details class="flex flex-col gap-2">
+    <summary class="btn-secundario w-fit">Acrescentar paciente</summary>
+    <div class="mt-3 flex flex-col gap-2">
+      <label class="campo max-w-md"><span class="rotulo">Nome, prontuário, CPF ou CNS</span>
+        <input class="entrada" type="search" name="termo" autocomplete="off"
+               hx-post="{{ base }}/candidatos" hx-trigger="input changed delay:500ms" hx-target="#candidatos-{{ chave }}" hx-swap="innerHTML"></label>
+      <div id="candidatos-{{ chave }}" aria-live="polite"></div>
+    </div>
+  </details>
+  {% endif %}
+  <div class="flex flex-wrap items-center justify-between gap-4 border-t border-linha pt-4">
+    <p class="m-0 text-[15px]"><strong class="numero">{{ tela.pacientes | length }}</strong> esperados,
+      <strong class="numero">{{ presentes | length }}</strong> presentes,
+      <strong class="numero text-ausente">{{ faltantes | length }}</strong> faltantes</p>
+    {% if pode.confirmar and marcavel and tela.estado.value != 'em_preparacao' %}
+    <form class="flex items-center gap-3" method="post" action="{{ base }}/confirmar" hx-post="{{ base }}/confirmar" hx-target="#turnos" hx-swap="innerHTML">
+      <input type="hidden" name="versao" value="{{ tela.versao }}">
+      {% if tela.estado.value == 'devida' %}<span class="text-sm text-suave">Liberada na última hora do turno</span>{% endif %}
+      <button type="submit" class="btn-primario min-h-12" data-acao="confirmar"{% if tela.estado.value == 'devida' %} disabled{% endif %}>Confirmar sessão</button>
+    </form>
+    {% endif %}
+  </div>
+  {% if pode.nao_realizada and tela.estado.value in ('devida', 'confirmacao_liberada', 'urgencia') %}
+  <details>
+    <summary class="cursor-pointer text-sm font-bold text-acao">A sessão não aconteceu</summary>
+    <form class="mt-3 flex max-w-xl flex-col gap-2" method="post" action="{{ base }}/nao-realizada" hx-post="{{ base }}/nao-realizada" hx-target="#turnos" hx-swap="innerHTML">
+      <label class="campo"><span class="rotulo">Motivo (fechamento excepcional)</span>
+        <input class="entrada" type="text" name="motivo" maxlength="300" required></label>
+      <p class="m-0 text-sm text-suave">A sessão sai das previstas e não gera ausências (RF-507). Exceções já marcadas são descartadas.</p>
+      <button type="submit" class="btn-urgente w-fit">Registrar como não realizada</button>
+    </form>
+  </details>
+  {% endif %}
+</section>

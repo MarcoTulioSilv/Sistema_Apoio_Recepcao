@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import calendar
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, fields
 from datetime import date, timedelta
@@ -856,6 +857,14 @@ class ServicoLeituraCadastro:
     def identificacao(self, uow: UnidadeDeTrabalho, paciente_id: int) -> Identificacao | None:
         paciente = self._vivo(uow, paciente_id)
         return _identificacao(paciente) if paciente is not None else None
+
+    def aniversariantes(self, uow: UnidadeDeTrabalho, data: date) -> list[Identificacao]:
+        repositorio = uow.repositorio(RepositorioPaciente)
+        dias = [(data.month, data.day)]
+        if (data.month, data.day) == (2, 28) and not calendar.isleap(data.year):
+            dias.append((2, 29))
+        em_tratamento = set(repositorio.pacientes_com_periodo_em(data))
+        return [_identificacao(p) for p in repositorio.aniversariantes(dias) if p.id in em_tratamento]
 
     def identificacoes(self, uow: UnidadeDeTrabalho, paciente_ids: Sequence[int]) -> dict[int, Identificacao]:
         if not paciente_ids:

@@ -11,6 +11,7 @@ from sar.modulo_01_acesso.contrato import CredencialInvalida, TermoPendente, Tro
 from sar.nucleo.erros import RegraViolada
 from sar.web import COOKIE_PERFIL_DEV, COOKIE_SESSAO, ROTULOS_PERFIL, contexto_atual
 from sar.web.configuracao import ServicosWeb
+from sar.web.rotas_turnos import aniversariantes, dados_do_painel
 
 bp = Blueprint("acesso", __name__)
 
@@ -88,8 +89,9 @@ def sair() -> Response:
 
 @bp.get("/")
 def inicio() -> str:
-    contexto_atual()
-    return render_template("inicio.html")
+    """As sessões de turno que pedem ação e os aniversariantes de hoje (DD-76, RF-909)."""
+    contexto = contexto_atual()
+    return render_template("inicio.html", aniversariantes=aniversariantes(contexto), **dados_do_painel(contexto))
 
 
 @bp.get("/senha")

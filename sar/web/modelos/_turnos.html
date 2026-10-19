@@ -1,0 +1,22 @@
+{# Conteúdo do painel de turnos (#turnos): trocado inteiro por cada ação e pela atualização a cada minuto. #}
+{% if ve_turnos %}
+{% if mensagem %}<p class="m-0 rounded-lg bg-acao-clara p-3 font-bold text-acao-escura" data-mensagem>{{ mensagem }}</p>{% endif %}
+{% if not implantacao_definida %}
+<section class="rounded-xl border border-alta/40 bg-alta-fundo p-4" aria-labelledby="implantacao-t">
+  <h2 id="implantacao-t" class="m-0 text-lg text-alta">Data de implantação não definida</h2>
+  <p class="m-0 mt-1">Enquanto ela estiver vazia, nenhuma sessão de turno é devida e esta tela não mostra turnos (DD-91). O TI define a data em Parâmetros.</p>
+</section>
+{% elif not telas and not em_lista %}
+<section class="cartao p-5"><p class="m-0 text-[15px] text-suave">Nenhuma sessão pede ação agora. A próxima aparece aqui uma hora antes do início.</p></section>
+{% endif %}
+{% if em_lista %}
+<section class="rounded-xl border-2 border-urgencia-borda bg-superficie p-4" aria-labelledby="anteriores-t">
+  <h2 id="anteriores-t" class="m-0 text-lg text-urgencia">Mais {{ em_lista | length }} {{ 'sessão' if em_lista | length == 1 else 'sessões' }} de dias anteriores sem confirmação</h2>
+  <ul class="m-0 mt-2 flex flex-col gap-1 pl-5">
+    {% for s in em_lista %}<li><a href="/turnos/{{ s.data.isoformat() }}/{{ s.escala.id }}">{{ s.escala.rotulo }} de {{ s.data.strftime('%d/%m/%Y') }}</a></li>{% endfor %}
+  </ul>
+</section>
+{% endif %}
+{% for tela in telas %}{% include "_sessao.html" %}{% endfor %}
+{% if foco %}<span hidden data-focar="{{ foco }}"></span>{% endif %}
+{% endif %}

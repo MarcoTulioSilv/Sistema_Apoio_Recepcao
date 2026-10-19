@@ -18,8 +18,9 @@ from sar.modulo_03_operacao.sessoes import ServicoSessoes
 from sar.modulo_06_configuracao.servicos import LeitorParametrosSQL
 from sar.modulo_08_dados.relogio import FUSO_CLINICA, RelogioSistema
 from sar.nucleo.contexto import Contexto, Perfil
-from testes.apoio.cadastro import AGORA, Cadastro
+from testes.apoio.cadastro import AGORA, Cadastro, dados_completos
 from testes.apoio.cadastro import montar as montar_cadastro
+from testes.apoio.fabrica import Fabrica
 
 ESCALAS = [
     Escala.de_texto(1, "1-seg", 1, "seg,qua,sex", time(6), time(10)),
@@ -104,3 +105,18 @@ def confirmar(op: Operacao, usuarios: dict[str, int], data: date, escala_id: int
     fim = POR_ID[escala_id].fim
     quando = contexto(usuarios, "recepcao", Perfil.RECEPCAO, local(data, fim.hour - 1, 30))
     op.turnos.confirmar(quando, data, escala_id, op.turnos.tela_do_turno(quando, data, escala_id).versao)
+
+
+def pacientes_no_turno(
+    engine: Engine, usuarios: dict[str, int], fabrica: Fabrica, quantos: int, escala_id: int, desde: date
+) -> list[tuple[int, str]]:
+    """Pacientes da fábrica alocados na escala desde a data, como a enfermagem faria: (id, nome)."""
+    op = montar(engine)
+    enfermeira = contexto(usuarios, "enfermagem", Perfil.ENFERMAGEM)
+    criados = []
+    for _ in range(quantos):
+        dados = dados_completos(fabrica)
+        pid = op.cadastro.pacientes.criar(contexto(usuarios, "recepcao", Perfil.RECEPCAO), dados, desde)
+        op.escalas.alocar(enfermeira, pid, escala_id, desde)
+        criados.append((pid, dados.nome or ""))
+    return criados
