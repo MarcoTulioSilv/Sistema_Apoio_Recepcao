@@ -4,17 +4,19 @@ administração (DEC-42), que as aprova na tela de autorizações, onde vê o im
 
 from __future__ import annotations
 
+import re
 from collections.abc import Callable
 from datetime import date
 from typing import Any
 
-from flask import Blueprint, current_app, redirect, render_template, request, url_for
+from flask import Blueprint, abort, current_app, redirect, render_template, request, url_for
 from werkzeug.wrappers import Response
 
 from sar.modulo_01_acesso.contrato import PermissionGuard
 from sar.modulo_02_cadastro.contrato import DadosCobertura, Ficha, TipoCobertura, TipoEvento, TipoTelefone
+from sar.modulo_03_operacao.contrato import OrigemPar
 from sar.nucleo.contexto import Contexto
-from sar.nucleo.erros import ConflitoDeVersao, IndisponivelExterno, RegraViolada
+from sar.nucleo.erros import ConflitoDeVersao, IndisponivelExterno, RegraViolada, RequerAutorizacao
 from sar.web import contexto_atual
 from sar.web.configuracao import ServicosWeb
 from sar.web.formulario_cadastro import ler, valores
@@ -28,6 +30,7 @@ from sar.web.mensagens_cadastro import (
     TELEFONES,
 )
 from sar.web.rotas_cadastro import (
+    FUSO,
     UF_RESIDENCIA,
     UFS,
     erro_do_formulario,
@@ -58,6 +61,8 @@ RESULTADOS = {
     "pedido": "Pedido enviado à administração. Ele aparece em Autorizações até a decisão.",
     "executado": "Feito. Como o pedido foi da administração, ele foi aprovado na hora.",
     "anulado": "Cadastro anulado: os dados pessoais foram apagados e os números ficaram livres.",
+    "pareamento": "Pareamento refeito. O que ficou sem ligação manual é pareado pela ordem das datas (RF-918).",
+    "pedido_pareamento": "Pedido enviado à administração: o mês já está fechado (DD-26).",
 }
 
 
@@ -101,6 +106,36 @@ def _cobertura(formulario: dict[str, str]) -> DadosCobertura | None:
                           formulario.get("carteirinha"))  # fmt: skip
 
 
+REFAZER = "operacao.pareamento.refazer"
+_COMPETENCIA = re.compile(r"^[0-9]{4}-(0[1-9]|1[0-2])$")
+
+
+def _competencia(contexto: Contexto) -> str:
+    """A do pedido (?competencia=AAAA-MM), ou o mês corrente na clínica."""
+    texto = request.values.get("competencia", "")
+    return texto if _COMPETENCIA.match(texto) else contexto.instante.astimezone(FUSO).strftime("%Y-%m")
+
+
+def _vizinhas(comp: str) -> tuple[str, str]:
+    ano, mes = int(comp[:4]), int(comp[5:])
+    anterior = f"{ano - 1}-12" if mes == 1 else f"{ano}-{mes - 1:02d}"
+    seguinte = f"{ano + 1}-01" if mes == 12 else f"{ano}-{mes + 1:02d}"
+    return anterior, seguinte
+
+
+def _frequencia(contexto: Contexto, paciente_id: int) -> dict[str, Any] | None:
+    """Balanço e pareamento do mês (RF-916, RF-918), para quem consulta o balanço."""
+    if not GUARDA.pode(contexto, "operacao.balanco.consultar"):
+        return None
+    comp = _competencia(contexto)
+    anterior, seguinte = _vizinhas(comp)
+    return {
+        "competencia": comp, "rotulo": f"{comp[5:]}/{comp[:4]}", "anterior": anterior, "seguinte": seguinte,
+        "p": _servicos().frequencia.pareamento_do_mes(contexto, paciente_id, comp),
+        "refaz": GUARDA.pode(contexto, REFAZER, "mês aberto") or GUARDA.solicitavel(contexto, REFAZER),
+    }  # fmt: skip
+
+
 def _ficha(contexto: Contexto, paciente_id: int, **extra: Any) -> str:
     ficha = _servicos().pacientes.ver_ficha(contexto, paciente_id)
     pode = _permissoes(contexto)
@@ -119,6 +154,7 @@ def _ficha(contexto: Contexto, paciente_id: int, **extra: Any) -> str:
         aberto=next((p for p in ficha.periodos if p.evento_tipo is None), None),
         ultimo=ficha.periodos[-1] if ficha.periodos else None,
         resultado=RESULTADOS.get(request.args.get("resultado", "")),
+        frequencia=_frequencia(contexto, paciente_id),
         **extra,
     )
 
@@ -428,3 +464,72 @@ def anular_enviar(paciente_id: int) -> Response | str:
     if _pedido(contexto) == "executado":
         return redirect(url_for("pacientes.busca", anulado="1"))
     return redirect(url_for("pacientes.ficha", paciente_id=paciente_id, resultado="pedido"))
+
+
+# ------------------------------------------------------------------ pareamento do mês (RF-918, DD-25, DD-26)
+def _ligacoes_manuais(contexto: Contexto, paciente_id: int, comp: str) -> list[tuple[int, int]]:
+    pareamento = _servicos().frequencia.pareamento_do_mes(contexto, paciente_id, comp)
+    return [
+        (par.ausencia.presenca_id, par.presenca.presenca_id)
+        for par in pareamento.pares
+        if par.origem is OrigemPar.MANUAL and par.ausencia.presenca_id is not None and par.presenca.presenca_id
+    ]
+
+
+def _refazer(paciente_id: int, ligacoes: list[tuple[int, int]]) -> Response | str:
+    contexto = contexto_atual()
+    comp = _competencia(contexto)
+    try:
+        _servicos().frequencia.refazer(contexto, paciente_id, comp, ligacoes)
+    except RegraViolada:
+        return _ficha(
+            contexto, paciente_id, erro="Essa ligação não vale: escolha uma ausência e uma presença fora da escala."
+        )
+    except RequerAutorizacao:
+        texto = ";".join(f"{a}-{p}" for a, p in ligacoes)
+        erro = "O mês já está fechado: refazer o pareamento precisa de autorização da administração."
+        return _ficha(contexto, paciente_id, erro=erro, pedido_pareamento={"competencia": comp, "ligacoes": texto})
+    return redirect(url_for("pacientes.ficha", paciente_id=paciente_id, competencia=comp, resultado="pareamento"))
+
+
+def _numero(campo: str) -> int:
+    valor = request.form.get(campo, "")
+    if not valor.isdigit():
+        abort(400)
+    return int(valor)
+
+
+@bp.post("/<int:paciente_id>/frequencia/ligar")
+def ligar(paciente_id: int) -> Response | str:
+    """Liga a ausência à presença escolhidas; ligações manuais que usavam um dos dois lados saem (§7.1)."""
+    ausencia, presenca = _numero("ausencia_id"), _numero("presenca_id")
+    atuais = _ligacoes_manuais(contexto_atual(), paciente_id, _competencia(contexto_atual()))
+    novas = [(a, p) for a, p in atuais if a != ausencia and p != presenca] + [(ausencia, presenca)]
+    return _refazer(paciente_id, novas)
+
+
+@bp.post("/<int:paciente_id>/frequencia/desfazer")
+def desfazer(paciente_id: int) -> Response | str:
+    alvo = (_numero("ausencia_id"), _numero("presenca_id"))
+    atuais = _ligacoes_manuais(contexto_atual(), paciente_id, _competencia(contexto_atual()))
+    return _refazer(paciente_id, [li for li in atuais if li != alvo])
+
+
+@bp.post("/<int:paciente_id>/frequencia/pedir")
+def pedir_pareamento(paciente_id: int) -> Response | str:
+    contexto = contexto_atual()
+    comp = _competencia(contexto)
+    ligacoes = []
+    for par in filter(None, request.form.get("ligacoes", "").split(";")):
+        a, _, p = par.partition("-")
+        if not (a.isdigit() and p.isdigit()):
+            abort(400)
+        ligacoes.append((int(a), int(p)))
+    try:
+        _servicos().frequencia.solicitar_refazer(contexto, paciente_id, comp, ligacoes, request.form.get("motivo", ""))
+    except RegraViolada:
+        pedido = {"competencia": comp, "ligacoes": request.form.get("ligacoes", "")}
+        return _ficha(contexto, paciente_id, erro="Informe o motivo do pedido.", pedido_pareamento=pedido)
+    return redirect(
+        url_for("pacientes.ficha", paciente_id=paciente_id, competencia=comp, resultado="pedido_pareamento")
+    )
