@@ -83,7 +83,7 @@ def test_quadros_com_arraste_clique_e_teclado(
     assert erros == []
 
 
-@pytest.mark.requisito("DD-57", "RNF-406")
+@pytest.mark.requisito("DD-57", "DD-93", "RNF-406")
 def test_atualizacao_automatica_espera_quem_esta_digitando(
     operacao_zerada: dict[str, int],
     criar_usuario: CriarUsuario,

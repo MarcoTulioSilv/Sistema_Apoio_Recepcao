@@ -198,7 +198,7 @@ def test_atualizacao_automatica_devolve_so_o_painel(
     assert resposta.status_code == 200 and "<html" not in html and "Primeiro turno" in html
 
 
-@pytest.mark.requisito("DD-76", "DD-23")
+@pytest.mark.requisito("DD-76", "DD-93", "DD-23")
 def test_sessoes_anteriores_sem_confirmacao_aparecem_em_urgencia(
     pacientes: list[tuple[int, str]],
     criar_usuario: CriarUsuario,

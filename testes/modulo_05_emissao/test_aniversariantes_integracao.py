@@ -18,7 +18,7 @@ from testes.apoio.fabrica import Fabrica
 pytestmark = pytest.mark.integracao
 
 
-@pytest.mark.requisito("RF-909")
+@pytest.mark.requisito("RF-909", "DD-92")
 def test_aniversariantes_em_tratamento_e_29_de_fevereiro_em_ano_comum(
     cadastro_zerado: dict[str, int], engine_web: Engine, fabrica: Fabrica
 ) -> None:
