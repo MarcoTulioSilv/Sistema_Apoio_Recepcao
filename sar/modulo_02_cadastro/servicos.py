@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import calendar
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, fields
 from datetime import date, timedelta
@@ -66,7 +67,7 @@ from sar.nucleo.erros import (
     RegraViolada,
 )
 from sar.nucleo.logs import campos_do_erro
-from sar.nucleo.portas import EnderecoCep, ProvedorCep
+from sar.nucleo.portas import EnderecoCep, FonteAlocacao, ProvedorCep
 from sar.nucleo.uow import ExecutorDeOperacao, UnidadeDeTrabalho
 
 GUARDA = PermissionGuard()
@@ -217,13 +218,20 @@ def _cep_existe(provedor: ProvedorCep, cep: str | None) -> bool:
 
 class ServicoPacientes:
     def __init__(
-        self, executar: ExecutorDeOperacao, auditoria: AuditService, referencias: Referencias, cep: ProvedorCep
+        self,
+        executar: ExecutorDeOperacao,
+        auditoria: AuditService,
+        referencias: Referencias,
+        cep: ProvedorCep,
+        alocacao: FonteAlocacao | None = None,
     ) -> None:
+        """Sem a fonte de alocação (o MOD-03, ligado na composição), a ficha trata o paciente como sem alocação."""
         self._executar = executar
         self._auditoria = auditoria
         self._referencias = referencias
         self._verificar = _Verificacoes(referencias)
         self._cep = cep
+        self._alocacao = alocacao
 
     # ---------------------------------------------------------------- escrita
     def criar(
@@ -306,6 +314,9 @@ class ServicoPacientes:
             return versao + 1
 
         return _com_unicidade(lambda: self._executar(operacao))
+
+    def _alocado(self, uow: UnidadeDeTrabalho, paciente_id: int, hoje: date) -> bool:
+        return self._alocacao is not None and paciente_id in self._alocacao.alocados(uow, [paciente_id], hoje)
 
     def _gravar_telefones_e_contatos(
         self,
@@ -567,7 +578,7 @@ class ServicoPacientes:
                 dados=dados,
                 cep_verificado=paciente.cep_verificado,
                 idade=idade(dados.data_nascimento, hoje) if dados.data_nascimento else None,
-                situacao=situacao([_evento(p) for p in periodos], alocado=False),  # alocação: MOD-03
+                situacao=situacao([_evento(p) for p in periodos], alocado=self._alocado(uow, paciente_id, hoje)),
                 pendencias=pendencias(dados, paciente.cep_verificado),
                 residencia=self._municipio(uow, dados.municipio),
                 naturalidade=self._municipio(uow, dados.naturalidade_municipio),
@@ -831,6 +842,10 @@ class ServicoCep:
         return next((m for m in candidatos if " ".join(sem_acento(m.nome).casefold().split()) == nome), None)
 
 
+def _periodo_ref(p: PeriodoGravado) -> PeriodoRef:
+    return PeriodoRef(p.id, p.inicio, p.evento_data, p.evento_tipo == TipoEvento.OBITO.value)
+
+
 class ServicoLeituraCadastro:
     """Implementa o LeituraCadastro do contrato."""
 
@@ -843,12 +858,25 @@ class ServicoLeituraCadastro:
         paciente = self._vivo(uow, paciente_id)
         return _identificacao(paciente) if paciente is not None else None
 
+    def aniversariantes(self, uow: UnidadeDeTrabalho, data: date) -> list[Identificacao]:
+        repositorio = uow.repositorio(RepositorioPaciente)
+        dias = [(data.month, data.day)]
+        if (data.month, data.day) == (2, 28) and not calendar.isleap(data.year):
+            dias.append((2, 29))
+        em_tratamento = set(repositorio.pacientes_com_periodo_em(data))
+        return [_identificacao(p) for p in repositorio.aniversariantes(dias) if p.id in em_tratamento]
+
+    def identificacoes(self, uow: UnidadeDeTrabalho, paciente_ids: Sequence[int]) -> dict[int, Identificacao]:
+        if not paciente_ids:
+            return {}
+        return {p.id: _identificacao(p) for p in uow.repositorio(RepositorioPaciente).vivos(paciente_ids)}
+
     def periodo_aberto_em(self, uow: UnidadeDeTrabalho, paciente_id: int, data: date) -> PeriodoRef | None:
         if self._vivo(uow, paciente_id) is None:
             return None
         for p in reversed(uow.repositorio(RepositorioPaciente).periodos(paciente_id)):
             if p.inicio <= data and (p.evento_data is None or data <= p.evento_data):
-                return PeriodoRef(p.id, p.inicio, p.evento_data)
+                return _periodo_ref(p)
         return None
 
     def data_obito(self, uow: UnidadeDeTrabalho, paciente_id: int) -> date | None:
@@ -859,3 +887,11 @@ class ServicoLeituraCadastro:
 
     def pacientes_com_periodo_aberto_em(self, uow: UnidadeDeTrabalho, data: date) -> list[int]:
         return uow.repositorio(RepositorioPaciente).pacientes_com_periodo_em(data)
+
+    def periodos_de(self, uow: UnidadeDeTrabalho, paciente_ids: Sequence[int] | None) -> dict[int, list[PeriodoRef]]:
+        if paciente_ids is not None and not paciente_ids:
+            return {}
+        por_paciente: dict[int, list[PeriodoRef]] = {}
+        for p in uow.repositorio(RepositorioPaciente).periodos_de(paciente_ids):
+            por_paciente.setdefault(p.paciente_id, []).append(_periodo_ref(p))
+        return por_paciente

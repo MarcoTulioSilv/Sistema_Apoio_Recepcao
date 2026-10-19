@@ -1,0 +1,86 @@
+{# Frequência do mês na ficha (RF-916, RF-918): balanço, pares com a origem, ausências livres e extras. Refazer é
+   escolher outras ligações; o resto é pareado pela ordem das datas. Em mês fechado, só por autorização (DD-26). #}
+{% set p = frequencia.p %}
+{% set b = p.balanco %}
+{% set base = '/pacientes/' ~ ficha.paciente_id ~ '/frequencia' %}
+{% macro sessao(item) %}{{ item.data.strftime('%d/%m') }}, {{ item.escala.rotulo | lower }}{% endmacro %}
+<section class="cartao flex flex-col gap-4 p-5" aria-labelledby="freq-t" data-frequencia>
+  <div class="flex flex-wrap items-center justify-between gap-3">
+    <h2 id="freq-t" class="m-0 text-xl">Frequência de {{ frequencia.rotulo }}</h2>
+    <nav class="flex gap-2" aria-label="Outros meses">
+      <a class="btn-neutro" href="/pacientes/{{ ficha.paciente_id }}?competencia={{ frequencia.anterior }}">Mês anterior</a>
+      <a class="btn-neutro" href="/pacientes/{{ ficha.paciente_id }}?competencia={{ frequencia.seguinte }}">Mês seguinte</a>
+    </nav>
+  </div>
+  <p class="m-0 text-sm text-suave">{% if p.mes_fechado %}Mês fechado: todas as sessões confirmadas. Extras definitivas.{% else %}Mês aberto: a classificação das extras ainda pode mudar (RF-504).{% endif %}</p>
+  <dl class="m-0 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+    {% for rotulo, valor in (('Previstas', b.previstas), ('Realizadas', b.realizadas), ('Ausências não compensadas', b.ausencias_nao_compensadas), ('Reposições', b.reposicoes), ('Extras' ~ (' provisórias' if b.provisorio else ''), b.extras), ('A realizar', b.a_realizar)) %}
+    <div class="flex flex-col rounded-lg border border-borda p-3"><dt class="text-sm text-suave">{{ rotulo }}</dt><dd class="numero m-0 text-2xl font-bold">{{ valor }}</dd></div>
+    {% endfor %}
+  </dl>
+  {% if b.extra_alem_do_limite %}<p class="m-0"><span class="etiqueta-a">Mais de 4 extras no mês (RN-01)</span></p>{% endif %}
+  {% if p.ligacoes_ignoradas %}<p class="m-0 text-sm text-alta">{{ p.ligacoes_ignoradas }} {{ 'ligação manual deixou' if p.ligacoes_ignoradas == 1 else 'ligações manuais deixaram' }} de valer por alteração posterior e {{ 'foi ignorada' if p.ligacoes_ignoradas == 1 else 'foram ignoradas' }}.</p>{% endif %}
+
+  {% if p.pares %}
+  <div class="overflow-x-auto">
+    <table class="w-full border-collapse text-left">
+      <caption class="sr-only">Ausências compensadas e a presença de cada uma</caption>
+      <thead><tr class="text-sm text-suave">
+        <th scope="col" class="px-3 py-2 font-bold">Ausência</th>
+        <th scope="col" class="px-3 py-2 font-bold">Compensada em</th>
+        <th scope="col" class="px-3 py-2 font-bold">Como</th>
+        <th scope="col" class="px-3 py-2 font-bold"><span class="sr-only">Ações</span></th>
+      </tr></thead>
+      <tbody>
+        {% for par in p.pares %}
+        <tr class="border-t border-linha" data-par="{{ par.origem.value }}">
+          <td class="px-3 py-2">{{ sessao(par.ausencia) }}</td>
+          <td class="px-3 py-2">{{ sessao(par.presenca) }}</td>
+          <td class="px-3 py-2">{{ {'troca': 'Troca pontual', 'manual': 'Ligação da recepção', 'automatico': 'Automático, pela ordem das datas'}[par.origem.value] }}</td>
+          <td class="px-3 py-2">
+            {% if frequencia.refaz and par.origem.value == 'manual' %}
+            <form method="post" action="{{ base }}/desfazer">
+              <input type="hidden" name="competencia" value="{{ frequencia.competencia }}">
+              <input type="hidden" name="ausencia_id" value="{{ par.ausencia.presenca_id }}">
+              <input type="hidden" name="presenca_id" value="{{ par.presenca.presenca_id }}">
+              <button class="btn-neutro" type="submit" aria-label="Desfazer a ligação de {{ sessao(par.ausencia) }}">Desfazer</button>
+            </form>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+  {% if p.ausencias_livres %}<p class="m-0"><strong>Ausências sem compensação:</strong> {% for a in p.ausencias_livres %}{{ sessao(a) }}{{ '; ' if not loop.last }}{% endfor %}</p>{% endif %}
+  {% if p.extras %}<p class="m-0"><strong>Extras:</strong> {% for x in p.extras %}{{ sessao(x) }}{{ '; ' if not loop.last }}{% endfor %}</p>{% endif %}
+
+  {% set ausencias = (p.pares | map(attribute='ausencia') | list) + (p.ausencias_livres | list) %}
+  {% set presencas = (p.pares | rejectattr('origem.value', 'equalto', 'troca') | map(attribute='presenca') | list) + (p.extras | list) %}
+  {% set ausencias = ausencias | selectattr('presenca_id') | list %}
+  {% set presencas = presencas | selectattr('presenca_id') | list %}
+  {% if frequencia.refaz and ausencias and presencas %}
+  <details>
+    <summary class="cursor-pointer text-sm font-bold text-acao">Refazer o pareamento</summary>
+    <form class="mt-3 flex flex-wrap items-end gap-2" method="post" action="{{ base }}/ligar">
+      <input type="hidden" name="competencia" value="{{ frequencia.competencia }}">
+      <label class="campo"><span class="rotulo">Ausência</span>
+        <select class="entrada w-56" name="ausencia_id">{% for a in ausencias | sort(attribute='data') %}<option value="{{ a.presenca_id }}">{{ sessao(a) }}</option>{% endfor %}</select></label>
+      <label class="campo"><span class="rotulo">Presença fora da escala</span>
+        <select class="entrada w-56" name="presenca_id">{% for x in presencas | sort(attribute='data') %}<option value="{{ x.presenca_id }}">{{ sessao(x) }}</option>{% endfor %}</select></label>
+      <button class="btn-secundario" type="submit">Ligar</button>
+    </form>
+    <p class="m-0 mt-2 text-sm text-suave">A ligação vale até ser desfeita; o resto continua pareado pela ordem das datas.</p>
+  </details>
+  {% endif %}
+  {% if pedido_pareamento %}
+  <form class="flex flex-col gap-2 rounded-xl border border-borda-forte p-4" method="post" action="{{ base }}/pedir">
+    <input type="hidden" name="competencia" value="{{ pedido_pareamento.competencia }}">
+    <input type="hidden" name="ligacoes" value="{{ pedido_pareamento.ligacoes }}">
+    <label class="campo"><span class="rotulo">Motivo do pedido à administração</span>
+      <input class="entrada" type="text" name="motivo" maxlength="500" required></label>
+    <button class="btn-primario w-fit" type="submit">Pedir autorização</button>
+  </form>
+  {% endif %}
+</section>

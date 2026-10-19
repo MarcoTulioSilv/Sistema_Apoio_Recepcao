@@ -111,6 +111,10 @@ class RepositorioPaciente(Protocol):
         """Não anulados, para a comparação da tríade (INV-08), que é feita no serviço."""
         ...
 
+    def aniversariantes(self, dias: Sequence[tuple[int, int]]) -> list[PacienteGravado]:
+        """Não anulados nascidos num dos (mês, dia) informados, em ordem de nome."""
+        ...
+
     def buscar(
         self, nome: str | None, prontuario: str | None, numero: str | None, limite: int, deslocamento: int = 0
     ) -> list[PacienteGravado]:

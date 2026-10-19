@@ -1,0 +1,18 @@
+{# Candidatos para acrescentar à sessão: escolher abre as ausências do mês e as extras (RF-917, RF-506). #}
+{% if pagina is none %}
+<p class="m-0 text-sm text-suave">Digite ao menos 3 letras ou números.</p>
+{% elif not pagina.itens %}
+<p class="m-0 text-sm text-suave">Nenhum paciente encontrado.</p>
+{% else %}
+<ul class="m-0 flex list-none flex-col gap-1 p-0">
+  {% for i in pagina.itens %}
+  <li>
+    <form method="post" action="/turnos/{{ data }}/{{ escala }}/escolher" hx-post="/turnos/{{ data }}/{{ escala }}/escolher" hx-target="#candidatos-{{ data }}-{{ escala }}" hx-swap="innerHTML">
+      <input type="hidden" name="paciente_id" value="{{ i.paciente_id }}">
+      <input type="hidden" name="nome" value="{{ i.nome }}">
+      <button type="submit" class="btn-neutro w-full justify-start text-left"><span>{{ i.nome }} <span class="numero font-normal text-suave">· prontuário {{ i.prontuario }}</span></span></button>
+    </form>
+  </li>
+  {% endfor %}
+</ul>
+{% endif %}

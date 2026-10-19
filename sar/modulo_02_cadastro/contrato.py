@@ -125,6 +125,7 @@ class PeriodoRef:
     id: int
     inicio: date
     fim: date | None  # data do evento; None enquanto aberto
+    obito: bool = False  # o evento que encerrou o período foi óbito (INV-01)
 
 
 @dataclass(frozen=True, slots=True)
@@ -380,6 +381,10 @@ class LeituraCadastro(Protocol):
 
     def identificacao(self, uow: UnidadeDeTrabalho, paciente_id: int) -> Identificacao | None: ...
 
+    def identificacoes(self, uow: UnidadeDeTrabalho, paciente_ids: Sequence[int]) -> dict[int, Identificacao]:
+        """As de vários pacientes numa consulta só (§11.3); os anulados e os inexistentes ficam de fora."""
+        ...
+
     def periodo_aberto_em(self, uow: UnidadeDeTrabalho, paciente_id: int, data: date) -> PeriodoRef | None:
         """O período que cobre a data: início até ela e evento, se houver, nela ou depois (INV-03, INV-04)."""
         ...
@@ -387,3 +392,12 @@ class LeituraCadastro(Protocol):
     def data_obito(self, uow: UnidadeDeTrabalho, paciente_id: int) -> date | None: ...
 
     def pacientes_com_periodo_aberto_em(self, uow: UnidadeDeTrabalho, data: date) -> list[int]: ...
+
+    def aniversariantes(self, uow: UnidadeDeTrabalho, data: date) -> list[Identificacao]:
+        """Em tratamento na data e nascidos nesse dia e mês, em ordem de nome (RF-909). Quem nasceu em 29/02 aparece
+        em 28/02 nos anos que não são bissextos."""
+        ...
+
+    def periodos_de(self, uow: UnidadeDeTrabalho, paciente_ids: Sequence[int] | None) -> dict[int, list[PeriodoRef]]:
+        """Períodos de cada paciente, em ordem de início, numa consulta só (§11.3); de todos com None."""
+        ...

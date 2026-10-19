@@ -1,0 +1,85 @@
+{% extends "layout.html" %}
+{% block titulo_pagina %}{{ p.nome }}{% endblock %}
+{% block subtitulo %}Prontuário {{ p.prontuario }} · {% if p.escala %}escala {{ p.escala.codigo }} ({{ p.escala.rotulo | lower }}){% elif p.em_tratamento %}sem alocação{% else %}sem tratamento em andamento{% endif %}{% endblock %}
+{% block conteudo %}
+<div class="flex max-w-4xl flex-col gap-5">
+  {% include "_avisos.html" %}
+  {% if pedido %}
+  <form class="flex flex-col gap-2 rounded-xl border border-borda-forte bg-superficie p-4" method="post" action="{{ url_for('escalas.pedir', paciente_id=p.paciente_id) }}">
+    {% for chave, valor in pedido.items() if chave != 'tipo' %}<input type="hidden" name="{{ chave }}" value="{{ valor }}">{% endfor %}
+    <label class="campo"><span class="rotulo">Motivo do pedido à administração</span>
+      <input class="entrada" type="text" name="motivo" maxlength="500" required></label>
+    <button class="btn-primario w-fit" type="submit">Pedir autorização</button>
+  </form>
+  {% endif %}
+
+  <section class="cartao flex flex-col gap-3 p-4" aria-labelledby="escala-t">
+    <h2 id="escala-t" class="m-0 text-lg">Escala</h2>
+    {% if p.vigencias %}
+    <ul class="m-0 flex flex-col gap-1 pl-5">
+      {% for inicio, e in p.vigencias %}<li>Desde {{ inicio.strftime('%d/%m/%Y') }}: {{ e.codigo if e else 'sem alocação' }}</li>{% endfor %}
+    </ul>
+    {% elif p.em_tratamento %}<p class="m-0"><span class="etiqueta-a">Sem alocação</span></p>{% endif %}
+    {% if registra and p.em_tratamento %}
+    <form class="flex flex-wrap items-end gap-2" method="post" action="{{ url_for('escalas.alocar', paciente_id=p.paciente_id) }}">
+      <label class="campo"><span class="rotulo">Nova escala</span>
+        <select class="entrada w-44" name="escala_id">
+          <option value="">Sem alocação</option>
+          {% for e in escalas %}<option value="{{ e.id }}"{% if p.escala and p.escala.id == e.id %} selected{% endif %}>{{ e.codigo }}</option>{% endfor %}
+        </select></label>
+      <label class="campo"><span class="rotulo">A partir de</span>
+        <input class="entrada w-48" type="date" name="inicio" value="{{ hoje.isoformat() }}" required></label>
+      <button class="btn-primario" type="submit">Registrar alocação</button>
+    </form>
+    {% endif %}
+  </section>
+
+  <section class="cartao flex flex-col gap-3 p-4" aria-labelledby="trocas-t">
+    <h2 id="trocas-t" class="m-0 text-lg">Trocas pontuais</h2>
+    {% for t in p.trocas %}
+    <div class="flex flex-wrap items-center justify-between gap-3 border-t border-linha pt-2" data-troca="{{ t.id }}">
+      <span>De {{ t.origem.strftime('%d/%m') }} para {{ t.destino.strftime('%d/%m') }}, {{ t.escala_destino.codigo }}
+        {% if t.termo_assinado %}<span class="etiqueta-n">Declaração assinada</span>{% else %}<span class="etiqueta-a">Declaração a emitir</span>{% endif %}</span>
+      {% if registra %}
+      <form method="post" action="{{ url_for('escalas.cancelar_troca', paciente_id=p.paciente_id, troca_id=t.id) }}">
+        <button class="btn-neutro" type="submit" aria-label="Cancelar a troca de {{ t.origem.strftime('%d/%m') }}">Cancelar</button>
+      </form>
+      {% endif %}
+    </div>
+    {% else %}<p class="m-0 text-sm text-suave">Nenhuma troca neste mês ou depois.</p>{% endfor %}
+    {% if registra and p.em_tratamento %}
+    <form class="flex flex-wrap items-end gap-2 border-t border-linha pt-3" method="post" action="{{ url_for('escalas.troca', paciente_id=p.paciente_id) }}">
+      <label class="campo"><span class="rotulo">Sessão que vai perder</span><input class="entrada w-48" type="date" name="origem" required></label>
+      <label class="campo"><span class="rotulo">Sessão em que vem</span><input class="entrada w-48" type="date" name="destino" required></label>
+      <label class="campo"><span class="rotulo">Escala em que vem</span>
+        <select class="entrada w-36" name="escala_destino_id">{% for e in escalas %}<option value="{{ e.id }}">{{ e.codigo }}</option>{% endfor %}</select></label>
+      <button class="btn-primario" type="submit">Registrar troca</button>
+    </form>
+    <p class="m-0 text-sm text-suave">Origem e destino no mesmo mês (P-11).</p>
+    {% endif %}
+  </section>
+
+  <section class="cartao flex flex-col gap-3 p-4" aria-labelledby="extras-t">
+    <h2 id="extras-t" class="m-0 text-lg">Extras planejadas</h2>
+    {% for x in p.extras %}
+    <div class="flex flex-wrap items-center justify-between gap-3 border-t border-linha pt-2" data-extra="{{ x.id }}">
+      <span>{{ x.data.strftime('%d/%m') }}, {{ x.escala.codigo }}</span>
+      {% if registra %}
+      <form method="post" action="{{ url_for('escalas.cancelar_extra', paciente_id=p.paciente_id, extra_id=x.id) }}">
+        <button class="btn-neutro" type="submit" aria-label="Cancelar a extra de {{ x.data.strftime('%d/%m') }}">Cancelar</button>
+      </form>
+      {% endif %}
+    </div>
+    {% else %}<p class="m-0 text-sm text-suave">Nenhuma extra neste mês ou depois.</p>{% endfor %}
+    {% if registra and p.em_tratamento %}
+    <form class="flex flex-wrap items-end gap-2 border-t border-linha pt-3" method="post" action="{{ url_for('escalas.extra', paciente_id=p.paciente_id) }}">
+      <label class="campo"><span class="rotulo">Data da extra</span><input class="entrada w-48" type="date" name="data" required></label>
+      <label class="campo"><span class="rotulo">Escala</span>
+        <select class="entrada w-36" name="escala_id">{% for e in escalas %}<option value="{{ e.id }}">{{ e.codigo }}</option>{% endfor %}</select></label>
+      <button class="btn-primario" type="submit">Registrar extra</button>
+    </form>
+    {% endif %}
+  </section>
+  <p class="m-0"><a href="{{ url_for('escalas.geral') }}">Voltar às escalas</a></p>
+</div>
+{% endblock %}

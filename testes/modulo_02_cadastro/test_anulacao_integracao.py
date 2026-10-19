@@ -12,7 +12,7 @@ from sar.modulo_02_cadastro.contrato import TipoTelefone
 from sar.modulo_08_dados.erros_banco import restricao_violada
 from sar.nucleo.contexto import Contexto, Perfil
 from sar.nucleo.erros import AcessoNegado, NaoEncontrado
-from sar.nucleo.portas import ImpactoAnulacao
+from sar.nucleo.portas import Autorizacao, ImpactoAnulacao
 from sar.nucleo.uow import UnidadeDeTrabalho
 from testes.apoio.cadastro import INICIO, Cadastro, dados_completos, montar, pessoa
 from testes.apoio.fabrica import Fabrica
@@ -32,7 +32,7 @@ class ParticipanteFalso:
     def impacto(self, uow: UnidadeDeTrabalho, paciente_id: int) -> ImpactoAnulacao:
         return ImpactoAnulacao(self.contagens, self.sessao_confirmada, False)
 
-    def descartar(self, uow: UnidadeDeTrabalho, contexto: Contexto, paciente_id: int) -> None:
+    def descartar(self, uow: UnidadeDeTrabalho, contexto: Contexto, paciente_id: int, autorizacao: Autorizacao) -> None:
         if self.falhar:
             raise RuntimeError("participante falhou")
         self.descartados.append(paciente_id)

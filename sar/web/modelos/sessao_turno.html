@@ -1,0 +1,16 @@
+{% extends "layout.html" %}
+{% block cabeca %}
+  <meta name="htmx-config" content="history:false includeIndicatorCSS:false">
+  <script src="{{ url_for('static', filename='js/htmx-4.0.0.min.js') }}" defer></script>
+  <script src="{{ url_for('static', filename='js/turnos.js') }}" defer></script>
+{% endblock %}
+{% block titulo_pagina %}Sessão de {{ tela.data.strftime('%d/%m/%Y') }}{% endblock %}
+{% block subtitulo %}{{ tela.escala.rotulo }}, sem confirmação{% endblock %}
+{% block conteudo %}
+{# As ações devolvem o painel da tela inicial; aqui ele substitui esta sessão. #}
+<p class="sr-only" aria-live="polite" id="anuncio-turnos"></p>
+<div id="turnos" class="flex flex-col gap-5">
+  {% include "_sessao.html" %}
+  <p class="m-0"><a href="{{ url_for('acesso.inicio') }}">Voltar ao início</a></p>
+</div>
+{% endblock %}

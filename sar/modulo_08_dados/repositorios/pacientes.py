@@ -6,7 +6,7 @@ from collections.abc import Sequence
 from datetime import UTC, date, datetime
 from typing import Any
 
-from sqlalchemy import ColumnElement, delete, or_, select, update
+from sqlalchemy import ColumnElement, and_, delete, extract, or_, select, update
 from sqlalchemy.orm import Session
 
 from sar.modulo_08_dados.interfaces.pacientes import (
@@ -114,6 +114,14 @@ class RepositorioPacienteSQL:
     def por_nascimento(self, data: date) -> list[PacienteGravado]:
         consulta = select(Paciente).where(Paciente.data_nascimento == data, Paciente.anulado_em.is_(None))
         return [_paciente(p) for p in self._s.scalars(consulta.order_by(Paciente.id))]
+
+    def aniversariantes(self, dias: Sequence[tuple[int, int]]) -> list[PacienteGravado]:
+        if not dias:
+            return []
+        no_dia = or_(*(and_(extract("month", Paciente.data_nascimento) == m,
+                            extract("day", Paciente.data_nascimento) == d) for m, d in dias))  # fmt: skip
+        consulta = select(Paciente).where(Paciente.anulado_em.is_(None), no_dia).order_by(Paciente.nome, Paciente.id)
+        return [_paciente(p) for p in self._s.scalars(consulta)]
 
     def buscar(
         self, nome: str | None, prontuario: str | None, numero: str | None, limite: int, deslocamento: int = 0

@@ -1,9 +1,35 @@
 {% extends "layout.html" %}
+{% block cabeca %}
+  <meta name="htmx-config" content="history:false includeIndicatorCSS:false">
+  <script src="{{ url_for('static', filename='js/htmx-4.0.0.min.js') }}" defer></script>
+  <script src="{{ url_for('static', filename='js/turnos.js') }}" defer></script>
+{% endblock %}
 {% block titulo_pagina %}Início{% endblock %}
-{% block subtitulo %}{{ perfil_rotulo }}{% endblock %}
+{% block subtitulo %}{{ perfil_rotulo }}{% if ve_turnos %}, turnos de hoje{% endif %}{% endblock %}
 {% block conteudo %}
-<section class="cartao flex max-w-2xl flex-col gap-2 p-5" aria-labelledby="inicio-t">
-  <h2 id="inicio-t" class="m-0 text-xl">Bem-vindo ao SAR</h2>
-  <p class="m-0 text-[15px] text-suave">As sessões do dia e as pendências chegam a esta tela nos próximos incrementos.</p>
-</section>
+<div class="flex flex-col gap-6 xl:flex-row">
+  <div class="flex min-w-0 grow flex-col gap-5">
+    {% if ve_turnos %}
+    {# A cada minuto, com a marca de requisição automática, que não renova a sessão (DD-57). #}
+    <p class="sr-only" aria-live="polite" id="anuncio-turnos"></p>
+    <div id="turnos" class="flex flex-col gap-5" hx-get="{{ url_for('turnos.painel') }}" hx-trigger="every 60s"
+         hx-target="this" hx-swap="innerHTML" hx-headers='{"X-SAR-Automatica": "1"}'>
+      {% include "_turnos.html" %}
+    </div>
+    {% else %}
+    <section class="cartao flex max-w-2xl flex-col gap-2 p-5" aria-labelledby="inicio-t">
+      <h2 id="inicio-t" class="m-0 text-xl">Bem-vindo ao SAR</h2>
+      <p class="m-0 text-[15px] text-suave">Use o menu para chegar às telas do seu perfil.</p>
+    </section>
+    {% endif %}
+  </div>
+  {% if aniversariantes is not none %}
+  <aside class="flex w-full shrink-0 flex-col gap-5 xl:w-72">
+    <section aria-labelledby="aniv-titulo" class="cartao flex flex-col gap-2 p-4">
+      <h2 id="aniv-titulo" class="m-0 text-lg">Aniversariantes de hoje</h2>
+      {% for nome in aniversariantes %}<p class="m-0">{{ nome }}</p>{% else %}<p class="m-0 text-sm text-suave">Nenhum hoje.</p>{% endfor %}
+    </section>
+  </aside>
+  {% endif %}
+</div>
 {% endblock %}

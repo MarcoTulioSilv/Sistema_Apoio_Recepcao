@@ -1,5 +1,8 @@
 # Fronteiras entre módulos do SAR, verificadas no pipeline (DDS_recepcao, DD-16 e §3.12).
 # Rodar com: lint-imports
+# Os contratos dep_NN conferem só as importações diretas (allow_indirect_imports): o grafo é de dependências
+# diretas, e usar o contrato de um módulo permitido que depende de outro (o do MOD-02 expõe o Municipio do
+# MOD-06) segue arestas permitidas.
 [importlinter]
 root_package = sar
 include_external_packages = True
@@ -39,6 +42,7 @@ forbidden_modules =
     sar.modulo_11_titular
     sar.web
     sar.composicao
+allow_indirect_imports = True
 
 [importlinter:contract:dep_02]
 name = MOD-02 só depende de MOD-01, MOD-06, MOD-08
@@ -54,6 +58,7 @@ forbidden_modules =
     sar.modulo_11_titular
     sar.web
     sar.composicao
+allow_indirect_imports = True
 
 [importlinter:contract:dep_03]
 name = MOD-03 só depende de MOD-01, MOD-02, MOD-08
@@ -69,6 +74,7 @@ forbidden_modules =
     sar.modulo_11_titular
     sar.web
     sar.composicao
+allow_indirect_imports = True
 
 [importlinter:contract:dep_04]
 name = MOD-04 só depende de MOD-01, MOD-06, MOD-08
@@ -84,6 +90,7 @@ forbidden_modules =
     sar.modulo_11_titular
     sar.web
     sar.composicao
+allow_indirect_imports = True
 
 [importlinter:contract:dep_05]
 name = MOD-05 só depende de MOD-01, MOD-02, MOD-03, MOD-04, MOD-06, MOD-08
@@ -96,6 +103,7 @@ forbidden_modules =
     sar.modulo_11_titular
     sar.web
     sar.composicao
+allow_indirect_imports = True
 
 [importlinter:contract:dep_06]
 name = MOD-06 só depende de MOD-01, MOD-08
@@ -112,6 +120,7 @@ forbidden_modules =
     sar.modulo_11_titular
     sar.web
     sar.composicao
+allow_indirect_imports = True
 
 [importlinter:contract:dep_07]
 name = MOD-07 só depende de MOD-01, MOD-08
@@ -128,6 +137,7 @@ forbidden_modules =
     sar.modulo_11_titular
     sar.web
     sar.composicao
+allow_indirect_imports = True
 
 [importlinter:contract:dep_08]
 name = MOD-08 só depende de núcleo
@@ -146,6 +156,7 @@ forbidden_modules =
     sar.modulo_11_titular
     sar.web
     sar.composicao
+allow_indirect_imports = True
 
 [importlinter:contract:dep_09]
 name = MOD-09 só depende de MOD-01, MOD-02, MOD-04, MOD-08
@@ -160,6 +171,7 @@ forbidden_modules =
     sar.modulo_11_titular
     sar.web
     sar.composicao
+allow_indirect_imports = True
 
 [importlinter:contract:dep_10]
 name = MOD-10 só depende de MOD-01, MOD-02, MOD-06, MOD-08
@@ -174,6 +186,7 @@ forbidden_modules =
     sar.modulo_11_titular
     sar.web
     sar.composicao
+allow_indirect_imports = True
 
 [importlinter:contract:dep_11]
 name = MOD-11 só depende de MOD-01, MOD-02, MOD-04, MOD-05, MOD-08
@@ -187,6 +200,7 @@ forbidden_modules =
     sar.modulo_10_carga
     sar.web
     sar.composicao
+allow_indirect_imports = True
 
 [importlinter:contract:contrato_01]
 name = Fora do MOD-01, só sar.modulo_01_acesso.contrato pode ser importado
@@ -204,9 +218,11 @@ source_modules =
     sar.modulo_11_titular
     sar.web
 forbidden_modules =
-    sar.modulo_01_acesso.servicos
-    sar.modulo_01_acesso.regras
-    sar.modulo_01_acesso.executores
+    sar.modulo_01_acesso.*
+# o contrato do módulo é a única porta de entrada; qualquer outro arquivo dele é interno
+ignore_imports =
+    ** -> sar.modulo_01_acesso.contrato
+unmatched_ignore_imports_alerting = none
 
 [importlinter:contract:contrato_02]
 name = Fora do MOD-02, só sar.modulo_02_cadastro.contrato pode ser importado
@@ -224,9 +240,11 @@ source_modules =
     sar.modulo_11_titular
     sar.web
 forbidden_modules =
-    sar.modulo_02_cadastro.servicos
-    sar.modulo_02_cadastro.regras
-    sar.modulo_02_cadastro.executores
+    sar.modulo_02_cadastro.*
+# o contrato do módulo é a única porta de entrada; qualquer outro arquivo dele é interno
+ignore_imports =
+    ** -> sar.modulo_02_cadastro.contrato
+unmatched_ignore_imports_alerting = none
 
 [importlinter:contract:contrato_03]
 name = Fora do MOD-03, só sar.modulo_03_operacao.contrato pode ser importado
@@ -244,9 +262,11 @@ source_modules =
     sar.modulo_11_titular
     sar.web
 forbidden_modules =
-    sar.modulo_03_operacao.servicos
-    sar.modulo_03_operacao.regras
-    sar.modulo_03_operacao.executores
+    sar.modulo_03_operacao.*
+# o contrato do módulo é a única porta de entrada; qualquer outro arquivo dele é interno
+ignore_imports =
+    ** -> sar.modulo_03_operacao.contrato
+unmatched_ignore_imports_alerting = none
 
 [importlinter:contract:contrato_04]
 name = Fora do MOD-04, só sar.modulo_04_documentos.contrato pode ser importado
@@ -264,9 +284,11 @@ source_modules =
     sar.modulo_11_titular
     sar.web
 forbidden_modules =
-    sar.modulo_04_documentos.servicos
-    sar.modulo_04_documentos.regras
-    sar.modulo_04_documentos.executores
+    sar.modulo_04_documentos.*
+# o contrato do módulo é a única porta de entrada; qualquer outro arquivo dele é interno
+ignore_imports =
+    ** -> sar.modulo_04_documentos.contrato
+unmatched_ignore_imports_alerting = none
 
 [importlinter:contract:contrato_05]
 name = Fora do MOD-05, só sar.modulo_05_emissao.contrato pode ser importado
@@ -284,9 +306,11 @@ source_modules =
     sar.modulo_11_titular
     sar.web
 forbidden_modules =
-    sar.modulo_05_emissao.servicos
-    sar.modulo_05_emissao.regras
-    sar.modulo_05_emissao.executores
+    sar.modulo_05_emissao.*
+# o contrato do módulo é a única porta de entrada; qualquer outro arquivo dele é interno
+ignore_imports =
+    ** -> sar.modulo_05_emissao.contrato
+unmatched_ignore_imports_alerting = none
 
 [importlinter:contract:contrato_06]
 name = Fora do MOD-06, só sar.modulo_06_configuracao.contrato pode ser importado
@@ -304,9 +328,11 @@ source_modules =
     sar.modulo_11_titular
     sar.web
 forbidden_modules =
-    sar.modulo_06_configuracao.servicos
-    sar.modulo_06_configuracao.regras
-    sar.modulo_06_configuracao.executores
+    sar.modulo_06_configuracao.*
+# o contrato do módulo é a única porta de entrada; qualquer outro arquivo dele é interno
+ignore_imports =
+    ** -> sar.modulo_06_configuracao.contrato
+unmatched_ignore_imports_alerting = none
 
 [importlinter:contract:contrato_07]
 name = Fora do MOD-07, só sar.modulo_07_pendencias.contrato pode ser importado
@@ -324,9 +350,11 @@ source_modules =
     sar.modulo_11_titular
     sar.web
 forbidden_modules =
-    sar.modulo_07_pendencias.servicos
-    sar.modulo_07_pendencias.regras
-    sar.modulo_07_pendencias.executores
+    sar.modulo_07_pendencias.*
+# o contrato do módulo é a única porta de entrada; qualquer outro arquivo dele é interno
+ignore_imports =
+    ** -> sar.modulo_07_pendencias.contrato
+unmatched_ignore_imports_alerting = none
 
 [importlinter:contract:contrato_09]
 name = Fora do MOD-09, só sar.modulo_09_agendamento.contrato pode ser importado
@@ -344,9 +372,11 @@ source_modules =
     sar.modulo_11_titular
     sar.web
 forbidden_modules =
-    sar.modulo_09_agendamento.servicos
-    sar.modulo_09_agendamento.regras
-    sar.modulo_09_agendamento.executores
+    sar.modulo_09_agendamento.*
+# o contrato do módulo é a única porta de entrada; qualquer outro arquivo dele é interno
+ignore_imports =
+    ** -> sar.modulo_09_agendamento.contrato
+unmatched_ignore_imports_alerting = none
 
 [importlinter:contract:contrato_10]
 name = Fora do MOD-10, só sar.modulo_10_carga.contrato pode ser importado
@@ -364,9 +394,11 @@ source_modules =
     sar.modulo_11_titular
     sar.web
 forbidden_modules =
-    sar.modulo_10_carga.servicos
-    sar.modulo_10_carga.regras
-    sar.modulo_10_carga.executores
+    sar.modulo_10_carga.*
+# o contrato do módulo é a única porta de entrada; qualquer outro arquivo dele é interno
+ignore_imports =
+    ** -> sar.modulo_10_carga.contrato
+unmatched_ignore_imports_alerting = none
 
 [importlinter:contract:contrato_11]
 name = Fora do MOD-11, só sar.modulo_11_titular.contrato pode ser importado
@@ -384,9 +416,11 @@ source_modules =
     sar.modulo_10_carga
     sar.web
 forbidden_modules =
-    sar.modulo_11_titular.servicos
-    sar.modulo_11_titular.regras
-    sar.modulo_11_titular.executores
+    sar.modulo_11_titular.*
+# o contrato do módulo é a única porta de entrada; qualquer outro arquivo dele é interno
+ignore_imports =
+    ** -> sar.modulo_11_titular.contrato
+unmatched_ignore_imports_alerting = none
 
 [importlinter:contract:web]
 name = Rotas não acessam o banco nem os internos dos módulos

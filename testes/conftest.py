@@ -80,8 +80,18 @@ ZERAR_TRILHA = (
 )
 
 
-# Cadastro (MOD-02), na ordem das chaves estrangeiras. A aplicação não apaga paciente; só os testes.
+# Operação (MOD-03) e cadastro (MOD-02), na ordem das chaves estrangeiras. A aplicação não apaga paciente; só os
+# testes.
 ZERAR_CADASTRO = (
+    "DELETE FROM mes_alterado",
+    "DELETE FROM ciencia_enfermagem",
+    "DELETE FROM ligacao_manual",
+    "DELETE FROM presenca",
+    "DELETE FROM sessao_turno",
+    "DELETE FROM termo_extra",
+    "DELETE FROM extra_planejada",
+    "DELETE FROM troca_pontual",
+    "DELETE FROM alocacao",
     "DELETE FROM solicitacao_autorizacao",
     "DELETE FROM telefone",
     "DELETE FROM contato",
@@ -202,4 +212,16 @@ def cadastro_zerado(usuarios: dict[str, int], trilha_zerada: Engine) -> Iterator
     yield usuarios
     with trilha_zerada.begin() as c:
         for comando in ZERAR_CADASTRO:
+            c.execute(text(comando))
+
+
+@pytest.fixture
+def operacao_zerada(
+    cadastro_zerado: dict[str, int], criar_usuario: CriarUsuario, trilha_zerada: Engine
+) -> Iterator[dict[str, int]]:
+    ids = dict(cadastro_zerado)
+    ids["enfermagem"] = criar_usuario("teste_enfermagem", perfil="enfermagem")
+    yield ids
+    with trilha_zerada.begin() as c:  # antes dos usuários, que as sessões, ciências e parâmetros referenciam
+        for comando in (*ZERAR_CADASTRO, "DELETE FROM parametro"):
             c.execute(text(comando))

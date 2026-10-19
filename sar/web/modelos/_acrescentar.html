@@ -1,0 +1,20 @@
+{# Acrescentar o paciente escolhido: ligar a uma ausência do mês ainda sem par (RF-917, DD-25) ou deixar a
+   classificação para o pareamento automático (RF-918). Com quatro extras, o aviso (RF-506); nunca bloqueia. #}
+<form class="flex max-w-xl flex-col gap-3 rounded-xl border border-borda bg-fundo p-4" method="post" action="/turnos/{{ data }}/{{ escala }}/acrescentar"
+      hx-post="/turnos/{{ data }}/{{ escala }}/acrescentar" hx-target="#turnos" hx-swap="innerHTML">
+  <input type="hidden" name="paciente_id" value="{{ paciente_id }}">
+  <p class="m-0 font-bold">{{ nome }}</p>
+  {% set livres = frequencia.ausencias | selectattr('livre') | selectattr('presenca_id') | list %}
+  <fieldset class="m-0 flex flex-col gap-2 border-0 p-0">
+    <legend class="rotulo mb-1">Ausências deste mês ainda sem compensação</legend>
+    {% for a in livres %}
+    <label class="opcao-simulador w-fit"><input type="radio" name="ausencia_id" value="{{ a.presenca_id }}"> {{ a.data.strftime('%d/%m') }}, {{ a.escala.rotulo | lower }}</label>
+    {% endfor %}
+    <label class="opcao-simulador w-fit"><input type="radio" name="ausencia_id" value="" checked> {{ 'Não ligar a nenhuma' if livres else 'Nenhuma ausência a compensar' }}</label>
+  </fieldset>
+  <p class="m-0 text-sm {{ 'font-bold text-alta' if frequencia.aviso_extra else 'text-suave' }}">
+    {{ frequencia.extras_no_mes }} {{ 'sessão extra' if frequencia.extras_no_mes == 1 else 'sessões extras' }} no mês até agora.
+    {% if frequencia.aviso_extra %}O limite mensal é de 4 (RN-01): avise a enfermagem. Acrescentar continua possível.{% endif %}
+  </p>
+  <button type="submit" class="btn-primario w-fit">Acrescentar à sessão</button>
+</form>

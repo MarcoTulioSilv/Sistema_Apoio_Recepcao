@@ -11,6 +11,7 @@ from playwright.sync_api import Browser, Page, sync_playwright
 from sqlalchemy import Engine
 from werkzeug.serving import WSGIRequestHandler, make_server
 
+from sar.nucleo.portas import Relogio
 from sar.web import criar_app
 from sar.web.configuracao import ConfigWeb
 from testes.apoio.acesso import SENHA
@@ -34,9 +35,16 @@ def provedor_cep() -> ProvedorCepFalso:
 
 
 @pytest.fixture
-def endereco(engine_web: Engine, provedor_cep: ProvedorCepFalso) -> Iterator[str]:
+def relogio_do_servidor() -> Relogio | None:
+    """O relógio do servidor de teste: o do sistema, salvo quando o teste fixa a hora (a tela inicial depende dela)."""
+    return None
+
+
+@pytest.fixture
+def endereco(engine_web: Engine, provedor_cep: ProvedorCepFalso, relogio_do_servidor: Relogio | None) -> Iterator[str]:
     origem = f"http://127.0.0.1:{PORTA}"  # HTTP só em desenvolvimento (DD-80); o cookie é Secure mesmo assim
-    app = criar_app(servicos_web(engine_web, provedor_cep), ConfigWeb(origem=origem, desenvolvimento=True))
+    servicos = servicos_web(engine_web, provedor_cep, relogio_do_servidor)
+    app = criar_app(servicos, ConfigWeb(origem=origem, desenvolvimento=True))
     servidor = make_server("127.0.0.1", PORTA, app, request_handler=SemLogDeAcesso)
     linha = threading.Thread(target=servidor.serve_forever, daemon=True)
     linha.start()

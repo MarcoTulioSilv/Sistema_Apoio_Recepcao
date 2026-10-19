@@ -137,3 +137,27 @@ def test_menu_recolhivel_mascaras_e_aviso_do_rascunho(
     sem_violacao(page)
     expect(aviso).to_be_hidden(timeout=8000)  # some sozinho
     assert erros == []
+
+
+@pytest.mark.requisito("RF-919", "RF-920")
+def test_salvar_o_cadastro_cancela_o_salvamento_pendente_do_rascunho(
+    criar_usuario: CriarUsuario, cadastro_zerado: dict[str, int], endereco: str, page: Page, fabrica: Fabrica
+) -> None:
+    """Defeito: salvar o paciente antes dos 800 ms do salvamento automático deixava esse salvamento pendente; ele
+    chegava depois e recriava o rascunho que o cadastro tinha acabado de eliminar."""
+    rascunhos: list[str] = []
+    page.on("request", lambda r: rascunhos.append(r.url) if r.url.endswith("/cadastro/rascunho") else None)
+    page.clock.install()
+    criar_usuario("sistcad_rec4")
+    entrar_no_navegador(page, endereco, "sistcad_rec4")
+    page.get_by_role("link", name="Novo cadastro").click()
+    page.get_by_label("Nome completo").fill(fabrica.nome())
+    page.get_by_label("Prontuário").fill(fabrica.prontuario())
+    page.get_by_label("Início do tratamento").fill("2026-01-05")
+    page.get_by_label("Início do tratamento").press("Tab")  # "change": o salvamento do rascunho fica agendado
+    # Segura o envio aqui, para a página não navegar antes de o relógio passar dos 800 ms.
+    page.evaluate("document.addEventListener('submit', (e) => e.preventDefault())")
+    page.get_by_role("button", name="Salvar paciente").click()
+    page.clock.run_for(2000)
+    page.wait_for_timeout(200)
+    assert rascunhos == []

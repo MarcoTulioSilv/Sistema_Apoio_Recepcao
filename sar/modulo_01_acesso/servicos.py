@@ -50,7 +50,7 @@ from sar.nucleo.erros import AcessoNegado, ConflitoDeVersao, ErroSAR, NaoEncontr
 from sar.nucleo.eventos import CadeiaDivergente, UsuarioInativado
 from sar.nucleo.logs import campos_do_erro, novo_requisicao_id, requisicao_atual
 from sar.nucleo.parametros import LeitorParametros
-from sar.nucleo.portas import ExecutorAutorizavel, Relogio
+from sar.nucleo.portas import Autorizacao, ExecutorAutorizavel, Relogio
 from sar.nucleo.uow import ExecutorDeOperacao, RegistroAuditoria, UnidadeDeTrabalho
 
 # RNF-625: o TI vê alterações e motivo só nestas entidades técnicas. Lista de permissão, e não de bloqueio:
@@ -762,7 +762,7 @@ class ServicoAutorizacoes:
                 usuario_id if automatica else None,
             )  # fmt: skip
             if automatica:
-                executor.executar(uow, contexto, usuario_id, parametros)
+                executor.executar(uow, contexto, Autorizacao(solicitacao_id, usuario_id, texto), parametros)
 
         self._executar(operacao)
         return solicitacao_id
@@ -791,7 +791,7 @@ class ServicoAutorizacoes:
                     solicitante.id, Perfil(solicitante.perfil), None, contexto.origem, contexto.instante,
                     contexto.requisicao_id,
                 )  # fmt: skip
-                executor.executar(uow, autor, decisor_id, s.parametros)
+                executor.executar(uow, autor, Autorizacao(s.id, decisor_id, s.motivo), s.parametros)
             solicitacoes.decidir(s.id, estado, decisor_id, contexto.instante, texto)
             self._auditoria.registrar(
                 uow, contexto, "acesso.autorizacao.decidir", "solicitacao_autorizacao", s.id,
