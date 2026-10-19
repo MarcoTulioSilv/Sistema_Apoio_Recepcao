@@ -78,6 +78,42 @@ class ContagemEscalas:
     sem_alocacao: int
 
 
+@dataclass(frozen=True, slots=True)
+class PacienteNaEscala:
+    paciente_id: int
+    nome: str
+    prontuario: str
+    escala: Escala | None  # None: sem alocação (RF-403)
+
+
+@dataclass(frozen=True, slots=True)
+class TrocaRegistrada:
+    id: int
+    origem: date
+    destino: date
+    escala_destino: Escala
+    termo_assinado: bool  # DOC-03 incorporado (RF-809)
+
+
+@dataclass(frozen=True, slots=True)
+class ExtraRegistrada:
+    id: int
+    data: date
+    escala: Escala
+
+
+@dataclass(frozen=True, slots=True)
+class EscalaDoPaciente:
+    paciente_id: int
+    nome: str
+    prontuario: str
+    em_tratamento: bool  # período que cobre a data de referência
+    escala: Escala | None
+    vigencias: tuple[tuple[date, Escala | None], ...]  # do período, em ordem de início (RF-402)
+    trocas: tuple[TrocaRegistrada, ...]  # não canceladas, do mês da data em diante
+    extras: tuple[ExtraRegistrada, ...]
+
+
 # ------------------------------------------------------------------ serviços para a interface
 class EscalaService(Protocol):
     """Escalas da enfermagem (RF-401 a RF-406). Registrar e cancelar só pela enfermagem, auditado com o autor;
@@ -87,6 +123,14 @@ class EscalaService(Protocol):
 
     def contagem(self, contexto: Contexto, data: date) -> ContagemEscalas:
         """Pacientes com período aberto na data, pela alocação vigente."""
+        ...
+
+    def distribuicao(self, contexto: Contexto, data: date) -> list[PacienteNaEscala]:
+        """Os pacientes em tratamento na data, com a escala vigente de cada um, em ordem de nome (RF-405)."""
+        ...
+
+    def do_paciente(self, contexto: Contexto, paciente_id: int, data: date) -> EscalaDoPaciente:
+        """A escala do paciente na data, o histórico do período e as trocas e extras do mês em diante. NaoEncontrado."""
         ...
 
     def alocar(self, contexto: Contexto, paciente_id: int, escala_id: int | None, inicio: date) -> None:
@@ -310,6 +354,18 @@ class PareamentoDoMes:
     mes_fechado: bool
 
 
+@dataclass(frozen=True, slots=True)
+class PresencaACientificar:
+    """Presença acrescentada pela recepção sem troca nem extra planejada (RF-921)."""
+
+    presenca_id: int
+    paciente_id: int
+    nome: str
+    prontuario: str
+    data: date
+    escala: Escala
+
+
 class FrequenciaService(Protocol):
     def balanco(self, contexto: Contexto, paciente_id: int, competencia: str) -> BalancoMes: ...
 
@@ -328,6 +384,10 @@ class FrequenciaService(Protocol):
     def solicitar_refazer(
         self, contexto: Contexto, paciente_id: int, competencia: str, ligacoes: Sequence[tuple[int, int]], motivo: str
     ) -> str: ...
+
+    def presencas_sem_registro(self, contexto: Contexto) -> list[PresencaACientificar]:
+        """As que ainda pedem a ciência da enfermagem, da mais antiga para a mais nova (RF-921)."""
+        ...
 
     def dar_ciencia(self, contexto: Contexto, presenca_id: int) -> None:
         """A enfermagem toma ciência da presença acrescentada pela recepção sem troca nem extra planejada (RF-921).

@@ -10,7 +10,14 @@ from sar.modulo_01_acesso.contrato import AuditService, AutorizacaoService, Perm
 from sar.modulo_02_cadastro.contrato import LeituraCadastro, PeriodoRef
 from sar.modulo_03_operacao import dados
 from sar.modulo_03_operacao.calendario import competencia
-from sar.modulo_03_operacao.contrato import ContagemEscalas, Escala
+from sar.modulo_03_operacao.contrato import (
+    ContagemEscalas,
+    Escala,
+    EscalaDoPaciente,
+    ExtraRegistrada,
+    PacienteNaEscala,
+    TrocaRegistrada,
+)
 from sar.modulo_08_dados.interfaces.operacao import AlocacaoGravada, RepositorioOperacao
 from sar.modulo_08_dados.relogio import FUSO_CLINICA
 from sar.nucleo.contexto import Contexto
@@ -190,6 +197,57 @@ class ServicoEscalas:
                 else:
                     contagem[escala.id] += 1
             return ContagemEscalas(contagem, sem)
+
+        return self._executar(operacao)
+
+    def distribuicao(self, contexto: Contexto, data: date) -> list[PacienteNaEscala]:
+        GUARDA.exigir(contexto, "operacao.escala.consultar")
+
+        def operacao(uow: UnidadeDeTrabalho) -> list[PacienteNaEscala]:
+            por_id = dados.escalas(uow)
+            ativos = self._leitura.pacientes_com_periodo_aberto_em(uow, data)
+            nomes = self._leitura.identificacoes(uow, ativos)
+            itens = []
+            for pid, (periodos, _) in dados.periodos_de(uow, self._leitura, ativos, por_id).items():
+                periodo = next((p for p in periodos if p.contem(data)), None)
+                if pid in nomes:
+                    escala = periodo.escala_em(data) if periodo is not None else None
+                    itens.append(PacienteNaEscala(pid, nomes[pid].nome, nomes[pid].prontuario, escala))
+            return sorted(itens, key=lambda i: (i.nome, i.paciente_id))
+
+        return self._executar(operacao)
+
+    def do_paciente(self, contexto: Contexto, paciente_id: int, data: date) -> EscalaDoPaciente:
+        GUARDA.exigir(contexto, "operacao.escala.consultar")
+
+        def operacao(uow: UnidadeDeTrabalho) -> EscalaDoPaciente:
+            identificacao = self._leitura.identificacao(uow, paciente_id)
+            if identificacao is None:
+                raise NaoEncontrado()
+            por_id = dados.escalas(uow)
+            repositorio = uow.repositorio(RepositorioOperacao)
+            periodo = self._leitura.periodo_aberto_em(uow, paciente_id, data)
+            vigencias = repositorio.alocacoes([periodo.id]) if periodo is not None else []
+            historico = tuple(
+                (v.vigencia_inicio, por_id[v.escala_id] if v.escala_id is not None else None) for v in vigencias
+            )
+            atual = _vigente(vigencias, data)
+            escala = por_id[atual.escala_id] if atual is not None and atual.escala_id is not None else None
+            desde = data.replace(day=1)
+            trocas = tuple(
+                TrocaRegistrada(
+                    t.id, t.data_origem, t.data_destino, por_id[t.escala_destino_id], t.documento_id is not None
+                )
+                for t in repositorio.trocas([paciente_id], desde, date(9999, 12, 31))
+            )
+            extras = tuple(
+                ExtraRegistrada(e.id, e.data, por_id[e.escala_id])
+                for e in repositorio.extras([paciente_id], desde, date(9999, 12, 31))
+            )
+            return EscalaDoPaciente(
+                paciente_id, identificacao.nome, identificacao.prontuario, periodo is not None, escala, historico,
+                trocas, extras,
+            )  # fmt: skip
 
         return self._executar(operacao)
 

@@ -1,0 +1,97 @@
+{% extends "layout.html" %}
+{% block titulo_pagina %}Escalas{% endblock %}
+{% block subtitulo %}Distribuição dos pacientes em tratamento em {{ data.strftime('%d/%m/%Y') }}{% endblock %}
+{% block conteudo %}
+<div class="flex flex-col gap-5">
+  {% include "_avisos.html" %}
+  <form class="flex flex-wrap items-end gap-2" method="get" action="{{ url_for('escalas.geral') }}">
+    <label class="campo"><span class="rotulo">Data de referência</span>
+      <input class="entrada w-48" type="date" name="data" value="{{ data.isoformat() }}"></label>
+    <button class="btn-neutro" type="submit">Ver</button>
+  </form>
+
+  <section class="cartao flex flex-col gap-3 p-4" aria-labelledby="contagem-t">
+    <h2 id="contagem-t" class="m-0 text-lg">Pacientes por escala</h2>
+    <ul class="m-0 grid list-none grid-cols-2 gap-2 p-0 sm:grid-cols-4 lg:grid-cols-7">
+      {% for e in escalas %}
+      <li class="flex flex-col rounded-lg border border-borda p-3" data-escala="{{ e.codigo }}">
+        <span class="font-bold">{{ e.codigo }}</span>
+        <span class="text-sm text-suave">{{ e.rotulo }}, {{ e.inicio.strftime('%H:%M') }}–{{ e.fim.strftime('%H:%M') }}</span>
+        <span class="numero text-2xl font-bold">{{ contagem.por_escala.get(e.id, 0) }}</span>
+      </li>
+      {% endfor %}
+      <li class="flex flex-col rounded-lg border-2 border-alta/40 bg-alta-fundo p-3" data-escala="sem">
+        <span class="font-bold text-alta">Sem alocação</span>
+        <span class="text-sm text-suave">Pendência (RF-403)</span>
+        <span class="numero text-2xl font-bold text-alta">{{ contagem.sem_alocacao }}</span>
+      </li>
+    </ul>
+  </section>
+
+  {% if a_cientificar is not none %}
+  <section class="cartao flex flex-col gap-3 p-4" aria-labelledby="ciencia-t">
+    <h2 id="ciencia-t" class="m-0 text-lg">Presenças fora da escala sem registro prévio</h2>
+    <p class="m-0 text-sm text-suave">A recepção acrescentou estes pacientes sem troca nem extra planejada. A presença vale; registre a ciência (RF-921).</p>
+    {% if a_cientificar %}
+    <ul class="m-0 flex list-none flex-col gap-2 p-0">
+      {% for p in a_cientificar %}
+      <li class="flex flex-wrap items-center justify-between gap-3 border-t border-linha pt-2">
+        <span><strong>{{ p.nome }}</strong> <span class="numero text-suave">· prontuário {{ p.prontuario }}</span><br>
+          <span class="text-sm">{{ p.data.strftime('%d/%m/%Y') }}, {{ p.escala.codigo }} ({{ p.escala.rotulo | lower }})</span></span>
+        <form method="post" action="{{ url_for('escalas.ciencia') }}">
+          <input type="hidden" name="presenca_id" value="{{ p.presenca_id }}">
+          <button class="btn-secundario" type="submit" aria-label="Registrar ciência: {{ p.nome }}, {{ p.data.strftime('%d/%m') }}">Registrar ciência</button>
+        </form>
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}<p class="m-0 text-sm text-suave">Nenhuma presença pendente de ciência.</p>{% endif %}
+  </section>
+  {% endif %}
+
+  <section class="cartao flex flex-col gap-3 p-4" aria-labelledby="dist-t">
+    <h2 id="dist-t" class="m-0 text-lg">Pacientes em tratamento</h2>
+    {% if registra %}<p class="m-0 text-sm text-suave">Para distribuir vários de uma vez (RF-405), escolha a escala de cada um e salve. Só as linhas mudadas são gravadas, todas a partir da mesma data.</p>{% endif %}
+    {% if distribuicao %}
+    <form class="flex flex-col gap-3" method="post" action="{{ url_for('escalas.lote') }}">
+      <div class="overflow-x-auto">
+        <table class="w-full border-collapse text-left">
+          <caption class="sr-only">Pacientes em tratamento e escala de cada um</caption>
+          <thead><tr class="text-sm text-suave">
+            <th scope="col" class="px-3 py-2 font-bold">Nome</th>
+            <th scope="col" class="px-3 py-2 font-bold">Prontuário</th>
+            <th scope="col" class="px-3 py-2 font-bold">Escala</th>
+            <th scope="col" class="px-3 py-2 font-bold"><span class="sr-only">Ações</span></th>
+          </tr></thead>
+          <tbody>
+            {% for p in distribuicao %}
+            <tr class="border-t border-linha" data-paciente="{{ p.paciente_id }}">
+              <td class="px-3 py-2">{{ p.nome }}</td>
+              <td class="numero px-3 py-2">{{ p.prontuario }}</td>
+              <td class="px-3 py-2">
+                {% if registra %}
+                <input type="hidden" name="atual-{{ p.paciente_id }}" value="{{ p.escala.id if p.escala else '' }}">
+                <select class="entrada w-44" name="escala-{{ p.paciente_id }}" aria-label="Escala de {{ p.nome }}">
+                  <option value=""{% if not p.escala %} selected{% endif %}>Sem alocação</option>
+                  {% for e in escalas %}<option value="{{ e.id }}"{% if p.escala and p.escala.id == e.id %} selected{% endif %}>{{ e.codigo }}</option>{% endfor %}
+                </select>
+                {% elif p.escala %}{{ p.escala.codigo }}{% else %}<span class="etiqueta-a">Sem alocação</span>{% endif %}
+              </td>
+              <td class="px-3 py-2"><a href="{{ url_for('escalas.paciente', paciente_id=p.paciente_id) }}" aria-label="Escala, trocas e extras de {{ p.nome }}">Trocas e extras</a></td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% if registra %}
+      <div class="flex flex-wrap items-end gap-2">
+        <label class="campo"><span class="rotulo">A partir de</span>
+          <input class="entrada w-48" type="date" name="inicio" value="{{ data.isoformat() }}" required></label>
+        <button class="btn-primario" type="submit">Salvar alocações</button>
+      </div>
+      {% endif %}
+    </form>
+    {% else %}<p class="m-0 text-sm text-suave">Nenhum paciente em tratamento nesta data.</p>{% endif %}
+  </section>
+</div>
+{% endblock %}

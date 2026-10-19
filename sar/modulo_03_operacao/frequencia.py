@@ -12,7 +12,14 @@ from sar.modulo_02_cadastro.contrato import LeituraCadastro
 from sar.modulo_03_operacao import dados
 from sar.modulo_03_operacao.apuracao import Apurado, apurar, lista_da_sessao, mes_fechado
 from sar.modulo_03_operacao.calendario import Sessao
-from sar.modulo_03_operacao.contrato import BalancoMes, ItemFrequencia, Origem, ParDoMes, PareamentoDoMes
+from sar.modulo_03_operacao.contrato import (
+    BalancoMes,
+    ItemFrequencia,
+    Origem,
+    ParDoMes,
+    PareamentoDoMes,
+    PresencaACientificar,
+)
 from sar.modulo_08_dados.interfaces.operacao import RepositorioOperacao
 from sar.modulo_08_dados.relogio import FUSO_CLINICA
 from sar.nucleo.contexto import Contexto
@@ -178,6 +185,29 @@ class ServicoFrequencia:
         comp = validar_competencia(competencia)
         parametros = {"paciente_id": paciente_id, "competencia": comp, "ligacoes": [[a, p] for a, p in ligacoes]}
         return self._autorizacoes.solicitar(contexto, REFAZER, f"{paciente_id}:{comp}", parametros, motivo)
+
+    def presencas_sem_registro(self, contexto: Contexto) -> list[PresencaACientificar]:
+        GUARDA.exigir(contexto, CIENCIA)
+
+        def operacao(uow: UnidadeDeTrabalho) -> list[PresencaACientificar]:
+            desde = dados.implantacao(self._parametros) or date(1900, 1, 1)
+            presencas = uow.repositorio(RepositorioOperacao).presencas_fora_da_escala(
+                None, desde, _hoje(contexto), sem_planejamento=True, sem_ciencia=True
+            )
+            nomes = self._leitura.identificacoes(uow, sorted({p.paciente_id for p in presencas}))
+            por_id = dados.escalas(uow)
+            itens = []
+            for p in presencas:
+                if p.paciente_id in nomes:
+                    nome = nomes[p.paciente_id]
+                    itens.append(
+                        PresencaACientificar(
+                            p.id, p.paciente_id, nome.nome, nome.prontuario, p.data, por_id[p.escala_id]
+                        )
+                    )
+            return itens
+
+        return self._executar(operacao)
 
     def dar_ciencia(self, contexto: Contexto, presenca_id: int) -> None:
         GUARDA.exigir(contexto, CIENCIA)
