@@ -132,6 +132,21 @@
 }
 @utility btn-mover { @apply mt-auto inline-flex min-h-11 cursor-pointer items-center rounded-lg border border-borda-forte bg-superficie px-3 text-sm font-bold text-acao hover:bg-acao-clara; }
 
+/* Distribuição nas escalas (enfermagem): o mesmo paciente é linha na lista "Sem alocação" e cartão no turno */
+@utility lista-escala { @apply m-0 flex min-h-16 list-none flex-col rounded-xl border-2 border-dashed border-borda p-0 transition-colors; &[data-sobre="true"] { @apply border-acao bg-acao-clara; } }
+@utility cartao-escala {
+  @apply flex cursor-grab select-none flex-col items-start gap-1 rounded-lg border border-borda bg-superficie p-3 active:cursor-grabbing;
+  [data-zona="sem"] > & {
+    @apply grid w-full grid-cols-1 items-center gap-x-3 rounded-none border-0 border-t border-linha bg-transparent px-2 py-2
+      sm:grid-cols-[minmax(0,2fr)_10rem_minmax(0,2fr)_11rem_auto_auto];
+  }
+  &[data-mudou] { @apply border-2 border-acao; }
+  [data-zona="sem"] > &[data-mudou] { @apply bg-acao-clara; }
+  &:not([data-mudou]) [data-nao-salvo] { @apply hidden; }
+  &[data-arrastando="true"] { @apply opacity-50; }
+  [data-travado] & { @apply cursor-default; }
+}
+
 /* Sessão de turno na tela inicial (DD-76) */
 @utility sessao {
   @apply flex flex-col gap-4 rounded-xl border border-borda bg-superficie p-4;

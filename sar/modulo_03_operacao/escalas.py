@@ -212,7 +212,8 @@ class ServicoEscalas:
                 periodo = next((p for p in periodos if p.contem(data)), None)
                 if pid in nomes:
                     escala = periodo.escala_em(data) if periodo is not None else None
-                    itens.append(PacienteNaEscala(pid, nomes[pid].nome, nomes[pid].prontuario, escala))
+                    i = nomes[pid]
+                    itens.append(PacienteNaEscala(pid, i.nome, i.prontuario, i.nome_mae, escala))
             return sorted(itens, key=lambda i: (i.nome, i.paciente_id))
 
         return self._executar(operacao)

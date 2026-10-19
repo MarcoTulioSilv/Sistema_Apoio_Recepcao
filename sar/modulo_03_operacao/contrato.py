@@ -83,6 +83,7 @@ class PacienteNaEscala:
     paciente_id: int
     nome: str
     prontuario: str
+    nome_mae: str | None
     escala: Escala | None  # None: sem alocação (RF-403)
 
 

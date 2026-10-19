@@ -13,6 +13,7 @@ from flask import Blueprint, abort, current_app, redirect, render_template, requ
 from werkzeug.wrappers import Response
 
 from sar.modulo_01_acesso.contrato import PermissionGuard
+from sar.modulo_03_operacao.contrato import PacienteNaEscala
 from sar.nucleo.contexto import Contexto
 from sar.nucleo.erros import NaoEncontrado, RegraViolada, RequerAutorizacao
 from sar.web import contexto_atual
@@ -81,13 +82,28 @@ def _numero(campo: str) -> int:
 
 # ------------------------------------------------------------------ visão geral (RF-404, RF-405, RF-921)
 def _geral(contexto: Contexto, data: date, **extra: Any) -> str:
+    """Os seis turnos em duas colunas (segunda, quarta e sexta; terça, quinta e sábado) e, no alto, quem está sem
+    alocação. `escolhidas` traz o que foi enviado e não gravou (erro no lote), para nada se perder na volta."""
     servicos = _servicos()
+    # Os de segunda, quarta e sexta primeiro, cada grupo pelo turno: 1-seg, 2-seg, 3-seg, 1-ter, 2-ter, 3-ter.
+    escalas = sorted(servicos.escalas.escalas(contexto), key=lambda e: (0 not in e.dias, e.turno))
+    distribuicao = servicos.escalas.distribuicao(contexto, data)
+    escolhidas: dict[int, str] = extra.pop("escolhidas", {})
+    atual = {p.paciente_id: str(p.escala.id) if p.escala else "" for p in distribuicao}
+    valor = {pid: escolhidas.get(pid, a) for pid, a in atual.items()}
+    por_zona: dict[str, list[PacienteNaEscala]] = {}
+    for p in distribuicao:
+        por_zona.setdefault(valor[p.paciente_id], []).append(p)
     return render_template(
         "escalas.html",
         data=data,
-        escalas=servicos.escalas.escalas(contexto),
-        contagem=servicos.escalas.contagem(contexto, data),
-        distribuicao=servicos.escalas.distribuicao(contexto, data),
+        inicio=extra.pop("inicio", data),
+        escalas=escalas,
+        colunas=[[e for e in escalas if 0 in e.dias], [e for e in escalas if 1 in e.dias]],
+        distribuicao=distribuicao,
+        atual=atual,
+        valor=valor,
+        por_zona=por_zona,
         registra=GUARDA.pode(contexto, "operacao.alocacao.registrar_em_lote"),
         a_cientificar=servicos.frequencia.presencas_sem_registro(contexto)
         if GUARDA.pode(contexto, "operacao.presenca.dar_ciencia")
@@ -120,13 +136,18 @@ def lote() -> Response | str:
                 mudancas.append((int(pid), _escala(chave)))
     if not mudancas:
         return _geral(contexto, inicio, erro="Nenhuma escala foi mudada.")
+    escolhidas = {pid: "" if escala is None else str(escala) for pid, escala in mudancas}
     try:
         _servicos().escalas.alocar_em_lote(contexto, mudancas, inicio)
     except RegraViolada as erro:
-        return _geral(contexto, inicio, erro=MENSAGENS.get(erro.codigo, "Não foi possível alocar."))
+        nome = next((p.nome for p in _servicos().escalas.distribuicao(contexto, inicio)
+                     if p.paciente_id == erro.detalhe.get("paciente_id")), None)  # fmt: skip
+        mensagem = MENSAGENS.get(erro.codigo, "Não foi possível alocar.") + (f" ({nome})" if nome else "")
+        return _geral(contexto, inicio, erro=mensagem + " Nada foi gravado.", escolhidas=escolhidas, inicio=inicio)
     except RequerAutorizacao:
-        texto = "Alguma mudança alcança sessão já confirmada. Faça essa pela página do paciente, que permite pedir "
-        return _geral(contexto, inicio, erro=texto + "autorização.")
+        texto = "Alguma mudança alcança sessão já confirmada, e nada foi gravado. Faça essa pela página do paciente, "
+        return _geral(contexto, inicio, erro=texto + "que permite pedir autorização.", escolhidas=escolhidas,
+                      inicio=inicio)  # fmt: skip
     quantidade = f"{len(mudancas)} {'alocação registrada' if len(mudancas) == 1 else 'alocações registradas'}"
     return redirect(url_for("escalas.geral", data=inicio.isoformat(), resultado=quantidade))
 
