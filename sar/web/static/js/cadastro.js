@@ -27,6 +27,12 @@
   function avisarMudanca(form) { form.dispatchEvent(new Event("change", { bubbles: true })); }
 
   function iniciar(form) {
+    // Enviado o cadastro, o salvamento automático ainda agendado (800 ms depois da última mudança) não sai mais:
+    // chegaria depois e recriaria o rascunho que o cadastro acabou de eliminar (§6.6).
+    form.addEventListener("submit", () => { form.dataset.enviado = "true"; });
+    form.addEventListener("htmx:before:request", (e) => {
+      if (e.target === form && form.dataset.enviado) e.preventDefault();
+    });
     const minimos = form.querySelectorAll("[data-minimo]");
     const contagem = form.querySelector('[data-contagem="minimo"]');
     const salvar = form.querySelector('[data-acao="salvar-paciente"]');
