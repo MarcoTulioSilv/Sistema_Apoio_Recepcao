@@ -52,6 +52,8 @@ export SAR_SEGREDOS="$PWD/segredos" SAR_BANCO_PORTA=3307 SAR_AMBIENTE=desenvolvi
 | `SAR_SUPERUSUARIOS` | Logins que trocam de perfil pelo cabeçalho (DD-85) | o seu login; só em desenvolvimento |
 | `SAR_WEB_PORTA` | Porta da aplicação | `8080` (padrão) |
 | `SAR_PROXIES` | Proxies confiáveis na frente (Caddy) | `0` em desenvolvimento; `1` no servidor |
+| `SAR_TESSERACT` | Executável do Tesseract, se não estiver no PATH; sem Tesseract, a extração fica desligada e a conferência é manual (RNF-702) | `C:\Program Files\Tesseract-OCR\tesseract.exe` |
+| `SAR_VERAPDF` | Executável do veraPDF, se não estiver no PATH; sem ele, o teste de PDF/A é pulado (o CI roda) | `C:\verapdf\verapdf.bat` |
 
 ---
 
