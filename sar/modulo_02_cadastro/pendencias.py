@@ -8,14 +8,19 @@ from __future__ import annotations
 
 from collections import defaultdict
 from collections.abc import Sequence
-from datetime import UTC, datetime, time
+from datetime import UTC, date, datetime, time
 
 from sar.modulo_02_cadastro.regras import CEP_NAO_VERIFICADO, chave_triade, pendencias
 from sar.modulo_02_cadastro.servicos import dados_de
-from sar.modulo_08_dados.interfaces.pacientes import PacienteGravado, PeriodoGravado, RepositorioPaciente
+from sar.modulo_08_dados.interfaces.pacientes import (
+    CoberturaGravada,
+    PacienteGravado,
+    PeriodoGravado,
+    RepositorioPaciente,
+)
 from sar.nucleo.contexto import Contexto, Perfil
 from sar.nucleo.documentos import DOCUMENTO_DO_EVENTO
-from sar.nucleo.portas import FontePendencia, ItemPendencia, MarcoRetencao, Prioridade
+from sar.nucleo.portas import ExigenciaChecklist, FontePendencia, ItemPendencia, MarcoRetencao, Prioridade
 from sar.nucleo.uow import UnidadeDeTrabalho
 
 PERFIS = frozenset({Perfil.RECEPCAO, Perfil.ADMINISTRACAO})
@@ -146,6 +151,29 @@ FONTES: tuple[FontePendencia, ...] = (
     FonteEventoSemComprovante(),
     FontePossivelDuplicidade(),
 )
+
+
+class ServicoChecklist:
+    """Implementa a FonteChecklist (RF-706): quem está em tratamento e se a cobertura vigente na data é de convênio.
+    O MOD-04 compara com os tipos de documento presentes."""
+
+    def exigencias(
+        self, uow: UnidadeDeTrabalho, paciente_ids: Sequence[int] | None, hoje: date
+    ) -> list[ExigenciaChecklist]:
+        repositorio = uow.repositorio(RepositorioPaciente)
+        vivos = {p.id for p in repositorio.vivos(paciente_ids)}
+        abertos = [p for p in repositorio.periodos_de(paciente_ids) if p.evento_tipo is None and p.paciente_id in vivos]
+        por_periodo: dict[int, list[CoberturaGravada]] = defaultdict(list)
+        for cobertura in repositorio.coberturas([p.id for p in abertos]) if abertos else []:
+            por_periodo[cobertura.periodo_id].append(cobertura)
+        exigencias = []
+        for periodo in abertos:
+            vigentes = [c for c in por_periodo[periodo.id] if c.inicio <= hoje]
+            atual = max(vigentes, key=lambda c: c.inicio) if vigentes else None
+            desde = datetime.combine(periodo.inicio, time(), UTC)
+            convenio = atual is not None and atual.convenio_id is not None
+            exigencias.append(ExigenciaChecklist(periodo.paciente_id, convenio, desde))
+        return exigencias
 
 
 class ServicoMarcoRetencao:

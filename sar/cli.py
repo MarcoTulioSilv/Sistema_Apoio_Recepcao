@@ -7,6 +7,9 @@
   sar criar-usuario-ti       primeiro TI da implantação, quando não há TI ativo (DD-85)
   sar criar-superusuario     superusuário, só em desenvolvimento (DD-85)
   sar worker                 consumidor da fila de ingestão de documentos (DD-63), até Ctrl+C
+  sar documentos-revarrer    revarredura antimalware do acervo (SEG-22); --minutos e --depois-de para retomar
+  sar documentos-hash        conferência de hash do acervo (SEG-15, P-19); mesmas opções
+  sar documentos-orfaos      remove do cofre arquivo sem documento (DD-37)
 
 Fica fora dos módulos porque junta comandos do MOD-08 e do MOD-01, como a raiz de composição.
 """
@@ -25,6 +28,7 @@ from sar.composicao import (
     ambiente_atual,
     antimalware_do_ambiente,
     compor_auditoria,
+    compor_rotinas,
     compor_worker,
     montar_barramento,
     montar_executor,
@@ -117,6 +121,28 @@ def worker(parar: threading.Event | None = None) -> int:
     return 0
 
 
+def rotina_documentos(comando: str, depois_de: str | None, minutos: float | None) -> int:
+    """As rotinas do acervo pelo usuário de banco do worker; o agendamento noturno chega com o MOD-09 (DD-41)."""
+    engine = criar_engine(ConfigBanco.do_ambiente("sar_worker"))
+    try:
+        rotinas = compor_rotinas(engine, carregar_chave_mestra(), pastas_do_ambiente(), antimalware_do_ambiente())
+        if comando == "documentos-orfaos":
+            print(f"Arquivos órfãos removidos do cofre: {rotinas.remover_orfaos()}.")
+            return 0
+        segundos = minutos * 60 if minutos is not None else None
+        rodar = rotinas.revarrer if comando == "documentos-revarrer" else rotinas.verificar_hashes
+        resultado = rodar(depois_de, segundos)
+    finally:
+        engine.dispose()
+    print(f"Documentos verificados: {resultado.verificados}; bloqueados: {len(resultado.bloqueados)}; "
+          f"desbloqueados: {len(resultado.desbloqueados)}.")  # fmt: skip
+    for documento_id in resultado.bloqueados:
+        print(f"  bloqueado: {documento_id}")
+    if resultado.cursor is not None:
+        print(f"Parou no prazo. Para continuar: sar {comando} --depois-de {resultado.cursor}")
+    return 1 if resultado.bloqueados else 0
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="sar", description="Linha de comando do SAR")
     sub = parser.add_subparsers(dest="comando", required=True)
@@ -136,6 +162,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     p.add_argument("--nome", required=True)
     p.add_argument("--login", required=True)
     sub.add_parser("worker", help="consumidor da fila de ingestão de documentos")
+    for nome, ajuda in (("documentos-revarrer", "revarredura antimalware do acervo"),
+                        ("documentos-hash", "conferência de hash do acervo")):  # fmt: skip
+        p = sub.add_parser(nome, help=ajuda)
+        p.add_argument("--depois-de", help="cursor devolvido pela execução anterior")
+        p.add_argument("--minutos", type=float, help="para depois deste tempo e mostra o cursor")
+    sub.add_parser("documentos-orfaos", help="remove do cofre arquivo sem documento")
     args = parser.parse_args(argv)
     configurar("cli")
     iniciar_requisicao()  # liga as linhas de log e a auditoria desta execução (DD-81)
@@ -153,6 +185,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             return criar_superusuario(args.nome, args.login)
         elif args.comando == "worker":
             return worker()
+        elif args.comando in ("documentos-revarrer", "documentos-hash", "documentos-orfaos"):
+            return rotina_documentos(args.comando, getattr(args, "depois_de", None), getattr(args, "minutos", None))
         else:
             return verificar_cadeia()
     except Exception as erro:

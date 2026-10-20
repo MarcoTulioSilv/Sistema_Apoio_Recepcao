@@ -15,6 +15,7 @@ from __future__ import annotations
 import hashlib
 import os
 import shutil
+import time
 import uuid
 from collections.abc import Iterable
 from dataclasses import dataclass
@@ -171,14 +172,17 @@ class Cofre:
         """Descarte (DD-04): o arquivo sai do cofre; quem chama apaga a chave na linha."""
         self._caminho(arquivo).unlink(missing_ok=True)
 
-    def orfaos(self, conhecidos: set[str]) -> list[str]:
-        """Arquivos sem linha correspondente (DD-37) e temporários esquecidos, pelo caminho relativo ao cofre."""
+    def orfaos(self, conhecidos: set[str], mais_velhos_que: float = 0) -> list[str]:
+        """Arquivos sem linha correspondente (DD-37) e temporários esquecidos, pelo caminho relativo ao cofre. Com
+        `mais_velhos_que` (segundos), só os modificados antes disso: o arquivo de uma incorporação ainda sem commit
+        também não tem linha."""
         if not self._raiz.is_dir():
             return []
+        limite = time.time() - mais_velhos_que
         return sorted(
             p.relative_to(self._raiz).as_posix()
             for p in self._raiz.glob("*/*")
-            if p.is_file() and p.name not in conhecidos
+            if p.is_file() and p.name not in conhecidos and p.stat().st_mtime <= limite
         )
 
     def remover_orfao(self, relativo: str) -> None:

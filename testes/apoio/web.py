@@ -18,6 +18,7 @@ from sar.web import criar_app
 from sar.web.configuracao import ConfigWeb, ServicosWeb
 from testes.apoio.acesso import HASHER, SENHA
 from testes.apoio.cadastro import ProvedorCepFalso
+from testes.apoio.documentos import AntimalwareFalso
 
 ORIGEM = "https://sar.teste"
 _ARMAZENAMENTO = Path(tempfile.gettempdir()) / "sar-testes-web"
@@ -36,6 +37,7 @@ def servicos_web(
         provedor_cep=provedor_cep or ProvedorCepFalso(),
         relogio=relogio,
         pastas=PASTAS,
+        antimalware=AntimalwareFalso(),
     )
     return ServicosWeb(
         componentes.autenticacao,

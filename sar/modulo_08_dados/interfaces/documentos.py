@@ -22,6 +22,7 @@ class TipoGravado:
     anos_retencao: int
     origem: Origem
     campos_extracao: tuple[str, ...]
+    checklist: str = "nao"  # "nao", "sempre" ou "se_convenio" (RF-706)
 
 
 @dataclass(frozen=True, slots=True)
@@ -69,6 +70,8 @@ class DocumentoGravado:
 class RepositorioDocumentos(Protocol):
     # ---------------------------------------------------------------- tipos e pacientes
     def tipo(self, codigo: str) -> TipoGravado | None: ...
+
+    def tipos(self) -> list[TipoGravado]: ...
 
     def paciente_ativo(self, paciente_id: int) -> bool:
         """Existe e não está anulado (o MOD-04 lê só o identificador do paciente, SEG-14)."""
@@ -133,3 +136,17 @@ class RepositorioDocumentos(Protocol):
         ...
 
     def desbloquear(self, documento_id: bytes) -> None: ...
+
+    def tipos_presentes(self, paciente_ids: Sequence[int] | None) -> dict[int, set[str]]:
+        """Os tipos com algum documento não descartado, por paciente (RF-706)."""
+        ...
+
+    def bloqueados(self) -> list[DocumentoGravado]: ...
+
+    def arquivos(self) -> set[str]:
+        """Os nomes de arquivo de todas as linhas, descartadas inclusive, para a varredura de órfãos (DD-37)."""
+        ...
+
+    def acervo_depois_de(self, documento_id: bytes | None, limite: int) -> list[DocumentoGravado]:
+        """Os não descartados em ordem de id, a partir do cursor: as rotinas longas param e retomam (DD-64)."""
+        ...

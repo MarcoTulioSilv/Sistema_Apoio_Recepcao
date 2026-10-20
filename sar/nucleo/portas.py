@@ -131,6 +131,22 @@ class FonteMarcoRetencao(Protocol):
     def marco(self, uow: UnidadeDeTrabalho, paciente_id: int) -> MarcoRetencao: ...
 
 
+# ------------------------------------------------------------------ MOD-04: checklist de cadastro (RF-706)
+@dataclass(frozen=True, slots=True)
+class ExigenciaChecklist:
+    paciente_id: int
+    convenio: bool  # a cobertura vigente é de convênio: o cartão do convênio entra no checklist
+    desde: datetime  # início do período em tratamento, para a ordem das pendências
+
+
+class FonteChecklist(Protocol):
+    def exigencias(
+        self, uow: UnidadeDeTrabalho, paciente_ids: Sequence[int] | None, hoje: date
+    ) -> list[ExigenciaChecklist]:
+        """Os pacientes não anulados em tratamento (§11.2), todos ou só os dos ids, numa consulta só (§11.3)."""
+        ...
+
+
 # ------------------------------------------------------------------ MOD-02: CEP (AD-23)
 @dataclass(frozen=True, slots=True)
 class EnderecoCep:

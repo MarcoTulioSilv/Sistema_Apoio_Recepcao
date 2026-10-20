@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime
 from enum import Enum
 from typing import BinaryIO, Protocol
 
 from sar.nucleo.contexto import Contexto
+from sar.nucleo.uow import UnidadeDeTrabalho
 
 
 class EstadoIngestao(str, Enum):  # §8.4
@@ -164,4 +166,35 @@ class DocumentoService(Protocol):
     def revincular(self, contexto: Contexto, documento_id: str, paciente_id: int, motivo: str) -> None:
         """Leva todas as versões do documento ao paciente certo (RF-713) e publica `DocumentoRevinculado`.
         `RegraViolada` com motivo vazio, paciente anulado ou o mesmo paciente."""
+        ...
+
+
+# ------------------------------------------------------------------ para outros módulos (§8.8)
+@dataclass(frozen=True, slots=True)
+class ElegivelDescarte:
+    documento_id: str
+    paciente_id: int
+    tipo: str
+    prazo: date
+
+
+class LeituraDocumentos(Protocol):
+    """Dentro da unidade de trabalho de quem chama, exceto as que entregam conteúdo, que auditam a entrega."""
+
+    def tipos_presentes(self, uow: UnidadeDeTrabalho, paciente_ids: Sequence[int]) -> dict[int, set[str]]:
+        """Os tipos com versão não descartada (RF-706)."""
+        ...
+
+    def ultimo_documento_em(self, uow: UnidadeDeTrabalho, paciente_id: int) -> datetime | None:
+        """A captura mais recente, para o prazo de retenção (DD-01)."""
+        ...
+
+    def elegiveis_descarte(self, uow: UnidadeDeTrabalho, hoje: date) -> list[ElegivelDescarte]: ...
+
+    def foto(self, contexto: Contexto, paciente_id: int) -> bytes | None:
+        """A foto vigente em JPEG, para o crachá (MOD-05); None sem foto legível. Auditada."""
+        ...
+
+    def copia_ao_titular(self, contexto: Contexto, paciente_id: int) -> bytes:
+        """Um PDF só, com a versão vigente de cada documento legível, para o MOD-11 entregar (RF-1009). Auditada."""
         ...

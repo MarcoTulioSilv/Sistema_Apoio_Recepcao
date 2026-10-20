@@ -46,7 +46,7 @@ from sar.modulo_02_cadastro.contrato import (
 )
 from sar.modulo_02_cadastro.eventos import ExecutorCorrigirEvento, ExecutorRemoverEvento, ServicoEventos
 from sar.modulo_02_cadastro.pendencias import FONTES as FONTES_CADASTRO
-from sar.modulo_02_cadastro.pendencias import ServicoMarcoRetencao
+from sar.modulo_02_cadastro.pendencias import ServicoChecklist, ServicoMarcoRetencao
 from sar.modulo_02_cadastro.rascunhos import FonteRascunhoProximoDoDescarte, ServicoRascunhos
 from sar.modulo_02_cadastro.servicos import ServicoCep, ServicoContatos, ServicoLeituraCadastro, ServicoPacientes
 from sar.modulo_03_operacao.contrato import EscalaService, FrequenciaService, LeituraOperacao, SessaoTurnoService
@@ -65,7 +65,7 @@ from sar.modulo_03_operacao.sessoes import ServicoSessoes
 from sar.modulo_03_operacao.termos import manipulador_revinculo_termos, manipulador_termos
 from sar.modulo_04_documentos.antimalware import Antimalware, Clamd
 from sar.modulo_04_documentos.armazenamento import Cofre, Pastas, Quarentena
-from sar.modulo_04_documentos.contrato import DocumentoService, IngestaoService
+from sar.modulo_04_documentos.contrato import DocumentoService, IngestaoService, LeituraDocumentos
 from sar.modulo_04_documentos.documentos import ServicoDocumentos
 from sar.modulo_04_documentos.executores import (
     ExecutorDesbloquearDocumento,
@@ -73,6 +73,9 @@ from sar.modulo_04_documentos.executores import (
     ParticipanteAnulacaoDocumentos,
 )
 from sar.modulo_04_documentos.ingestao import ServicoIngestao
+from sar.modulo_04_documentos.leitura import ServicoLeituraDocumentos
+from sar.modulo_04_documentos.pendencias import fontes as fontes_documentos
+from sar.modulo_04_documentos.rotinas import RotinasDocumentos
 from sar.modulo_04_documentos.worker import ProcessadorIngestoes
 from sar.modulo_05_emissao.contrato import RelatorioService
 from sar.modulo_05_emissao.relatorios import ServicoRelatorios
@@ -152,9 +155,10 @@ def pastas_do_ambiente() -> Pastas:
     return Pastas(Path(cofre), Path(quarentena))
 
 
-def antimalware_do_ambiente() -> Antimalware:
+def antimalware_do_ambiente(tempo: float = 60.0) -> Antimalware:
     """SAR_CLAMAV_HOST e SAR_CLAMAV_PORTA; padrão, o clamd do compose no loopback."""
-    return Clamd(os.environ.get("SAR_CLAMAV_HOST", "127.0.0.1"), int(os.environ.get("SAR_CLAMAV_PORTA", "3310")))
+    host, porta = os.environ.get("SAR_CLAMAV_HOST", "127.0.0.1"), int(os.environ.get("SAR_CLAMAV_PORTA", "3310"))
+    return Clamd(host, porta, tempo)
 
 
 # Interface do repositório (sem SQLAlchemy, importável pelos módulos) → implementação SQL.
@@ -236,6 +240,7 @@ class Componentes:
     relatorios: RelatorioService
     ingestao: IngestaoService
     documentos: DocumentoService
+    leitura_documentos: LeituraDocumentos
 
 
 # Verificadores de uso dos parâmetros imutáveis (DD-51): a data de implantação trava na primeira sessão confirmada.
@@ -260,11 +265,13 @@ def compor(
     provedor_cep: ProvedorCep | None = None,
     relogio: Relogio | None = None,
     pastas: Pastas | None = None,
+    antimalware: Antimalware | None = None,
 ) -> Componentes:
     """O hasher só muda nos testes, que usam um custo menor; em produção é bcrypt com custo 12 (DD-83). O provedor
     de CEP também, para os testes nunca acessarem a internet; em produção é ViaCEP com BrasilAPI (DD-88). O relógio
     também: a tela inicial depende da hora, e o teste a fixa. As pastas do cofre e da quarentena vêm do ambiente
-    (pastas_do_ambiente), e os testes passam as suas."""
+    (pastas_do_ambiente), e os testes passam as suas. O antimalware da web só responde à pendência 18 (DD-97), com
+    tempo curto; os testes passam um falso."""
     relogio = relogio or RelogioSistema()
     barramento = montar_barramento(relogio)
     executar = montar_executor(engine, barramento, gravar_auditoria)
@@ -321,6 +328,9 @@ def compor(
             *FONTES_CADASTRO,
             FonteRascunhoProximoDoDescarte(parametros),
             *fontes_operacao(leitura_cadastro, parametros),
+            *fontes_documentos(
+                ServicoChecklist(), marco_retencao, antimalware or antimalware_do_ambiente(2.0), parametros
+            ),
         ),
         marco_retencao=marco_retencao,
         leitura_cadastro=leitura_cadastro,
@@ -331,6 +341,7 @@ def compor(
         relatorios=ServicoRelatorios(executar, leitura_cadastro),
         ingestao=ServicoIngestao(executar, auditoria, parametros, quarentena, cofre, cifra, relogio),
         documentos=ServicoDocumentos(executar, auditoria, cofre),
+        leitura_documentos=ServicoLeituraDocumentos(executar, auditoria, cofre, marco_retencao),
     )
 
 
@@ -347,6 +358,14 @@ def compor_worker(
     cifra = CifraAesGcm(chave_mestra)
     return ProcessadorIngestoes(executar, ServicoAuditoria(executar), LeitorParametrosSQL(executar),
                                 Quarentena(pastas.quarentena, cifra), antimalware, cifra, relogio)  # fmt: skip
+
+
+def compor_rotinas(engine: Engine, chave_mestra: bytes, pastas: Pastas, antimalware: Antimalware) -> RotinasDocumentos:
+    """Revarredura, conferência de hash e órfãos do acervo (DD-41, DD-37), pelo usuário de banco do worker."""
+    relogio = RelogioSistema()
+    executar = montar_executor(engine, montar_barramento(relogio))
+    return RotinasDocumentos(executar, ServicoAuditoria(executar), Cofre(pastas.cofre, CifraAesGcm(chave_mestra)),
+                             antimalware, relogio)  # fmt: skip
 
 
 def ids_dos_logins(executar: ExecutorDeOperacao, logins: list[str]) -> dict[str, int]:

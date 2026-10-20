@@ -119,6 +119,15 @@ sar worker                                   # consome a fila de ingestão a cad
 
 Em desenvolvimento, o cofre e a quarentena ficam em `armazenamento\` no projeto, fora do Git.
 
+Rotinas do acervo de documentos, pelo usuário do worker (o agendamento noturno chega no Incremento 6):
+
+```powershell
+sar documentos-revarrer                      # revarredura antimalware (SEG-22); detecção bloqueia o documento
+sar documentos-hash                          # confere o hash de cada documento; divergência bloqueia
+sar documentos-hash --minutos 30             # para em 30 min e mostra o --depois-de para continuar
+sar documentos-orfaos                        # remove do cofre arquivo sem documento, com mais de 1 h
+```
+
 Parar e voltar o banco:
 
 ```powershell

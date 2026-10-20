@@ -28,6 +28,11 @@ def _gravar(instante: datetime | None) -> datetime | None:
     return instante.astimezone(UTC).replace(tzinfo=None) if instante is not None else None
 
 
+def _tipo(t: TipoDocumento) -> TipoGravado:
+    campos = tuple(c.strip() for c in (t.campos_extracao or "").split(",") if c.strip())
+    return TipoGravado(t.codigo, t.nome, t.familia, t.anos_retencao, cast(Origem, t.origem), campos, t.checklist)
+
+
 def _ingestao(i: Ingestao) -> IngestaoGravada:
     return IngestaoGravada(
         i.id, i.paciente_id, i.tipo, cast(Origem, i.origem), i.vinculo, i.substitui_id, cast(EstadoIngestao, i.estado),
@@ -51,10 +56,10 @@ class RepositorioDocumentosSQL:
     # ---------------------------------------------------------------- tipos e pacientes
     def tipo(self, codigo: str) -> TipoGravado | None:
         t = self._s.get(TipoDocumento, codigo)
-        if t is None:
-            return None
-        campos = tuple(c.strip() for c in (t.campos_extracao or "").split(",") if c.strip())
-        return TipoGravado(t.codigo, t.nome, t.familia, t.anos_retencao, cast(Origem, t.origem), campos)
+        return _tipo(t) if t is not None else None
+
+    def tipos(self) -> list[TipoGravado]:
+        return [_tipo(t) for t in self._s.scalars(select(TipoDocumento).order_by(TipoDocumento.codigo))]
 
     def paciente_ativo(self, paciente_id: int) -> bool:
         anulado = self._s.execute(select(Paciente.anulado_em).where(Paciente.id == paciente_id)).first()
@@ -182,6 +187,30 @@ class RepositorioDocumentosSQL:
             .where(Documento.id == documento_id, Documento.bloqueado_em.is_(None))
             .values(bloqueado_em=_gravar(instante), bloqueio_motivo=motivo)
         )
+
+    def tipos_presentes(self, paciente_ids: Sequence[int] | None) -> dict[int, set[str]]:
+        consulta = select(Documento.paciente_id, Documento.tipo).where(Documento.descartado_em.is_(None)).distinct()
+        if paciente_ids is not None:
+            if not paciente_ids:
+                return {}
+            consulta = consulta.where(Documento.paciente_id.in_(paciente_ids))
+        presentes: dict[int, set[str]] = {}
+        for paciente_id, tipo in self._s.execute(consulta):
+            presentes.setdefault(paciente_id, set()).add(tipo)
+        return presentes
+
+    def bloqueados(self) -> list[DocumentoGravado]:
+        consulta = select(Documento).where(Documento.bloqueado_em.is_not(None), Documento.descartado_em.is_(None))
+        return [_documento(d) for d in self._s.scalars(consulta.order_by(Documento.bloqueado_em))]
+
+    def arquivos(self) -> set[str]:
+        return set(self._s.scalars(select(Documento.arquivo)))
+
+    def acervo_depois_de(self, documento_id: bytes | None, limite: int) -> list[DocumentoGravado]:
+        consulta = select(Documento).where(Documento.descartado_em.is_(None))
+        if documento_id is not None:
+            consulta = consulta.where(Documento.id > documento_id)
+        return [_documento(d) for d in self._s.scalars(consulta.order_by(Documento.id).limit(limite))]
 
     def desbloquear(self, documento_id: bytes) -> None:
         self._s.execute(
