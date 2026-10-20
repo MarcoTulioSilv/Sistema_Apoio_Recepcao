@@ -28,3 +28,6 @@ docs/prototipo/node_modules/
 CLAUDE.md
 
 .env
+
+# Cofre e quarentena locais do desenvolvimento (SAR_COFRE, SAR_QUARENTENA): imagem de documento nunca vai para o Git
+/armazenamento/

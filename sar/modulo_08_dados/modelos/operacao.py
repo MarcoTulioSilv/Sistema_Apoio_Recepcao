@@ -1,9 +1,5 @@
 """Modelos do MOD-03 Operação (DDS §7.9). Espelham a 0001; um teste de integração confere contra o banco
-migrado. Sem relacionamentos: o repositório carrega o agregado explicitamente (DD-12).
-
-`troca_pontual.documento_id` e `termo_extra.documento_id` apontam para `documento`, que ganha modelo no
-Incremento 4; até lá as colunas ficam sem a chave estrangeira no modelo, e o teste de comparação ignora essas
-chaves, como a do período de tratamento."""
+migrado. Sem relacionamentos: o repositório carrega o agregado explicitamente (DD-12)."""
 
 from __future__ import annotations
 
@@ -74,7 +70,9 @@ class TrocaPontual(Base):
     data_origem: Mapped[date] = mapped_column(Date)
     data_destino: Mapped[date] = mapped_column(Date)
     escala_destino_id: Mapped[int] = mapped_column(TINYINT, _fk("troca_pontual", "escala_destino_id", "escala.id"))
-    documento_id: Mapped[bytes | None] = mapped_column(mysql.BINARY(16))
+    documento_id: Mapped[bytes | None] = mapped_column(
+        mysql.BINARY(16), _fk("troca_pontual", "documento_id", "documento.id")
+    )
     cancelada_em: Mapped[datetime | None] = mapped_column(INSTANTE)
     cancelada_motivo: Mapped[str | None] = mapped_column(String(300))
     ativa: Mapped[int | None] = _ativa()
@@ -105,7 +103,7 @@ class TermoExtra(Base):
     id: Mapped[int] = mapped_column(BIGINT, primary_key=True, autoincrement=True)
     paciente_id: Mapped[int] = mapped_column(BIGINT, _fk("termo_extra", "paciente_id", "paciente.id"))
     competencia: Mapped[str] = mapped_column(_ascii(7))
-    documento_id: Mapped[bytes] = mapped_column(mysql.BINARY(16))
+    documento_id: Mapped[bytes] = mapped_column(mysql.BINARY(16), _fk("termo_extra", "documento_id", "documento.id"))
 
 
 class SessaoTurno(Base):

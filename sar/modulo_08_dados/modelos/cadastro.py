@@ -88,8 +88,7 @@ class Telefone(Base):
 
 
 class PeriodoTratamento(Base):
-    """Evento embutido (DD-13). O comprovante aponta para `documento`, que ganha modelo no Incremento 4; até lá
-    a coluna fica sem a chave estrangeira no modelo, e o teste de comparação ignora essa chave."""
+    """Evento embutido (DD-13), com o comprovante ligado ao documento do MOD-04 (§6.5)."""
 
     __tablename__ = "periodo_tratamento"
     __table_args__ = (
@@ -107,7 +106,9 @@ class PeriodoTratamento(Base):
     evento_tipo: Mapped[str | None] = mapped_column(Enum(*TIPOS_EVENTO, name="tipo_evento"))
     evento_data: Mapped[date | None] = mapped_column(Date)
     evento_local: Mapped[str | None] = mapped_column(String(150))
-    evento_documento_id: Mapped[bytes | None] = mapped_column(mysql.BINARY(16))
+    evento_documento_id: Mapped[bytes | None] = mapped_column(
+        mysql.BINARY(16), ForeignKey("documento.id", name="fk_periodo_tratamento__evento_documento_id")
+    )
     evento_registrado_em: Mapped[datetime | None] = mapped_column(INSTANTE)
     aberto: Mapped[int | None] = mapped_column(
         mysql.TINYINT(unsigned=True), Computed("IF(evento_tipo IS NULL, 1, NULL)", persisted=True)
