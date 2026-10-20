@@ -1,4 +1,4 @@
-# Ambiente de desenvolvimento do SAR: só o banco. A aplicação roda no .venv local.
+# Ambiente de desenvolvimento do SAR: o banco e o antimalware. A aplicação roda no .venv local.
 # Porta 3307 no loopback, para não colidir com outro MySQL da máquina e não ficar exposta na rede.
 name: sar
 
@@ -33,6 +33,26 @@ services:
       timeout: 5s
       retries: 30
 
+  # Antimalware da ingestão (SEG-09, DD-35): clamd escuta só no loopback; o freshclam do próprio contêiner atualiza
+  # as assinaturas sozinho (SEG-21). Na primeira subida baixa a base (~300 MB) e leva alguns minutos para responder.
+  clamav:
+    image: clamav/clamav:1.5.4
+    ports:
+      - "127.0.0.1:3310:3310"
+    volumes:
+      - clamav-assinaturas:/var/lib/clamav
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    healthcheck:
+      test: ["CMD", "clamdcheck.sh"]
+      interval: 10s
+      timeout: 10s
+      retries: 60
+      start_period: 120s
+
 secrets:
   mysql_root:
     file: ./segredos/mysql_root
@@ -47,3 +67,4 @@ secrets:
 
 volumes:
   mysql-dados:
+  clamav-assinaturas:

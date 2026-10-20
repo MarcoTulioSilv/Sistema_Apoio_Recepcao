@@ -132,8 +132,8 @@ class Hostil:
 
 
 def hostis() -> list[Hostil]:
-    """Os itens do PT §6.2 que a validação recusa. EICAR (antimalware), tamanho (recebimento) e token (abertura)
-    são recusados em outras etapas e testados nelas."""
+    """Os itens do PT §6.2 que a validação recusa. O EICAR também cai aqui, mas o motivo final é a detecção
+    (DD-96, testado com o antimalware); tamanho (recebimento) e token (abertura) são recusados em outras etapas."""
     executavel = b"MZ\x90\x00\x03\x00\x00\x00" + b"\x00" * 120 + b"PE\x00\x00"
     return [
         Hostil("laudo.pdf", executavel, "tipo.nao_permitido"),
@@ -157,7 +157,7 @@ def hostis() -> list[Hostil]:
     ]
 
 
-def eicar_em(formato: str) -> bytes:
-    """EICAR com cabeçalho de formato permitido (CT-DOC-02): só o antimalware pega."""
-    cabecalhos = {"pdf": b"%PDF-1.4\n", "jpeg": b"\xff\xd8\xff\xe0"}
-    return cabecalhos[formato] + eicar()
+def eicar_com_extensao_permitida() -> list[Hostil]:
+    """EICAR com nome de PDF e de JPEG (CT-DOC-02): a validação recusa pelo tipo, e o antimalware detecta (DD-96).
+    O EICAR só é reconhecido no início do arquivo, como manda o padrão: por isso vai puro, sem cabeçalho."""
+    return [Hostil("eicar.pdf", eicar(), "tipo.nao_permitido"), Hostil("eicar.jpg", eicar(), "tipo.nao_permitido")]

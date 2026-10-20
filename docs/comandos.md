@@ -52,6 +52,7 @@ export SAR_SEGREDOS="$PWD/segredos" SAR_BANCO_PORTA=3307 SAR_AMBIENTE=desenvolvi
 | `SAR_SUPERUSUARIOS` | Logins que trocam de perfil pelo cabeçalho (DD-85) | o seu login; só em desenvolvimento |
 | `SAR_WEB_PORTA` | Porta da aplicação | `8080` (padrão) |
 | `SAR_PROXIES` | Proxies confiáveis na frente (Caddy) | `0` em desenvolvimento; `1` no servidor |
+| `SAR_CLAMAV_HOST` / `SAR_CLAMAV_PORTA` | Onde o clamd escuta (SEG-09) | `127.0.0.1` e `3310` (padrão, o do compose) |
 | `SAR_TESSERACT` | Executável do Tesseract, se não estiver no PATH; sem Tesseract, a extração fica desligada e a conferência é manual (RNF-702) | `C:\Program Files\Tesseract-OCR\tesseract.exe` |
 | `SAR_VERAPDF` | Executável do veraPDF, se não estiver no PATH; sem ele, o teste de PDF/A é pulado (o CI roda) | `C:\verapdf\verapdf.bat` |
 
@@ -69,6 +70,7 @@ pip install -e ".[dev]"                      # dependências do projeto e das fe
 playwright install chromium                  # navegador dos testes de sistema
 python scripts\criar_segredos_dev.py         # gera segredos\ (fora do git); não sobrescreve
 docker compose up -d --wait mysql            # sobe o MySQL 9.7.2; na primeira vez cria sar e sar_teste
+docker compose up -d --wait clamav           # antimalware; na primeira vez baixa as assinaturas (alguns minutos)
 ```
 
 Defina as variáveis da seção 1 e prepare os dois bancos (o da aplicação e o dos testes):
@@ -97,7 +99,7 @@ Por fim, o seu usuário de desenvolvimento (seção 5) e o CSS (seção 7).
 ## 3. Dia a dia: rodar a aplicação
 
 ```powershell
-docker compose up -d --wait mysql            # garante o banco no ar (Docker Desktop aberto)
+docker compose up -d --wait mysql clamav     # garante o banco e o antimalware no ar (Docker Desktop aberto)
 $env:SAR_SUPERUSUARIOS = "seu.login"         # o login exato que o criar-superusuario mostrou; vários: "a,b"
 python -m sar.wsgi
 ```
@@ -166,7 +168,8 @@ Os demais usuários são criados pela tela do TI.
 ## 6. Testes e qualidade
 
 Os testes usam o banco `sar_teste` sozinhos: nunca mexem no banco `sar` da aplicação. Precisam do MySQL no
-ar e das variáveis `SAR_SEGREDOS` e `SAR_BANCO_PORTA` (seção 1).
+ar e das variáveis `SAR_SEGREDOS` e `SAR_BANCO_PORTA` (seção 1). Os testes do antimalware usam o ClamAV do
+compose e são pulados se ele estiver fora do ar; com `$env:SAR_EXIGIR_CLAMAV = "1"` (como no CI), falham.
 
 ```powershell
 pytest testes -m "not integracao and not sistema"   # unidade: rápido, sem banco
