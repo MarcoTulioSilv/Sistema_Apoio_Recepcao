@@ -7,7 +7,6 @@ import io
 import os
 import shutil
 import subprocess  # nosec B404
-import sys
 from pathlib import Path
 
 import pikepdf
@@ -24,7 +23,7 @@ from sar.modulo_04_documentos.processamento import (
     tipo_real,
 )
 from testes.apoio import corpus
-from testes.apoio.fabrica import Fabrica
+from testes.apoio.fabrica import Fabrica, PacienteFicticio
 
 LIMITES = Limites(pixels_por_pagina=12_000_000, paginas=30)
 CAMPOS = ("cpf", "cns", "data_nascimento")
@@ -34,29 +33,6 @@ def _recusa(funcao: object, *args: object) -> str:
     with pytest.raises(Recusa) as erro:
         funcao(*args)  # type: ignore[operator]
     return erro.value.codigo
-
-
-@pytest.fixture
-def tesseract_falso(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> str:
-    """Um "Tesseract" que devolve sempre o mesmo texto: CPF válido, CNS e uma frase que nunca pode ser guardada."""
-    paciente = Fabrica(7).paciente()
-    texto = f"Paciente {paciente.nome}\nCPF {paciente.cpf}\nCNS {paciente.cns}\nDIAGNOSTICO SIGILOSO\n"
-    script = tmp_path / "tesseract_falso.py"
-    script.write_text(f"import sys\nsys.stdin.buffer.read()\nsys.stdout.write({texto!r})\n", encoding="utf-8")
-    if sys.platform == "win32":
-        programa = tmp_path / "tesseract.cmd"
-        programa.write_text(f'@"{sys.executable}" "{script}" %*\n', encoding="utf-8")
-    else:
-        programa = tmp_path / "tesseract"
-        programa.write_text(f'#!/bin/sh\nexec "{sys.executable}" "{script}" "$@"\n', encoding="utf-8")
-        programa.chmod(0o755)
-    monkeypatch.setenv("SAR_TESSERACT", str(programa))
-    return paciente.cpf
-
-
-@pytest.fixture
-def sem_tesseract(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    monkeypatch.setenv("SAR_TESSERACT", str(tmp_path / "nao-existe"))
 
 
 # ------------------------------------------------------------------ validação
@@ -155,15 +131,16 @@ def test_campos_do_texto_com_confianca_pelo_digito() -> None:
 
 
 @pytest.mark.requisito("CT-DOC-07", "SEG-31", "P-18", "DD-40")
-def test_so_os_campos_do_tipo_saem_da_extracao(tesseract_falso: str) -> None:
+def test_so_os_campos_do_tipo_saem_da_extracao(tesseract_falso: PacienteFicticio) -> None:
     feito = processar([corpus.png()], "scanner", ("cpf",), LIMITES, True)
-    assert [(c.nome, c.valor) for c in feito.campos] == [("cpf", tesseract_falso)]
+    assert [(c.nome, c.valor) for c in feito.campos] == [("cpf", tesseract_falso.cpf)]
     assert b"SIGILOSO" not in feito.conteudo  # o texto integral não vai nem para o documento
 
 
 @pytest.mark.requisito("CT-DOC-08", "QAS-08", "RNF-702")
-def test_extracao_desligada_ou_sem_tesseract_nao_impede(tesseract_falso: str, monkeypatch: pytest.MonkeyPatch,
-                                                        tmp_path: Path) -> None:  # fmt: skip
+def test_extracao_desligada_ou_sem_tesseract_nao_impede(
+    tesseract_falso: PacienteFicticio, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     desligada = processar([corpus.png()], "scanner", ("cpf",), LIMITES, False)
     assert desligada.campos == () and desligada.formato == "pdf"
     monkeypatch.setenv("SAR_TESSERACT", str(tmp_path / "nao-existe"))
@@ -173,9 +150,9 @@ def test_extracao_desligada_ou_sem_tesseract_nao_impede(tesseract_falso: str, mo
 
 # ------------------------------------------------------------------ isolamento
 @pytest.mark.requisito("DD-35", "SEG-30", "CT-DOC-07")
-def test_processamento_no_subprocesso(tesseract_falso: str) -> None:
+def test_processamento_no_subprocesso(tesseract_falso: PacienteFicticio) -> None:
     feito = executar([corpus.png()], "scanner", ("cpf",), LIMITES, True, tempo_maximo=60)
-    assert feito.formato == "pdf" and feito.paginas == 1 and feito.campos[0].valor == tesseract_falso
+    assert feito.formato == "pdf" and feito.paginas == 1 and feito.campos[0].valor == tesseract_falso.cpf
     _conferir_pdfa(feito.conteudo, 1)
     with pytest.raises(Recusa) as erro:
         executar([corpus.pdf_com_javascript()], "scanner", (), LIMITES, False, tempo_maximo=60)

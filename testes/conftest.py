@@ -80,8 +80,8 @@ ZERAR_TRILHA = (
 )
 
 
-# Operação (MOD-03) e cadastro (MOD-02), na ordem das chaves estrangeiras. A aplicação não apaga paciente; só os
-# testes.
+# Operação (MOD-03), documentos (MOD-04) e cadastro (MOD-02), na ordem das chaves estrangeiras. A aplicação não
+# apaga paciente; só os testes.
 ZERAR_CADASTRO = (
     "DELETE FROM mes_alterado",
     "DELETE FROM ciencia_enfermagem",
@@ -97,6 +97,8 @@ ZERAR_CADASTRO = (
     "DELETE FROM contato",
     "DELETE FROM cobertura",
     "DELETE FROM periodo_tratamento",
+    "DELETE FROM ingestao",
+    "UPDATE documento SET substitui_id = NULL",  # versões apontam umas para as outras
     "DELETE FROM documento",
     "DELETE FROM duplicidade_descartada",
     "DELETE FROM rascunho_cadastro",

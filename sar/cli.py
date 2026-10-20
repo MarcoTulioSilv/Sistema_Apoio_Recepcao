@@ -6,6 +6,7 @@
   sar verificar-cadeia       verifica a trilha de auditoria como o job diário (§13.1), pelo usuário do worker
   sar criar-usuario-ti       primeiro TI da implantação, quando não há TI ativo (DD-85)
   sar criar-superusuario     superusuário, só em desenvolvimento (DD-85)
+  sar worker                 consumidor da fila de ingestão de documentos (DD-63), até Ctrl+C
 
 Fica fora dos módulos porque junta comandos do MOD-08 e do MOD-01, como a raiz de composição.
 """
@@ -14,16 +15,27 @@ from __future__ import annotations
 
 import argparse
 import sys
+import threading
 from collections.abc import Sequence
 
 from sqlalchemy.exc import DBAPIError
 
-from sar.composicao import Ambiente, ambiente_atual, compor_auditoria, montar_barramento, montar_executor
+from sar.composicao import (
+    Ambiente,
+    ambiente_atual,
+    antimalware_do_ambiente,
+    compor_auditoria,
+    compor_worker,
+    montar_barramento,
+    montar_executor,
+    pastas_do_ambiente,
+)
 from sar.modulo_01_acesso.contrato import UsuarioCriado
 from sar.modulo_01_acesso.senhas import Hasher
 from sar.modulo_01_acesso.servicos import ServicoAuditoria, ServicoUsuarios
 from sar.modulo_08_dados import cli as banco
 from sar.modulo_08_dados.banco import ConfigBanco, criar_engine
+from sar.modulo_08_dados.cifra import carregar_chave_mestra
 from sar.modulo_08_dados.erros_banco import anotar_restricao
 from sar.modulo_08_dados.relogio import RelogioSistema
 from sar.nucleo.contexto import Contexto
@@ -90,6 +102,21 @@ def criar_superusuario(nome: str, login: str) -> int:
     return 0
 
 
+def worker(parar: threading.Event | None = None) -> int:
+    """Laço da fila de ingestão pelo usuário de banco do worker (DD-58), com o clamd do ambiente."""
+    parar = parar or threading.Event()
+    engine = criar_engine(ConfigBanco.do_ambiente("sar_worker"))
+    try:
+        processador = compor_worker(engine, carregar_chave_mestra(), pastas_do_ambiente(), antimalware_do_ambiente())
+        print("Worker da ingestão no ar. Ctrl+C para parar.", flush=True)
+        processador.rodar(parar)
+    except KeyboardInterrupt:
+        parar.set()
+    finally:
+        engine.dispose()
+    return 0
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="sar", description="Linha de comando do SAR")
     sub = parser.add_subparsers(dest="comando", required=True)
@@ -108,6 +135,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     p = sub.add_parser("criar-superusuario", help="superusuário de desenvolvimento")
     p.add_argument("--nome", required=True)
     p.add_argument("--login", required=True)
+    sub.add_parser("worker", help="consumidor da fila de ingestão de documentos")
     args = parser.parse_args(argv)
     configurar("cli")
     iniciar_requisicao()  # liga as linhas de log e a auditoria desta execução (DD-81)
@@ -123,6 +151,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             return criar_usuario_ti(args.nome, args.login, args.termo_assinado)
         elif args.comando == "criar-superusuario":
             return criar_superusuario(args.nome, args.login)
+        elif args.comando == "worker":
+            return worker()
         else:
             return verificar_cadeia()
     except Exception as erro:

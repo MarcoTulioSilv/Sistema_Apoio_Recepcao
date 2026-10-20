@@ -1,27 +1,29 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from pathlib import Path
 
 import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
 
-from sar.composicao import Ambiente, ambiente_atual, compor
+from sar.composicao import Ambiente, ambiente_atual, compor, pastas_do_ambiente
+from sar.modulo_04_documentos.armazenamento import Pastas
 from sar.nucleo.contexto import Contexto
 from sar.nucleo.portas import Finalidade
 from sar.nucleo.uow import RegistroAuditoria, UnidadeDeTrabalho
 
 
 @pytest.mark.requisito("DD-02", "DD-03")
-def test_componentes_ligados_e_auditoria_passa_pelo_gravador() -> None:
+def test_componentes_ligados_e_auditoria_passa_pelo_gravador(tmp_path: Path) -> None:
     gravados: list[RegistroAuditoria] = []
 
     def gravador(_sessao: Session, registros: Sequence[RegistroAuditoria]) -> None:
         gravados.extend(registros)
 
     engine = create_engine("sqlite://", poolclass=StaticPool)
-    componentes = compor(engine, bytes(32), gravador)
+    componentes = compor(engine, bytes(32), gravador, pastas=Pastas(tmp_path / "cofre", tmp_path / "quarentena"))
     agora = componentes.relogio.agora()
 
     def operacao(uow: UnidadeDeTrabalho) -> None:
@@ -47,3 +49,18 @@ def test_ambiente_desconhecido_e_recusado(monkeypatch: pytest.MonkeyPatch) -> No
     monkeypatch.setenv("SAR_AMBIENTE", "dev")
     with pytest.raises(RuntimeError):
         ambiente_atual()
+
+
+@pytest.mark.requisito("DD-34", "SEG-29")
+def test_pastas_do_armazenamento_obrigatorias_em_producao(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    monkeypatch.delenv("SAR_COFRE", raising=False)
+    monkeypatch.delenv("SAR_QUARENTENA", raising=False)
+    monkeypatch.delenv("SAR_AMBIENTE", raising=False)
+    with pytest.raises(RuntimeError):
+        pastas_do_ambiente()
+    monkeypatch.setenv("SAR_AMBIENTE", "desenvolvimento")
+    assert pastas_do_ambiente().cofre.parts[-2:] == ("armazenamento", "cofre")
+    monkeypatch.setenv("SAR_COFRE", str(tmp_path / "c"))
+    monkeypatch.setenv("SAR_QUARENTENA", str(tmp_path / "c" / "q"))  # dentro do cofre: iria para o backup
+    with pytest.raises(ValueError):
+        pastas_do_ambiente()

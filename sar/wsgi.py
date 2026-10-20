@@ -6,6 +6,8 @@ ambiente: banco pelo usuário sar_web (DD-58), chave mestra do segredo, origem e
   SAR_SUPERUSUARIOS   logins separados por vírgula; só em desenvolvimento, senão o servidor não sobe (DD-85).
                       Login que não existe também impede a subida, com o nome dele na mensagem.
   SAR_PROXIES         quantos proxies confiáveis na frente (Caddy: 1); padrão 0
+  SAR_COFRE           pasta do cofre de documentos (no backup); obrigatória em produção (DD-34)
+  SAR_QUARENTENA      pasta da quarentena (fora do backup, SEG-29); obrigatória em produção
 """
 
 from __future__ import annotations
@@ -15,7 +17,7 @@ import os
 from flask import Flask
 from waitress import serve
 
-from sar.composicao import Ambiente, ambiente_atual, compor, ids_dos_logins
+from sar.composicao import Ambiente, ambiente_atual, compor, ids_dos_logins, pastas_do_ambiente
 from sar.modulo_08_dados.banco import ConfigBanco, criar_engine
 from sar.modulo_08_dados.cifra import carregar_chave_mestra
 from sar.nucleo.logs import configurar
@@ -35,7 +37,7 @@ def montar() -> Flask:
     if logins and not desenvolvimento:
         raise RuntimeError("SAR_SUPERUSUARIOS só vale em desenvolvimento: o servidor não sobe assim (DD-85)")
     engine = criar_engine(ConfigBanco.do_ambiente("sar_web"))
-    componentes = compor(engine, carregar_chave_mestra())
+    componentes = compor(engine, carregar_chave_mestra(), pastas=pastas_do_ambiente())
     superusuarios = ids_dos_logins(componentes.executar, logins) if logins else {}
     faltando = sorted(set(logins) - superusuarios.keys())
     if faltando:

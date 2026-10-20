@@ -52,6 +52,7 @@ export SAR_SEGREDOS="$PWD/segredos" SAR_BANCO_PORTA=3307 SAR_AMBIENTE=desenvolvi
 | `SAR_SUPERUSUARIOS` | Logins que trocam de perfil pelo cabeçalho (DD-85) | o seu login; só em desenvolvimento |
 | `SAR_WEB_PORTA` | Porta da aplicação | `8080` (padrão) |
 | `SAR_PROXIES` | Proxies confiáveis na frente (Caddy) | `0` em desenvolvimento; `1` no servidor |
+| `SAR_COFRE` / `SAR_QUARENTENA` | Pastas do cofre de documentos (vai para o backup) e da quarentena (fora do backup, SEG-29); obrigatórias em produção | `armazenamento\cofre` e `armazenamento\quarentena` no projeto (padrão em desenvolvimento) |
 | `SAR_CLAMAV_HOST` / `SAR_CLAMAV_PORTA` | Onde o clamd escuta (SEG-09) | `127.0.0.1` e `3310` (padrão, o do compose) |
 | `SAR_TESSERACT` | Executável do Tesseract, se não estiver no PATH; sem Tesseract, a extração fica desligada e a conferência é manual (RNF-702) | `C:\Program Files\Tesseract-OCR\tesseract.exe` |
 | `SAR_VERAPDF` | Executável do veraPDF, se não estiver no PATH; sem ele, o teste de PDF/A é pulado (o CI roda) | `C:\verapdf\verapdf.bat` |
@@ -108,6 +109,15 @@ python -m sar.wsgi
   proteção contra requisição forjada (DD-84) recusa os formulários.
 - O terminal fica mostrando os logs em JSON. **Ctrl+C** para o servidor.
 - O superusuário escolhe o perfil no seletor "Agir como (desenvolvimento)", no cabeçalho.
+
+Os documentos digitalizados só chegam à conferência com o worker rodando, num **segundo terminal** preparado
+como na seção 1 (DD-63):
+
+```powershell
+sar worker                                   # consome a fila de ingestão a cada 2 s; Ctrl+C para parar
+```
+
+Em desenvolvimento, o cofre e a quarentena ficam em `armazenamento\` no projeto, fora do Git.
 
 Parar e voltar o banco:
 
