@@ -91,6 +91,8 @@ class RepositorioDocumentos(Protocol):
 
     def criadas_antes(self, estados: Sequence[EstadoIngestao], limite: datetime) -> list[IngestaoGravada]: ...
 
+    def ingestoes_do_paciente(self, paciente_id: int, estados: Sequence[EstadoIngestao]) -> list[IngestaoGravada]: ...
+
     def ids_de_ingestoes(self, ids: Sequence[bytes]) -> dict[bytes, EstadoIngestao]:
         """O estado de cada id existente, para a limpeza da quarentena."""
         ...
@@ -107,3 +109,27 @@ class RepositorioDocumentos(Protocol):
     def sucessor(self, documento_id: bytes) -> bytes | None:
         """A versão que substitui esta, se houver (a vigente é a que não tem sucessor, DD-36)."""
         ...
+
+    def do_paciente(self, paciente_id: int) -> list[DocumentoGravado]:
+        """Todas as versões, descartadas inclusive, por tipo e versão."""
+        ...
+
+    def nao_descartados(self) -> list[DocumentoGravado]:
+        """O acervo vivo, para a retenção (DD-01) e as conferências periódicas (DD-41)."""
+        ...
+
+    def ultimo_documento_em(self, paciente_ids: Sequence[int]) -> dict[int, datetime]:
+        """A captura mais recente de cada paciente, descartados inclusive: é o último registro (DD-01)."""
+        ...
+
+    def revincular(self, documento_ids: Sequence[bytes], paciente_id: int) -> None: ...
+
+    def descartar(self, documento_id: bytes, instante: datetime) -> None:
+        """Apaga a chave e marca o descarte (DD-04); a linha fica como registro."""
+        ...
+
+    def bloquear(self, documento_id: bytes, instante: datetime, motivo: str) -> None:
+        """Só se ainda não estiver bloqueado: o primeiro motivo prevalece (P-19)."""
+        ...
+
+    def desbloquear(self, documento_id: bytes) -> None: ...

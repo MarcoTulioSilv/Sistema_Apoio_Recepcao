@@ -65,7 +65,13 @@ from sar.modulo_03_operacao.sessoes import ServicoSessoes
 from sar.modulo_03_operacao.termos import manipulador_revinculo_termos, manipulador_termos
 from sar.modulo_04_documentos.antimalware import Antimalware, Clamd
 from sar.modulo_04_documentos.armazenamento import Cofre, Pastas, Quarentena
-from sar.modulo_04_documentos.contrato import IngestaoService
+from sar.modulo_04_documentos.contrato import DocumentoService, IngestaoService
+from sar.modulo_04_documentos.documentos import ServicoDocumentos
+from sar.modulo_04_documentos.executores import (
+    ExecutorDesbloquearDocumento,
+    ExecutorDescartarDocumento,
+    ParticipanteAnulacaoDocumentos,
+)
 from sar.modulo_04_documentos.ingestao import ServicoIngestao
 from sar.modulo_04_documentos.worker import ProcessadorIngestoes
 from sar.modulo_05_emissao.contrato import RelatorioService
@@ -229,6 +235,7 @@ class Componentes:
     leitura_operacao: LeituraOperacao
     relatorios: RelatorioService
     ingestao: IngestaoService
+    documentos: DocumentoService
 
 
 # Verificadores de uso dos parâmetros imutáveis (DD-51): a data de implantação trava na primeira sessão confirmada.
@@ -241,8 +248,7 @@ EXECUTORES_AUTORIZAVEIS: dict[str, ExecutorAutorizavel] = {}
 # Quem tem fatos datados que impedem encerrar o período (DD-31, DD-74), além do MOD-03, que o compor() monta.
 VERIFICADORES_IMPEDIMENTO: list[VerificadorImpedimento] = []
 
-# Quem descarta o que está ligado ao cadastro anulado (§6.9, DD-74), além do MOD-03, que o compor() monta. O MOD-04
-# entra no Incremento 4.
+# Quem descarta o que está ligado ao cadastro anulado (§6.9, DD-74), além do MOD-03 e do MOD-04, que o compor() monta.
 PARTICIPANTES_ANULACAO: list[ParticipanteAnulacao] = []
 
 
@@ -269,9 +275,14 @@ def compor(
     cep = provedor_cep or provedor_padrao()
     leitura_cadastro = ServicoLeituraCadastro()
     verificadores = [*VERIFICADORES_IMPEDIMENTO, VerificadorImpedimentoOperacao(auditoria)]
+    cifra = CifraAesGcm(chave_mestra)
+    pastas = pastas or pastas_do_ambiente()
+    quarentena, cofre = Quarentena(pastas.quarentena, cifra), Cofre(pastas.cofre, cifra)
+    marco_retencao = ServicoMarcoRetencao()
     participantes = [
         *PARTICIPANTES_ANULACAO,
         ParticipanteAnulacaoOperacao(auditoria, leitura_cadastro, parametros, relogio),
+        ParticipanteAnulacaoDocumentos(auditoria, cofre, quarentena),
     ]
     executores = dict(EXECUTORES_AUTORIZAVEIS)
     dos_modulos: list[ExecutorAutorizavel] = [
@@ -279,13 +290,12 @@ def compor(
         ExecutorRemoverEvento(auditoria),
         ExecutorAnularPaciente(auditoria, participantes),
         *executores_operacao(auditoria, leitura_cadastro, parametros),
+        ExecutorDescartarDocumento(auditoria, cofre, marco_retencao),
+        ExecutorDesbloquearDocumento(auditoria),
     ]
     for executor in dos_modulos:
         executores.setdefault(executor.tipo, executor)
     autorizacoes = ServicoAutorizacoes(executar, auditoria, executores)
-    cifra = CifraAesGcm(chave_mestra)
-    pastas = pastas or pastas_do_ambiente()
-    quarentena, cofre = Quarentena(pastas.quarentena, cifra), Cofre(pastas.cofre, cifra)
     return Componentes(
         relogio=relogio,
         cifra=cifra,
@@ -312,7 +322,7 @@ def compor(
             FonteRascunhoProximoDoDescarte(parametros),
             *fontes_operacao(leitura_cadastro, parametros),
         ),
-        marco_retencao=ServicoMarcoRetencao(),
+        marco_retencao=marco_retencao,
         leitura_cadastro=leitura_cadastro,
         escalas=ServicoEscalas(executar, auditoria, leitura_cadastro, parametros, autorizacoes),
         turnos=ServicoSessoes(executar, auditoria, leitura_cadastro, parametros, autorizacoes),
@@ -320,6 +330,7 @@ def compor(
         leitura_operacao=ServicoLeituraOperacao(leitura_cadastro, parametros),
         relatorios=ServicoRelatorios(executar, leitura_cadastro),
         ingestao=ServicoIngestao(executar, auditoria, parametros, quarentena, cofre, cifra, relogio),
+        documentos=ServicoDocumentos(executar, auditoria, cofre),
     )
 
 

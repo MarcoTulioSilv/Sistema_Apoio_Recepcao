@@ -15,11 +15,13 @@ from sar.modulo_01_acesso.servicos import ServicoAuditoria
 from sar.modulo_04_documentos.antimalware import AntimalwareIndisponivel, Versao
 from sar.modulo_04_documentos.armazenamento import Cofre, Quarentena
 from sar.modulo_04_documentos.contrato import IngestaoAberta
+from sar.modulo_04_documentos.documentos import ServicoDocumentos
 from sar.modulo_04_documentos.ingestao import ServicoIngestao
 from sar.modulo_04_documentos.worker import ProcessadorIngestoes
 from sar.modulo_06_configuracao.servicos import LeitorParametrosSQL
 from sar.modulo_08_dados.cifra import CifraAesGcm
 from sar.nucleo.contexto import Contexto
+from sar.nucleo.uow import ExecutorDeOperacao
 from testes.apoio import corpus
 from testes.apoio.relogio_controlado import RelogioControlado
 
@@ -52,6 +54,8 @@ class Documentos:
     cofre: Cofre
     antimalware: AntimalwareFalso
     relogio: RelogioControlado
+    documentos: ServicoDocumentos
+    executar: ExecutorDeOperacao
 
     def capturar(self, contexto: Contexto, paciente_id: int, tipo: str, paginas: list[bytes],
                  origem: str = "scanner", **opcoes: str) -> IngestaoAberta:  # fmt: skip
@@ -61,6 +65,13 @@ class Documentos:
             self.ingestao.receber_pagina(aberta.id, aberta.token, numero, io.BytesIO(pagina))
         self.ingestao.concluir(aberta.id, aberta.token, len(paginas))
         return aberta
+
+    def incorporado(self, contexto: Contexto, paciente_id: int, tipo: str, paginas: list[bytes],
+                    origem: str = "scanner", **opcoes: str) -> str:  # fmt: skip
+        """Captura, processa e incorpora; devolve o id do documento."""
+        aberta = self.capturar(contexto, paciente_id, tipo, paginas, origem, **opcoes)
+        assert self.worker.processar_proxima()
+        return self.ingestao.incorporar(contexto, aberta.id)
 
 
 def montar(engine_web: Engine, engine_worker: Engine, pasta: Path, relogio: RelogioControlado) -> Documentos:
@@ -77,4 +88,6 @@ def montar(engine_web: Engine, engine_worker: Engine, pasta: Path, relogio: Relo
         cofre,
         antimalware,
         relogio,
+        ServicoDocumentos(web, ServicoAuditoria(), cofre),
+        web,
     )

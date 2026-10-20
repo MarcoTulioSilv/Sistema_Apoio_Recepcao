@@ -40,6 +40,8 @@ ABRIR = "documento.ingestao.abrir"
 CONFERIR = "documento.ingestao.conferir"
 INCORPORAR = "documento.ingestao.incorporar"
 REJEITAR = "documento.ingestao.rejeitar"
+NOVA_VERSAO = "documento.nova_versao"
+TAMANHO_MOTIVO = 300
 RECONSTRUIDO = "reconstruido"
 FOTO_BYTES_MAXIMO = 2 * 1024 * 1024  # teto fixo da §10.1
 TAMANHO_NONCE = 12
@@ -84,7 +86,7 @@ def decifrar_campos(cifra: Cifra, ingestao_id: bytes, bruto: bytes | None) -> tu
     return tuple(CampoCandidato(nome, valor, confianca) for nome, valor, confianca in json.loads(claro))
 
 
-def _id(texto: str) -> bytes:
+def id_do_texto(texto: str) -> bytes:
     try:
         valor = bytes.fromhex(texto)
     except ValueError:
@@ -139,10 +141,16 @@ class ServicoIngestao:
         origem: str,
         vinculo: str | None = None,
         substitui_id: str | None = None,
+        motivo: str | None = None,
     ) -> IngestaoAberta:
         GUARDA.exigir(contexto, ABRIR)
         autor = _usuario(contexto)
-        substituida = _id(substitui_id) if substitui_id is not None else None
+        substituida = id_do_texto(substitui_id) if substitui_id is not None else None
+        motivo = (motivo or "").strip()
+        if substituida is not None:
+            GUARDA.exigir(contexto, NOVA_VERSAO)
+            if not motivo or len(motivo) > TAMANHO_MOTIVO:
+                raise RegraViolada("versao.motivo")  # correção só por nova versão, com motivo (RF-708)
         token = secrets.token_urlsafe(32)  # DD-05
         ingestao_id = uuid.uuid4().bytes  # nome aleatório da pasta na quarentena (SEG-07)
 
@@ -165,6 +173,9 @@ class ServicoIngestao:
             )  # fmt: skip
             self._auditoria.registrar(uow, contexto, ABRIR, "ingestao", ingestao_id.hex(),
                                       {"tipo": (None, tipo), "paciente_id": (None, paciente_id)})  # fmt: skip
+            if substituida is not None:
+                self._auditoria.registrar(uow, contexto, NOVA_VERSAO, "documento", substituida.hex(),
+                                          {"ingestao": (None, ingestao_id.hex())}, motivo=motivo)  # fmt: skip
 
         self._executar(operacao)
         return IngestaoAberta(ingestao_id.hex(), token)
@@ -196,7 +207,7 @@ class ServicoIngestao:
         return ingestao
 
     def receber_pagina(self, ingestao_id: str, token: str, numero: int, fluxo: BinaryIO) -> None:
-        id_ = _id(ingestao_id)
+        id_ = id_do_texto(ingestao_id)
         ingestao = self._executar(lambda uow: self._pelo_token(uow, id_, token))
         maximo_paginas = 1 if ingestao.origem == "webcam" else self._inteiro("paginas_por_ingestao")
         if not 1 <= numero <= maximo_paginas:
@@ -208,7 +219,7 @@ class ServicoIngestao:
         self._quarentena.gravar(id_, nome_pagina(numero), conteudo)  # cifrado (SEG-08)
 
     def concluir(self, ingestao_id: str, token: str, paginas: int) -> None:
-        id_ = _id(ingestao_id)
+        id_ = id_do_texto(ingestao_id)
 
         def operacao(uow: UnidadeDeTrabalho) -> None:
             ingestao = self._pelo_token(uow, id_, token)
@@ -225,7 +236,7 @@ class ServicoIngestao:
 
     def cancelar(self, contexto: Contexto, ingestao_id: str) -> None:
         GUARDA.exigir(contexto, ABRIR)
-        id_ = _id(ingestao_id)
+        id_ = id_do_texto(ingestao_id)
 
         def operacao(uow: UnidadeDeTrabalho) -> None:
             repo = uow.repositorio(RepositorioDocumentos)
@@ -243,7 +254,7 @@ class ServicoIngestao:
     # ---------------------------------------------------------------- acompanhamento e conferência (etapa 7)
     def situacao(self, contexto: Contexto, ingestao_id: str) -> SituacaoIngestao:
         GUARDA.exigir(contexto, ABRIR)
-        id_ = _id(ingestao_id)
+        id_ = id_do_texto(ingestao_id)
 
         def operacao(uow: UnidadeDeTrabalho) -> SituacaoIngestao:
             ingestao = uow.repositorio(RepositorioDocumentos).ingestao(id_)
@@ -264,7 +275,7 @@ class ServicoIngestao:
 
     def conferir(self, contexto: Contexto, ingestao_id: str) -> Conferencia:
         GUARDA.exigir(contexto, CONFERIR)
-        id_ = _id(ingestao_id)
+        id_ = id_do_texto(ingestao_id)
 
         def operacao(uow: UnidadeDeTrabalho) -> Conferencia:
             ingestao = self._aguardando(uow, id_)
@@ -283,7 +294,7 @@ class ServicoIngestao:
 
     def pagina_em_conferencia(self, contexto: Contexto, ingestao_id: str) -> tuple[bytes, str]:
         GUARDA.exigir(contexto, CONFERIR)
-        id_ = _id(ingestao_id)
+        id_ = id_do_texto(ingestao_id)
         ingestao = self._executar(lambda uow: self._aguardando(uow, id_))
         return self._reconstruido(ingestao), formato(ingestao.origem)
 
@@ -291,7 +302,7 @@ class ServicoIngestao:
     def incorporar(self, contexto: Contexto, ingestao_id: str) -> str:
         GUARDA.exigir(contexto, INCORPORAR)
         _usuario(contexto)
-        id_ = _id(ingestao_id)
+        id_ = id_do_texto(ingestao_id)
 
         def operacao(uow: UnidadeDeTrabalho) -> str:
             repo = uow.repositorio(RepositorioDocumentos)
@@ -333,7 +344,7 @@ class ServicoIngestao:
         GUARDA.exigir(contexto, REJEITAR)
         if motivo not in MOTIVOS_REJEICAO:
             raise RegraViolada("ingestao.motivo")
-        id_ = _id(ingestao_id)
+        id_ = id_do_texto(ingestao_id)
 
         def operacao(uow: UnidadeDeTrabalho) -> None:
             ingestao = self._aguardando(uow, id_, travar=True)

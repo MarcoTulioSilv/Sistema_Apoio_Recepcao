@@ -125,7 +125,10 @@ def test_abertura_confere_tipo_origem_paciente_e_versao(
     docs.worker.processar_proxima()
     v1 = docs.ingestao.incorporar(contexto, primeira.id)
     outra_pagina = corpus.em_formato(corpus.pagina_ficticia(2), "PNG")
-    segunda = docs.capturar(contexto, paciente, "cartao_sus", [outra_pagina], substitui_id=v1)
+    with pytest.raises(RegraViolada) as erro:
+        docs.ingestao.abrir(contexto, paciente, "cartao_sus", "scanner", substitui_id=v1)
+    assert erro.value.codigo == "versao.motivo"
+    segunda = docs.capturar(contexto, paciente, "cartao_sus", [outra_pagina], substitui_id=v1, motivo="Ilegível")
     docs.worker.processar_proxima()
     v2 = docs.ingestao.incorporar(contexto, segunda.id)
     versao, substitui = _linha(engine_migracao, "SELECT versao, substitui_id FROM documento WHERE id = :d",
@@ -133,7 +136,7 @@ def test_abertura_confere_tipo_origem_paciente_e_versao(
     assert versao == 2 and substitui == bytes.fromhex(v1)
     for substituida, tipo in ((v1, "cartao_sus"), (v2, "comprovante_endereco")):  # a não vigente; outro tipo
         with pytest.raises(RegraViolada) as erro:
-            docs.ingestao.abrir(contexto, paciente, tipo, "scanner", substitui_id=substituida)
+            docs.ingestao.abrir(contexto, paciente, tipo, "scanner", substitui_id=substituida, motivo="Corrigir")
         assert erro.value.codigo == "versao.substituida"
     with engine_migracao.begin() as c:
         c.execute(text("UPDATE paciente SET anulado_em = NOW(6) WHERE id = :p"), {"p": paciente})

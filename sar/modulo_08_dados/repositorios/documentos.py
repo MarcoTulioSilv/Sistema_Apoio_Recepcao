@@ -6,7 +6,7 @@ from collections.abc import Sequence
 from datetime import UTC, datetime
 from typing import cast
 
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
 from sar.modulo_08_dados.interfaces.documentos import (
@@ -113,6 +113,10 @@ class RepositorioDocumentosSQL:
         consulta = select(Ingestao).where(Ingestao.estado.in_(estados), Ingestao.criada_em < _gravar(limite))
         return [_ingestao(i) for i in self._s.scalars(consulta.order_by(Ingestao.criada_em))]
 
+    def ingestoes_do_paciente(self, paciente_id: int, estados: Sequence[EstadoIngestao]) -> list[IngestaoGravada]:
+        consulta = select(Ingestao).where(Ingestao.paciente_id == paciente_id, Ingestao.estado.in_(estados))
+        return [_ingestao(i) for i in self._s.scalars(consulta.with_for_update())]
+
     def ids_de_ingestoes(self, ids: Sequence[bytes]) -> dict[bytes, EstadoIngestao]:
         if not ids:
             return {}
@@ -143,3 +147,43 @@ class RepositorioDocumentosSQL:
 
     def sucessor(self, documento_id: bytes) -> bytes | None:
         return self._s.scalar(select(Documento.id).where(Documento.substitui_id == documento_id))
+
+    def do_paciente(self, paciente_id: int) -> list[DocumentoGravado]:
+        consulta = select(Documento).where(Documento.paciente_id == paciente_id)
+        return [_documento(d) for d in self._s.scalars(consulta.order_by(Documento.tipo, Documento.versao))]
+
+    def nao_descartados(self) -> list[DocumentoGravado]:
+        consulta = select(Documento).where(Documento.descartado_em.is_(None)).order_by(Documento.capturado_em)
+        return [_documento(d) for d in self._s.scalars(consulta)]
+
+    def ultimo_documento_em(self, paciente_ids: Sequence[int]) -> dict[int, datetime]:
+        if not paciente_ids:
+            return {}
+        linhas = self._s.execute(
+            select(Documento.paciente_id, func.max(Documento.capturado_em))
+            .where(Documento.paciente_id.in_(paciente_ids))
+            .group_by(Documento.paciente_id)
+        )
+        return {paciente: instante.replace(tzinfo=UTC) for paciente, instante in linhas}
+
+    def revincular(self, documento_ids: Sequence[bytes], paciente_id: int) -> None:
+        self._s.execute(update(Documento).where(Documento.id.in_(documento_ids)).values(paciente_id=paciente_id))
+
+    def descartar(self, documento_id: bytes, instante: datetime) -> None:
+        self._s.execute(
+            update(Documento)
+            .where(Documento.id == documento_id, Documento.descartado_em.is_(None))
+            .values(descartado_em=_gravar(instante), chave_cifrada=None)
+        )
+
+    def bloquear(self, documento_id: bytes, instante: datetime, motivo: str) -> None:
+        self._s.execute(
+            update(Documento)
+            .where(Documento.id == documento_id, Documento.bloqueado_em.is_(None))
+            .values(bloqueado_em=_gravar(instante), bloqueio_motivo=motivo)
+        )
+
+    def desbloquear(self, documento_id: bytes) -> None:
+        self._s.execute(
+            update(Documento).where(Documento.id == documento_id).values(bloqueado_em=None, bloqueio_motivo=None)
+        )
