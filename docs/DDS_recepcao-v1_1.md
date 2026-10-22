@@ -968,7 +968,9 @@ retoma a ingestão do início da etapa 3, porque nenhuma etapa grava fora da qua
 ### 8.5 Agente de captura — protocolo
 
 Validado no teste do R-34 (05 e 06/10/2026), na estação da recepção: Windows 10, Chrome 154, scanner
-Brother DCP-1610NW pelo WIA, vidro e alimentador automático.
+Brother DCP-1610NW pelo WIA, vidro e alimentador automático. A recepção trocou o equipamento pela Brother
+DCP-L2540DW, ligada por USB; a digitalização direta pelo WIA foi repetida em 22/10/2026 (Windows 10, Chrome 155)
+com o mesmo comportamento e tempos menores. As medidas abaixo são as do equipamento novo.
 
 **Fluxo**
 
@@ -1002,20 +1004,20 @@ servidor), **nome** do scanner (DD-79) e porta local. O agente roda na sessão d
 iniciado no logon, porque o WIA precisa de sessão de usuário. Registra só metadados (data, páginas,
 tempos, resultado), nunca imagem.
 
-**Medidas do teste**
+**Medidas do teste** (DCP-L2540DW, 22/10/2026; entre parênteses, a DCP-1610NW de 05/10/2026)
 
 | **Medida** | **Observado** | **Uso** |
 |---|---|---|
-| Página A4 em cinza, 300 dpi, do driver | BMP de 8.741 KB, 2550×3507 | O driver ignora o formato pedido (DD-77) |
-| Mesma página em PNG | 700 KB a 3.986 KB, conforme o conteúdo | Limite de tamanho por página (§10.1) |
-| Conversão BMP → PNG na estação | 145 a 294 ms por página | Desprezível no RNF-208 |
-| Captura pelo vidro | 11,5 a 11,8 s por página | RNF-208 |
-| Alimentador, 3 folhas | 23,9 s no total; primeira página 10,3 s, seguintes 4,5 a 8,3 s | RNF-208; 3 de 3 folhas lidas |
-| Página colorida | 26.207 KB em BMP; cerca de 13,6 s | Motivo da DD-78 |
+| Página A4 em cinza, 300 dpi, do driver | BMP de 8.741 KB, 2550×3507 (igual) | O driver ignora o formato pedido (DD-77) |
+| Mesma página em PNG | 1.248 KB a 1.416 KB (700 KB a 3.986 KB) | Limite de tamanho por página (§10.1) |
+| Conversão BMP → PNG na estação | 128 a 161 ms por página (145 a 294 ms) | Desprezível no RNF-208 |
+| Captura pelo vidro | 8,4 s por página (11,5 a 11,8 s) | RNF-208 |
+| Alimentador, 3 folhas | 14,7 s no total; primeira página 6,9 s, seguintes 2,8 a 4,3 s (23,9 s) | RNF-208; 3 de 3 folhas lidas |
+| Página colorida | 26.207 KB em BMP; 14,8 s (cerca de 13,6 s) | Motivo da DD-78 |
 | Foto da webcam | 1280×720, 128 KB em JPEG | Limites da foto (§10.1) |
 
-**Orçamento do RNF-208 (30 s da captura à conferência, A4 a 300 dpi):** cerca de 12 s de captura,
-menos de 1 s de conversão e envio na rede local, sobrando cerca de 17 s para validação, varredura,
+**Orçamento do RNF-208 (30 s da captura à conferência, A4 a 300 dpi):** cerca de 9 s de captura,
+menos de 1 s de conversão e envio na rede local, sobrando cerca de 20 s para validação, varredura,
 reconstrução e leitura no servidor. O alvo de processamento no servidor fica em **15 s por página**,
 medido no plano de testes (§6.3 do PT_recepcao).
 
