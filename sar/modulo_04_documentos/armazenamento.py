@@ -20,7 +20,7 @@ import uuid
 from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import BinaryIO
+from typing import IO
 
 from cryptography.exceptions import InvalidTag
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
@@ -42,7 +42,7 @@ def hash_das_paginas(hashes: Iterable[str]) -> str:
     return sha256("\n".join(hashes).encode())
 
 
-def ler_limitado(fluxo: BinaryIO, limite: int) -> bytes:
+def ler_limitado(fluxo: IO[bytes], limite: int) -> bytes:
     """Lê o envio em blocos e para assim que passa do limite, sem guardar o excesso (SEG-06)."""
     partes: list[bytes] = []
     total = 0

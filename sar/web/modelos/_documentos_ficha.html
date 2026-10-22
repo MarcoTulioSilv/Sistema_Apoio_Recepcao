@@ -1,0 +1,39 @@
+{# Documentos do paciente na ficha (§8.6): a versão vigente de cada documento, com as anteriores contadas. Bloqueado
+   (P-19) e descartado (DD-04) não têm o que abrir. #}
+<section class="cartao flex flex-col gap-3 p-5" id="documentos" aria-labelledby="docs-t">
+  <div class="flex flex-wrap items-center justify-between gap-3">
+    <h2 id="docs-t" class="m-0 text-xl">Documentos</h2>
+    {% if pode.capturar %}
+    <div class="flex flex-wrap gap-3">
+      <a class="btn-secundario" href="{{ url_for('documentos.digitalizar', paciente_id=ficha.paciente_id) }}">Digitalizar documento</a>
+      <a class="btn-secundario" href="{{ url_for('documentos.foto', paciente_id=ficha.paciente_id) }}">Tirar foto do paciente</a>
+    </div>
+    {% endif %}
+  </div>
+  {% if documentos %}
+  <div class="overflow-x-auto">
+    <table class="w-full border-collapse text-left">
+      <caption class="sr-only">Documentos do paciente</caption>
+      <thead><tr class="text-sm text-suave">
+        <th scope="col" class="px-3 py-2 font-bold">Documento</th>
+        <th scope="col" class="px-3 py-2 font-bold">Versão</th>
+        <th scope="col" class="px-3 py-2 font-bold">Digitalizado em</th>
+        <th scope="col" class="px-3 py-2 font-bold">Ver</th>
+      </tr></thead>
+      <tbody>
+      {% for d in documentos %}{% set v = d.vigente %}
+        <tr class="border-t border-linha" data-documento="{{ v.id }}">
+          <td class="px-3 py-2">{{ d.nome_tipo }}
+            {% if v.bloqueio %} <span class="etiqueta-u">Bloqueado</span>{% endif %}
+            {% if v.descartado_em %} <span class="etiqueta-n">Descartado</span>{% endif %}</td>
+          <td class="numero px-3 py-2">{{ v.versao }}{% if d.anteriores %} <span class="text-sm text-suave">({{ d.anteriores|length }} anterior{{ "es" if d.anteriores|length > 1 }})</span>{% endif %}</td>
+          <td class="px-3 py-2">{{ v.capturado_em|data_hora }}</td>
+          <td class="px-3 py-2"><a href="{{ url_for('documentos.ver', paciente_id=ficha.paciente_id, documento_id=v.id) }}">Abrir<span class="sr-only"> {{ d.nome_tipo }}</span></a></td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}<p class="m-0 text-suave">Nenhum documento digitalizado.</p>
+  {% endif %}
+</section>

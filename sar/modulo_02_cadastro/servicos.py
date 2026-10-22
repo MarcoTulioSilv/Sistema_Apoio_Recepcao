@@ -497,6 +497,14 @@ class ServicoPacientes:
         self._executar(operacao)
 
     # ---------------------------------------------------------------- leitura
+    def identificar(self, contexto: Contexto, paciente_ids: Sequence[int]) -> dict[int, Identificacao]:
+        GUARDA.exigir(contexto, "cadastro.paciente.buscar")
+        if not paciente_ids:
+            return {}
+        return self._executar(
+            lambda uow: {p.id: _identificacao(p) for p in uow.repositorio(RepositorioPaciente).vivos(paciente_ids)}
+        )
+
     def buscar(self, contexto: Contexto, termo: str) -> list[Identificacao]:
         GUARDA.exigir(contexto, "cadastro.paciente.buscar")
         limpo = " ".join(termo.split())

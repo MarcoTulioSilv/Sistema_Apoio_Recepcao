@@ -63,6 +63,10 @@ RESULTADOS = {
     "anulado": "Cadastro anulado: os dados pessoais foram apagados e os números ficaram livres.",
     "pareamento": "Pareamento refeito. O que ficou sem ligação manual é pareado pela ordem das datas (RF-918).",
     "pedido_pareamento": "Pedido enviado à administração: o mês já está fechado (DD-26).",
+    "documento": "Documento guardado.",
+    "documento_campo_recusado": "Documento guardado. O dado lido não foi gravado no cadastro: confira e corrija em "
+    "Editar dados.",
+    "revinculado": "Documento passado para este paciente.",
 }
 
 
@@ -85,6 +89,8 @@ def _permissoes(contexto: Contexto) -> dict[str, bool]:
         "evento": pode("cadastro.evento.registrar"),
         "corrigir_evento": GUARDA.solicitavel(contexto, "cadastro.evento.corrigir"),
         "anular": GUARDA.solicitavel(contexto, "cadastro.paciente.anular"),
+        "documentos": pode("documento.listar"),
+        "capturar": pode("documento.ingestao.abrir"),
     }
 
 
@@ -155,6 +161,7 @@ def _ficha(contexto: Contexto, paciente_id: int, **extra: Any) -> str:
         ultimo=ficha.periodos[-1] if ficha.periodos else None,
         resultado=RESULTADOS.get(request.args.get("resultado", "")),
         frequencia=_frequencia(contexto, paciente_id),
+        documentos=_servicos().documentos.listar(contexto, paciente_id) if pode["documentos"] else None,
         **extra,
     )
 

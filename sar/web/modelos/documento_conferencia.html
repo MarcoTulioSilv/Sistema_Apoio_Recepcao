@@ -1,0 +1,67 @@
+{% extends "layout.html" %}
+{% set d = ficha.dados %}
+{% block titulo_pagina %}Conferir: {{ nome_tipo }}{% endblock %}
+{% block subtitulo %}Confira a imagem e o paciente antes de guardar. {{ s.paginas }} página{{ "s" if s.paginas and s.paginas > 1 }}.{% endblock %}
+{% block conteudo %}
+<div class="flex max-w-6xl flex-col gap-5">
+  {% include "_avisos.html" %}
+  <div class="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1fr)_26rem]">
+    <div class="flex flex-col gap-4">
+      {% for n in range(1, (s.paginas or 1) + 1) %}
+      <figure class="m-0 flex flex-col gap-2">
+        <img class="pagina-documento" src="{{ url_for('documentos.pagina_em_conferencia', ingestao_id=s.id, numero=n) }}" alt="Página {{ n }} de {{ s.paginas or 1 }} do documento capturado">
+        <figcaption class="text-sm text-suave">Página {{ n }} de {{ s.paginas or 1 }}</figcaption>
+      </figure>
+      {% endfor %}
+    </div>
+    <div class="flex flex-col gap-4">
+      <section class="destaque-paciente" aria-labelledby="destino-t">
+        <h2 id="destino-t" class="m-0 text-sm text-suave">Este documento vai para</h2>
+        <p class="m-0 text-xl font-bold">{{ d.nome }}</p>
+        <p class="m-0">Nascimento {{ d.data_nascimento.strftime('%d/%m/%Y') if d.data_nascimento else "—" }} · Mãe: {{ d.nome_mae or "—" }}</p>
+        <p class="m-0 numero text-sm">Prontuário {{ d.prontuario }}</p>
+      </section>
+
+      <form class="flex flex-col gap-4" method="post" action="{{ url_for('documentos.incorporar', ingestao_id=s.id) }}">
+        {% if campos %}
+        <table class="w-full border-collapse text-left">
+          <caption class="rotulo mb-2 text-left">Dados lidos no documento</caption>
+          <thead><tr class="text-sm text-suave">
+            <th scope="col" class="py-1 pr-2 font-bold">Campo</th>
+            <th scope="col" class="py-1 pr-2 font-bold">Lido</th>
+            <th scope="col" class="py-1 pr-2 font-bold">No cadastro</th>
+            <th scope="col" class="py-1 font-bold">Usar</th>
+          </tr></thead>
+          <tbody>
+          {% for c in campos %}
+            <tr class="border-t border-linha" data-campo="{{ c.nome }}">
+              <th scope="row" class="py-2 pr-2">{{ c.rotulo }}</th>
+              <td class="numero py-2 pr-2">{{ c.lido }}{% if c.baixa %} <span class="etiqueta-a">Confira</span>{% endif %}</td>
+              <td class="numero py-2 pr-2">{{ c.atual }}</td>
+              <td class="py-2">{% if c.atualizavel and not c.igual %}<input type="checkbox" name="usar" value="{{ c.nome }}" aria-label="Usar o {{ c.rotulo }} lido">{% elif c.igual %}<span class="text-sm text-suave">Igual</span>{% else %}<span class="text-sm text-suave">Na cobertura</span>{% endif %}</td>
+            </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+        <p class="m-0 text-sm text-suave">Só o que for marcado vai ao cadastro, com a mesma conferência da digitação. O documento é guardado de qualquer forma.</p>
+        {% endif %}
+        <div><button class="btn-primario" type="submit">Guardar o documento</button></div>
+      </form>
+
+      <details>
+        <summary class="cursor-pointer font-bold text-acao">Rejeitar</summary>
+        <form class="mt-2 flex flex-wrap items-end gap-3" method="post" action="{{ url_for('documentos.rejeitar', ingestao_id=s.id) }}">
+          <label class="campo"><span class="rotulo">Motivo</span>
+            <select class="entrada" name="motivo" required>
+              <option value="">Selecione…</option>
+              {% for valor, nome in motivos %}<option value="{{ valor }}">{{ nome }}</option>{% endfor %}
+            </select></label>
+          <button class="btn-urgente" type="submit">Rejeitar o documento</button>
+        </form>
+        <p class="m-0 mt-2 text-sm text-suave">Nada é guardado. Para o paciente errado, digitalize de novo pela ficha certa.</p>
+      </details>
+      <p class="m-0"><a href="{{ url_for('documentos.fila') }}">Voltar à fila</a></p>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -52,6 +52,7 @@ export SAR_SEGREDOS="$PWD/segredos" SAR_BANCO_PORTA=3307 SAR_AMBIENTE=desenvolvi
 | `SAR_SUPERUSUARIOS` | Logins que trocam de perfil pelo cabeçalho (DD-85) | o seu login; só em desenvolvimento |
 | `SAR_WEB_PORTA` | Porta da aplicação | `8080` (padrão) |
 | `SAR_PROXIES` | Proxies confiáveis na frente (Caddy) | `0` em desenvolvimento; `1` no servidor |
+| `SAR_AGENTE_PORTA` | Porta do agente de captura nas estações, no loopback (DD-98); a mesma da configuração do agente | `47830` (padrão) |
 | `SAR_COFRE` / `SAR_QUARENTENA` | Pastas do cofre de documentos (vai para o backup) e da quarentena (fora do backup, SEG-29); obrigatórias em produção | `armazenamento\cofre` e `armazenamento\quarentena` no projeto (padrão em desenvolvimento) |
 | `SAR_CLAMAV_HOST` / `SAR_CLAMAV_PORTA` | Onde o clamd escuta (SEG-09) | `127.0.0.1` e `3310` (padrão, o do compose) |
 | `SAR_TESSERACT` | Executável do Tesseract, se não estiver no PATH; sem Tesseract, a extração fica desligada e a conferência é manual (RNF-702) | `C:\Program Files\Tesseract-OCR\tesseract.exe` |

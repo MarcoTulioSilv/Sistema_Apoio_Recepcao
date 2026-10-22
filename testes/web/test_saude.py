@@ -14,12 +14,15 @@ from testes.apoio.vazamento import ColetorLogs
 MODELOS = Path(__file__).resolve().parents[2] / "sar" / "web" / "modelos"
 
 
-@pytest.mark.requisito("DD-09")
+@pytest.mark.requisito("DD-09", "DD-98")
 def test_saude_responde_com_politica_de_conteudo_estrita() -> None:
     resposta = criar_app().test_client().get("/saude")
     assert resposta.status_code == 200
-    assert resposta.headers["Content-Security-Policy"] == POLITICA_CONTEUDO
-    assert "unsafe-inline" not in POLITICA_CONTEUDO
+    politica = resposta.headers["Content-Security-Policy"]
+    assert politica == POLITICA_CONTEUDO.format(agente="http://127.0.0.1:47830")
+    assert "unsafe-inline" not in politica and "*" not in politica
+    # Além do próprio servidor, só o agente de captura no loopback da estação.
+    assert "connect-src 'self' http://127.0.0.1:47830;" in politica
     assert resposta.headers["X-Content-Type-Options"] == "nosniff"
 
 

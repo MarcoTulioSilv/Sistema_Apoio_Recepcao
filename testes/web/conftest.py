@@ -54,8 +54,9 @@ def endereco(engine_web: Engine, provedor_cep: ProvedorCepFalso, relogio_do_serv
 
 @pytest.fixture(scope="module")
 def navegador() -> Iterator[Browser]:
+    # Câmera falsa (padrão de teste) com a permissão concedida sem diálogo: só age quando a página pede a câmera.
     with sync_playwright() as p:
-        navegador = p.chromium.launch()
+        navegador = p.chromium.launch(args=["--use-fake-device-for-media-stream", "--use-fake-ui-for-media-stream"])
         yield navegador
         navegador.close()
 

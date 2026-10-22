@@ -6,7 +6,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import date, datetime
 from enum import Enum
-from typing import BinaryIO, Protocol
+from typing import IO, Protocol
 
 from sar.nucleo.contexto import Contexto
 from sar.nucleo.uow import UnidadeDeTrabalho
@@ -31,6 +31,14 @@ MOTIVOS_REJEICAO = ("ilegivel", "paciente_errado", "tipo_errado")
 
 
 @dataclass(frozen=True, slots=True)
+class TipoDocumento:
+    codigo: str
+    nome: str
+    origem: str  # "scanner" ou "webcam"
+    familia: str  # "cadastro" ou "prontuario"
+
+
+@dataclass(frozen=True, slots=True)
 class IngestaoAberta:
     id: str  # 32 hexadecimais
     token: str  # de uso único (DD-05); só existe nesta resposta, o banco guarda o hash
@@ -52,6 +60,8 @@ class SituacaoIngestao:
     estado: EstadoIngestao
     motivo: str | None  # código da rejeição (SEG-12)
     paginas: int | None
+    atualizada_em: datetime
+    nova_versao: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -64,6 +74,10 @@ class Conferencia:
 
 
 class IngestaoService(Protocol):
+    def tipos(self, contexto: Contexto) -> list[TipoDocumento]:
+        """O catálogo fixo (DEC-41, §8.2), em ordem de nome, para a tela escolher."""
+        ...
+
     def abrir(
         self,
         contexto: Contexto,
@@ -78,7 +92,7 @@ class IngestaoService(Protocol):
         ou versão substituída que não é a vigente do mesmo paciente e tipo. Nova versão exige motivo (RF-708)."""
         ...
 
-    def receber_pagina(self, ingestao_id: str, token: str, numero: int, fluxo: BinaryIO) -> None:
+    def receber_pagina(self, ingestao_id: str, token: str, numero: int, fluxo: IO[bytes]) -> None:
         """Etapa 2, uma página por chamada (§8.5). `AcessoNegado` com token inválido, vencido ou já usado;
         `RegraViolada("arquivo.tamanho")` ou `RegraViolada("pagina.numero")`."""
         ...
@@ -99,8 +113,12 @@ class IngestaoService(Protocol):
         """Abre a conferência (auditada). `RegraViolada("ingestao.estado")` fora de "aguardando conferência"."""
         ...
 
-    def pagina_em_conferencia(self, contexto: Contexto, ingestao_id: str) -> tuple[bytes, str]:
-        """O documento reconstruído, da quarentena, com o formato ("pdf" ou "jpeg"). `IntegridadeViolada`."""
+    def pagina_em_conferencia(self, contexto: Contexto, ingestao_id: str, numero: int) -> PaginaDocumento:
+        """Uma página do documento reconstruído, da quarentena, como imagem. `IntegridadeViolada`, `NaoEncontrado`."""
+        ...
+
+    def a_conferir(self, contexto: Contexto) -> list[SituacaoIngestao]:
+        """A fila da conferência: as que esperam, das mais antigas às mais novas."""
         ...
 
     def incorporar(self, contexto: Contexto, ingestao_id: str) -> str:

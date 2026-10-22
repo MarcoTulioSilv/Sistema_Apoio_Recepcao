@@ -17,7 +17,7 @@ from sar.modulo_04_documentos.contrato import EstadoIngestao, IngestaoAberta
 from sar.modulo_04_documentos.ingestao import RECONSTRUIDO, hash_token
 from sar.modulo_08_dados.interfaces.documentos import RepositorioDocumentos
 from sar.nucleo.contexto import Perfil
-from sar.nucleo.erros import AcessoNegado, IntegridadeViolada, RegraViolada
+from sar.nucleo.erros import AcessoNegado, IntegridadeViolada, NaoEncontrado, RegraViolada
 from testes.apoio import corpus
 from testes.apoio.cadastro import AGORA, INICIO, dados_completos, pessoa
 from testes.apoio.cadastro import montar as montar_cadastro
@@ -63,8 +63,14 @@ def test_captura_processamento_conferencia_e_incorporacao(
     conferencia = docs.ingestao.conferir(pessoa(ids), aberta.id)
     assert conferencia.situacao.estado is EstadoIngestao.AGUARDANDO_CONFERENCIA and conferencia.situacao.paginas == 2
     assert conferencia.campos == () and conferencia.vinculo == "T-1"
-    reconstruido, formato = docs.ingestao.pagina_em_conferencia(pessoa(ids), aberta.id)
-    assert formato == "pdf" and len(pikepdf.open(io.BytesIO(reconstruido)).pages) == 2
+    reconstruido = docs.quarentena.ler(bytes.fromhex(aberta.id), RECONSTRUIDO)
+    assert len(pikepdf.open(io.BytesIO(reconstruido)).pages) == 2
+    primeira = docs.ingestao.pagina_em_conferencia(pessoa(ids), aberta.id, 1)
+    assert primeira.tipo_midia == "image/jpeg" and primeira.conteudo[:3] == bytes([0xFF, 0xD8, 0xFF])
+    assert docs.ingestao.pagina_em_conferencia(pessoa(ids), aberta.id, 2).conteudo != primeira.conteudo
+    with pytest.raises(NaoEncontrado):
+        docs.ingestao.pagina_em_conferencia(pessoa(ids), aberta.id, 3)
+    assert [s.id for s in docs.ingestao.a_conferir(pessoa(ids))] == [aberta.id]
 
     documento_id = docs.ingestao.incorporar(pessoa(ids), aberta.id)
     assert _estado(docs, aberta, ids) is EstadoIngestao.INCORPORADA
@@ -87,8 +93,8 @@ def test_foto_pela_webcam(docs: Documentos, paciente: int, cadastro_zerado: dict
     ids = cadastro_zerado
     aberta = docs.capturar(pessoa(ids), paciente, "foto_paciente", [corpus.foto_com_exif()], origem="webcam")
     docs.worker.processar_proxima()
-    foto, formato = docs.ingestao.pagina_em_conferencia(pessoa(ids), aberta.id)
-    assert formato == "jpeg" and foto.startswith(b"\xff\xd8\xff") and b"Ficticia" not in foto
+    foto = docs.ingestao.pagina_em_conferencia(pessoa(ids), aberta.id, 1).conteudo
+    assert foto.startswith(b"\xff\xd8\xff") and b"Ficticia" not in foto
     docs.ingestao.incorporar(pessoa(ids), aberta.id)
 
 

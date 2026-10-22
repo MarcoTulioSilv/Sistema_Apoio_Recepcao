@@ -1,0 +1,28 @@
+{# Andamento da ingestão até a conferência (§8.4). O script da tela repete o pedido a cada 2 s enquanto não houver
+   data-final. #}
+{% set recusa = s.estado.value in ("rejeitada", "expirada", "cancelada") %}
+<section class="situacao-captura max-w-xl" role="status" data-ingestao="{{ s.id }}"
+         data-estado="{{ 'recusada' if recusa else ('pronta' if s.estado.value == 'aguardando_conferencia' else 'processando') }}"
+         data-url="{{ url_for('documentos.situacao', ingestao_id=s.id) }}"{% if final %} data-final{% endif %}>
+  <h2 class="m-0 text-base">{{ estados[s.estado] }}</h2>
+  {% if not recusa %}
+  <ol class="passos">
+    {% for rotulo in ("Digitalizar", "Conferir o arquivo", "Pronto para conferência") %}
+    <li{% if loop.index0 < passo %} data-feito{% elif loop.index0 == passo %} aria-current="step"{% endif %}>{{ rotulo }}</li>
+    {% endfor %}
+  </ol>
+  {% endif %}
+  {% if s.estado.value == "aguardando_conferencia" %}
+    {% if pode.conferir %}<a class="btn-primario w-fit" href="{{ url_for('documentos.conferencia', ingestao_id=s.id) }}">Conferir agora</a>{% endif %}
+  {% elif s.estado.value == "rejeitada" %}
+    <p class="m-0 font-bold text-urgencia">{{ motivo }}</p>
+    <p class="m-0">Nada foi guardado. Digitalize o papel de novo.</p>
+  {% elif s.estado.value in ("recebida", "em_processamento") %}
+    <p class="m-0">O servidor está verificando e preparando {{ s.paginas }} página{{ "s" if s.paginas and s.paginas > 1 }}. Leva alguns segundos.</p>
+  {% elif s.estado.value == "aberta" %}
+    <p class="m-0" data-aguardando>Esperando o scanner. Não tire o papel até terminar.</p>
+    <form method="post" action="{{ url_for('documentos.cancelar', ingestao_id=s.id) }}" data-cancelar>
+      <button class="btn-neutro" type="submit">Cancelar</button>
+    </form>
+  {% endif %}
+</section>

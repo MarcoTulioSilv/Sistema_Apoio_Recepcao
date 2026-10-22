@@ -211,6 +211,11 @@ class PacienteService(Protocol):
         na ficha e na lista de pendências."""
         ...
 
+    def identificar(self, contexto: Contexto, paciente_ids: Sequence[int]) -> dict[int, Identificacao]:
+        """Nome, prontuário, nascimento e mãe de pacientes já conhecidos pela tela (a fila da conferência), numa
+        consulta só (§11.3). Como a lista de pacientes, não vai à trilha: não é busca. Anulados ficam de fora."""
+        ...
+
     def buscar(self, contexto: Contexto, termo: str) -> list[Identificacao]:
         """Pelo nome (contém, sem caixa e acento), pelo começo do prontuário, ou pelo começo do CPF ou do CNS (a
         partir de 3 dígitos, com ou sem pontuação). Termo com menos de 2 caracteres não busca. Anulados nunca

@@ -168,6 +168,16 @@
 @utility simulador { @apply m-0 flex flex-wrap items-center gap-2 rounded-xl border border-dashed border-borda-forte px-4 pt-1 pb-3; }
 @utility opcao-simulador { @apply inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-lg border border-borda bg-superficie px-3 has-checked:border-acao has-checked:font-bold; }
 
+/* Documentos (Incremento 4): página como imagem, paciente de destino na conferência, situação da captura, câmera */
+@utility pagina-documento { @apply block h-auto w-full max-w-3xl rounded-lg border border-borda bg-superficie; }
+@utility destaque-paciente { @apply flex flex-col gap-1 rounded-xl border-2 border-acao bg-acao-clara p-4; }
+@utility situacao-captura {
+  @apply flex flex-col gap-2 rounded-xl border border-borda bg-superficie p-4;
+  &[data-estado="pronta"] { @apply border-aprovar bg-aprovar-fundo; }
+  &[data-estado="recusada"] { @apply border-urgencia-borda bg-urgencia-fundo; }
+}
+@utility video-camera { @apply block aspect-video w-full max-w-xl rounded-lg bg-menu; }
+
 /* Guia de componentes (só na página do guia) */
 @utility codigo { @apply m-0 overflow-x-auto rounded-lg bg-menu p-3 text-[13px] leading-relaxed text-menu-texto; }
 @utility amostra { @apply flex flex-wrap items-start gap-3 rounded-lg border border-dashed border-borda-forte bg-fundo p-4; }

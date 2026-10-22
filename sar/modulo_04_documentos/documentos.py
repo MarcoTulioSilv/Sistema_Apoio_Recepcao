@@ -4,14 +4,11 @@ o bloqueio ficar mesmo com a leitura recusada."""
 
 from __future__ import annotations
 
-import io
-
-import pikepdf
-
 from sar.modulo_01_acesso.contrato import AuditService, PermissionGuard
 from sar.modulo_04_documentos.armazenamento import Cofre
 from sar.modulo_04_documentos.contrato import DocumentoDoTipo, PaginaDocumento, VersaoDocumento
 from sar.modulo_04_documentos.ingestao import id_do_texto
+from sar.modulo_04_documentos.paginas import JPEG, formato_da_origem, paginas_jpeg
 from sar.modulo_08_dados.interfaces.documentos import DocumentoGravado, RepositorioDocumentos
 from sar.nucleo.contexto import Contexto
 from sar.nucleo.erros import IntegridadeViolada, NaoEncontrado, RegraViolada
@@ -24,20 +21,10 @@ VER = "documento.ver"
 BAIXAR = "documento.baixar"
 REVINCULAR = "documento.revincular"
 TAMANHO_MOTIVO = 300
-JPEG = "image/jpeg"
-
-
-def paginas_jpeg(conteudo: bytes, formato: str) -> list[bytes]:
-    """As páginas como imagem, sem reprocessar: a foto é o próprio JPEG; no PDF/A reconstruído (SEG-10), cada página
-    tem uma imagem DCT só, que é o JPEG da página."""
-    if formato == "jpeg":
-        return [conteudo]
-    with pikepdf.open(io.BytesIO(conteudo)) as pdf:
-        return [bytes(pagina.Resources.XObject.Im0.read_raw_bytes()) for pagina in pdf.pages]
 
 
 def formato_do(documento: DocumentoGravado) -> str:
-    return "jpeg" if documento.origem == "webcam" else "pdf"
+    return formato_da_origem(documento.origem)
 
 
 def cadeia(repo: RepositorioDocumentos, documento: DocumentoGravado) -> list[DocumentoGravado]:

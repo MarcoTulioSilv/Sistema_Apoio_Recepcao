@@ -15,7 +15,7 @@ from PIL import Image
 from sar.modulo_01_acesso.contrato import AuditService, PermissionGuard
 from sar.modulo_04_documentos.armazenamento import Cofre
 from sar.modulo_04_documentos.contrato import ElegivelDescarte
-from sar.modulo_04_documentos.documentos import formato_do
+from sar.modulo_04_documentos.paginas import formato_da_origem
 from sar.modulo_04_documentos.retencao import elegiveis
 from sar.modulo_08_dados.interfaces.documentos import DocumentoGravado, RepositorioDocumentos
 from sar.nucleo.contexto import Contexto
@@ -110,7 +110,7 @@ class ServicoLeituraDocumentos:
         abertos = []
         try:
             for documento, conteudo in self._entregar(contexto, documentos):
-                if formato_do(documento) == "jpeg":
+                if formato_da_origem(documento.origem) == "jpeg":
                     copia.pages.append(pagina_da_foto(copia, conteudo))
                     continue
                 origem = pikepdf.open(io.BytesIO(conteudo))

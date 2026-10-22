@@ -6,6 +6,7 @@ ambiente: banco pelo usuário sar_web (DD-58), chave mestra do segredo, origem e
   SAR_SUPERUSUARIOS   logins separados por vírgula; só em desenvolvimento, senão o servidor não sobe (DD-85).
                       Login que não existe também impede a subida, com o nome dele na mensagem.
   SAR_PROXIES         quantos proxies confiáveis na frente (Caddy: 1); padrão 0
+  SAR_AGENTE_PORTA    porta do agente de captura nas estações, no loopback; padrão 47830 (DD-98)
   SAR_COFRE           pasta do cofre de documentos (no backup); obrigatória em produção (DD-34)
   SAR_QUARENTENA      pasta da quarentena (fora do backup, SEG-29); obrigatória em produção
 """
@@ -51,6 +52,7 @@ def montar() -> Flask:
         desenvolvimento=desenvolvimento,
         superusuarios=frozenset(superusuarios.values()),
         proxies_confiaveis=int(os.environ.get("SAR_PROXIES", "0")),
+        porta_agente=int(os.environ.get("SAR_AGENTE_PORTA", "47830")),
     )
     servicos = ServicosWeb(
         componentes.autenticacao,
@@ -70,6 +72,8 @@ def montar() -> Flask:
         componentes.turnos,
         componentes.frequencia,
         componentes.relatorios,
+        componentes.ingestao,
+        componentes.documentos,
     )
     return criar_app(servicos, config)
 

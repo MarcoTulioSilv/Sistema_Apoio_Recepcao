@@ -57,6 +57,8 @@ def servicos_web(
         componentes.turnos,
         componentes.frequencia,
         componentes.relatorios,
+        componentes.ingestao,
+        componentes.documentos,
     )
 
 

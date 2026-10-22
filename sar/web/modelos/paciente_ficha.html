@@ -167,6 +167,8 @@
 
   {% if frequencia %}{% include "_frequencia_ficha.html" %}{% endif %}
 
+  {% if documentos is not none %}{% include "_documentos_ficha.html" %}{% endif %}
+
   <section class="cartao flex flex-col gap-3 p-5" aria-labelledby="tel-t">
     <h2 id="tel-t" class="m-0 text-xl">Telefones do paciente</h2>
     {% for t in ficha.telefones %}

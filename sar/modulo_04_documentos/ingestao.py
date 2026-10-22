@@ -15,7 +15,7 @@ import uuid
 from collections.abc import Sequence
 from dataclasses import replace
 from datetime import timedelta
-from typing import BinaryIO
+from typing import IO
 
 from sar.modulo_01_acesso.contrato import AuditService, PermissionGuard
 from sar.modulo_04_documentos.armazenamento import Cofre, Quarentena, hash_das_paginas, ler_limitado, sha256
@@ -25,8 +25,11 @@ from sar.modulo_04_documentos.contrato import (
     Conferencia,
     EstadoIngestao,
     IngestaoAberta,
+    PaginaDocumento,
     SituacaoIngestao,
+    TipoDocumento,
 )
+from sar.modulo_04_documentos.paginas import JPEG, formato_da_origem, paginas_jpeg
 from sar.modulo_08_dados.interfaces.documentos import DocumentoGravado, IngestaoGravada, RepositorioDocumentos
 from sar.nucleo.contexto import Contexto
 from sar.nucleo.erros import AcessoNegado, IntegridadeViolada, NaoEncontrado, RegraViolada
@@ -58,10 +61,6 @@ def paginas_recebidas(quarentena: Quarentena, ingestao_id: bytes) -> list[str]:
 
 def hash_token(token: str) -> str:
     return hashlib.sha256(token.encode()).hexdigest()
-
-
-def formato(origem: str) -> str:
-    return "jpeg" if origem == "webcam" else "pdf"
 
 
 # ------------------------------------------------------------------ campos candidatos cifrados (P-18)
@@ -104,7 +103,8 @@ def _usuario(contexto: Contexto) -> int:
 
 def situacao_de(ingestao: IngestaoGravada) -> SituacaoIngestao:
     return SituacaoIngestao(ingestao.id.hex(), ingestao.paciente_id, ingestao.tipo, ingestao.origem,
-                            EstadoIngestao(ingestao.estado), ingestao.motivo_rejeicao, ingestao.paginas)  # fmt: skip
+                            EstadoIngestao(ingestao.estado), ingestao.motivo_rejeicao, ingestao.paginas,
+                            ingestao.atualizada_em, ingestao.substitui_id is not None)  # fmt: skip
 
 
 class ServicoIngestao:
@@ -131,6 +131,11 @@ class ServicoIngestao:
         if not isinstance(valor, int) or isinstance(valor, bool):
             raise RuntimeError(f"parâmetro {nome} sem valor inteiro")
         return valor
+
+    def tipos(self, contexto: Contexto) -> list[TipoDocumento]:
+        GUARDA.exigir(contexto, ABRIR)
+        tipos = self._executar(lambda uow: uow.repositorio(RepositorioDocumentos).tipos())
+        return sorted((TipoDocumento(t.codigo, t.nome, t.origem, t.familia) for t in tipos), key=lambda t: t.nome)
 
     # ---------------------------------------------------------------- etapa 1
     def abrir(
@@ -206,7 +211,7 @@ class ServicoIngestao:
             raise AcessoNegado()
         return ingestao
 
-    def receber_pagina(self, ingestao_id: str, token: str, numero: int, fluxo: BinaryIO) -> None:
+    def receber_pagina(self, ingestao_id: str, token: str, numero: int, fluxo: IO[bytes]) -> None:
         id_ = id_do_texto(ingestao_id)
         ingestao = self._executar(lambda uow: self._pelo_token(uow, id_, token))
         maximo_paginas = 1 if ingestao.origem == "webcam" else self._inteiro("paginas_por_ingestao")
@@ -292,11 +297,21 @@ class ServicoIngestao:
             raise IntegridadeViolada("documento reconstruído não confere")
         return conteudo
 
-    def pagina_em_conferencia(self, contexto: Contexto, ingestao_id: str) -> tuple[bytes, str]:
+    def pagina_em_conferencia(self, contexto: Contexto, ingestao_id: str, numero: int) -> PaginaDocumento:
         GUARDA.exigir(contexto, CONFERIR)
         id_ = id_do_texto(ingestao_id)
         ingestao = self._executar(lambda uow: self._aguardando(uow, id_))
-        return self._reconstruido(ingestao), formato(ingestao.origem)
+        paginas = paginas_jpeg(self._reconstruido(ingestao), formato_da_origem(ingestao.origem))
+        if not 1 <= numero <= len(paginas):
+            raise NaoEncontrado()
+        return PaginaDocumento(paginas[numero - 1], JPEG)
+
+    def a_conferir(self, contexto: Contexto) -> list[SituacaoIngestao]:
+        GUARDA.exigir(contexto, CONFERIR)
+        ingestoes = self._executar(
+            lambda uow: uow.repositorio(RepositorioDocumentos).em_estado(["aguardando_conferencia"])
+        )
+        return [situacao_de(i) for i in ingestoes]
 
     # ---------------------------------------------------------------- etapa 8
     def incorporar(self, contexto: Contexto, ingestao_id: str) -> str:
