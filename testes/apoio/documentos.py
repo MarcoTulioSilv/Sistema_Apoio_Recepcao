@@ -33,6 +33,8 @@ class AntimalwareFalso:
     assinaturas_em: datetime = datetime(2026, 10, 13, 6, tzinfo=UTC)
     fora_do_ar: bool = False
     varridos: list[bytes] = field(default_factory=list)
+    recargas: int = 0
+    base_nova: datetime | None = None  # o que a recarga carrega; None: a base continua a mesma
 
     def versao(self) -> Versao:
         if self.fora_do_ar:
@@ -44,6 +46,13 @@ class AntimalwareFalso:
             raise AntimalwareIndisponivel("fora do ar")
         self.varridos.append(dados)
         return "Eicar-Test-Signature" if dados.startswith(corpus.eicar()) else None
+
+    def recarregar(self) -> None:
+        if self.fora_do_ar:
+            raise AntimalwareIndisponivel("fora do ar")
+        self.recargas += 1
+        if self.base_nova is not None:
+            self.assinaturas_em = self.base_nova
 
 
 @dataclass(frozen=True, slots=True)

@@ -231,7 +231,7 @@ def test_hostis_rejeitados_pelo_worker_sem_sobrar_nada(
     _linha(engine_migracao, "SELECT 1 WHERE (SELECT COUNT(*) FROM documento) = 0")
 
 
-@pytest.mark.requisito("SEG-21", "DD-95", "SEG-09")
+@pytest.mark.requisito("SEG-21", "DD-95", "SEG-09", "DD-99")
 def test_antimalware_vencido_rejeita_e_fora_do_ar_espera(
     docs: Documentos, paciente: int, cadastro_zerado: dict[str, int]
 ) -> None:
@@ -243,9 +243,29 @@ def test_antimalware_vencido_rejeita_e_fora_do_ar_espera(
     assert docs.quarentena.nomes(bytes.fromhex(aberta.id)) == ["p0001"]
     docs.antimalware.fora_do_ar = False
     docs.antimalware.assinaturas_em = AGORA - timedelta(hours=49)
+    # DD-99: base vencida pede a recarga e espera com a ingestão na fila; só recusa se continuar vencida.
+    assert not docs.worker.processar_proxima()
+    assert docs.antimalware.recargas == 1 and _estado(docs, aberta, ids) is EstadoIngestao.RECEBIDA
+    docs.relogio.avancar(timedelta(minutes=1))
+    assert not docs.worker.processar_proxima() and docs.antimalware.recargas == 1  # ainda esperando
+    docs.relogio.avancar(timedelta(minutes=2))
     assert docs.worker.processar_proxima()
     situacao = docs.ingestao.situacao(pessoa(ids), aberta.id)
     assert (situacao.estado, situacao.motivo) == (EstadoIngestao.REJEITADA, "antimalware.assinaturas_vencidas")
+
+
+@pytest.mark.requisito("DD-99", "SEG-21")
+def test_base_vencida_carregada_se_resolve_com_a_recarga(
+    docs: Documentos, paciente: int, cadastro_zerado: dict[str, int], sem_tesseract: None
+) -> None:
+    """O atualizador baixou a base nova, mas o clamd subiu junto e ficou com a antiga: a recarga resolve."""
+    ids = cadastro_zerado
+    docs.antimalware.assinaturas_em = AGORA - timedelta(hours=60)
+    docs.antimalware.base_nova = AGORA - timedelta(hours=8)
+    aberta = docs.capturar(pessoa(ids), paciente, "cartao_sus", [corpus.png()])
+    assert not docs.worker.processar_proxima() and docs.antimalware.recargas == 1
+    assert docs.worker.processar_proxima()
+    assert _estado(docs, aberta, ids) is EstadoIngestao.AGUARDANDO_CONFERENCIA
 
 
 @pytest.mark.requisito("SEG-27", "SEG-15")

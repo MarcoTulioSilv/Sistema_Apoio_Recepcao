@@ -43,7 +43,7 @@ from sar.modulo_08_dados.cifra import carregar_chave_mestra
 from sar.modulo_08_dados.erros_banco import anotar_restricao
 from sar.modulo_08_dados.relogio import RelogioSistema
 from sar.nucleo.contexto import Contexto
-from sar.nucleo.erros import RegraViolada
+from sar.nucleo.erros import ConfiguracaoInvalida, RegraViolada
 from sar.nucleo.logs import campos_do_erro, configurar, iniciar_requisicao
 
 
@@ -189,6 +189,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             return rotina_documentos(args.comando, getattr(args, "depois_de", None), getattr(args, "minutos", None))
         else:
             return verificar_cadeia()
+    except ConfiguracaoInvalida as erro:
+        print(f"Falhou: {erro}", file=sys.stderr)  # mensagem nossa, sem dado pessoal nem segredo
+        return 1
     except Exception as erro:
         if isinstance(erro, DBAPIError):
             anotar_restricao(erro)

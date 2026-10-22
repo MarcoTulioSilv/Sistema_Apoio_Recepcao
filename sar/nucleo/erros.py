@@ -55,3 +55,8 @@ class IntegridadeViolada(ErroSAR):
 
 class IndisponivelExterno(ErroSAR):
     """Serviço externo fora do ar; o fluxo segue sem ele (RNF-507)."""
+
+
+class ConfiguracaoInvalida(RuntimeError):
+    """Ambiente mal configurado na subida (variável, segredo, pasta). A mensagem é escrita por nós, nunca traz dado
+    pessoal nem segredo, e diz o que fazer: a linha de comando a mostra por extenso, ao contrário dos outros erros."""

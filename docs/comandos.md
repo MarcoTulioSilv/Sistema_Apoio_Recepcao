@@ -256,6 +256,7 @@ python scripts\gerar_municipios_ibge.py
 | `'export' não é reconhecido` | PowerShell com sintaxe do Git Bash. Use `$env:NOME = "valor"` |
 | `sar` não é reconhecido | O `.venv` não está ativo: `.\.venv\Scripts\Activate.ps1` |
 | `Can't connect to MySQL` / conexão recusada | O banco não está no ar: abra o Docker Desktop e rode `docker compose up -d --wait mysql` |
+| `sar worker` falha com `SAR_COFRE e SAR_QUARENTENA são obrigatórias` | O terminal do worker não tem `SAR_AMBIENTE=desenvolvimento`, e sem ela o SAR se comporta como produção (DD-85). Prepare o segundo terminal com as variáveis da seção 1, como o do servidor |
 | `segredo ausente` | `SAR_SEGREDOS` não definida neste terminal (seção 1) |
 | Formulário dá "Forbidden" (403) | Página aberta como `localhost`. Use `http://127.0.0.1:8080` |
 | Tela sem estilo | Falta gerar o CSS (seção 7) |

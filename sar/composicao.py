@@ -105,6 +105,7 @@ from sar.modulo_08_dados.repositorios.sessoes import RepositorioSessaoSQL
 from sar.modulo_08_dados.repositorios.trilha import RepositorioExpurgoSQL, RepositorioTrilhaSQL
 from sar.modulo_08_dados.repositorios.usuarios import RepositorioUsuarioSQL
 from sar.modulo_08_dados.uow import ExecutorSQL, FabricaRepositorio, GravadorAuditoria, UnidadeDeTrabalhoSQL
+from sar.nucleo.erros import ConfiguracaoInvalida
 from sar.nucleo.eventos import (
     Barramento,
     CadeiaDivergente,
@@ -138,7 +139,7 @@ def ambiente_atual() -> Ambiente:
     try:
         return Ambiente(valor)
     except ValueError:
-        raise RuntimeError("SAR_AMBIENTE deve ser 'desenvolvimento' ou 'producao'") from None
+        raise ConfiguracaoInvalida("SAR_AMBIENTE deve ser 'desenvolvimento' ou 'producao'") from None
 
 
 RAIZ = Path(__file__).resolve().parent.parent
@@ -150,7 +151,10 @@ def pastas_do_ambiente() -> Pastas:
     cofre, quarentena = os.environ.get("SAR_COFRE"), os.environ.get("SAR_QUARENTENA")
     if not cofre or not quarentena:
         if ambiente_atual() is not Ambiente.DESENVOLVIMENTO:
-            raise RuntimeError("SAR_COFRE e SAR_QUARENTENA são obrigatórias fora do desenvolvimento (DD-34)")
+            raise ConfiguracaoInvalida(
+                "SAR_COFRE e SAR_QUARENTENA são obrigatórias fora do desenvolvimento (DD-34). Em desenvolvimento, "
+                "defina SAR_AMBIENTE=desenvolvimento neste terminal (docs/comandos.md, seção 1)."
+            )
         return Pastas(RAIZ / "armazenamento" / "cofre", RAIZ / "armazenamento" / "quarentena")
     return Pastas(Path(cofre), Path(quarentena))
 

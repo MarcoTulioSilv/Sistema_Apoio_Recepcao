@@ -12,7 +12,7 @@ import threading
 import time
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, replace
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 from sar.modulo_01_acesso.contrato import AuditService
 from sar.modulo_04_documentos.antimalware import Antimalware, AntimalwareIndisponivel, assinaturas_vencidas
@@ -33,6 +33,8 @@ log = logging.getLogger(__name__)
 PROCESSAR = "documento.ingestao.processar"
 EXPIRAR = "documento.ingestao.expirar"
 INTERVALO_FILA = 2.0  # DD-63
+RECARGA_ESPERA = timedelta(minutes=2)  # DD-99: tempo para o clamd terminar de ler a base nova
+RECARGA_INTERVALO = timedelta(hours=1)  # DD-99: nova tentativa de recarga, se a base continuar vencida
 INTERVALO_EXPIRACAO = 60.0
 
 Processar = Callable[[Sequence[bytes], str, Sequence[str], Limites, bool, float], Resultado]
@@ -70,6 +72,7 @@ class ProcessadorIngestoes:
         self._cifra = cifra
         self._relogio = relogio
         self._processar = processar
+        self._recarga_em: datetime | None = None  # quando o worker pediu a última recarga ao clamd (DD-99)
 
     def _contexto(self) -> Contexto:
         return Contexto.sistema("worker.ingestao", self._relogio.agora())
@@ -132,8 +135,12 @@ class ProcessadorIngestoes:
         try:
             versao = self._antimalware.versao()
             if assinaturas_vencidas(versao, self._relogio.agora(), self._inteiro("antimalware_idade_maxima")):
+                if self._esperar_recarga():
+                    self._devolver(ingestao)
+                    return False
                 self._rejeitar(ingestao, "antimalware.assinaturas_vencidas")
                 return True
+            self._recarga_em = None
             deteccoes = [d for d in (self._antimalware.varrer(a) for a in arquivos) if d is not None]
         except AntimalwareIndisponivel:
             log.warning("ingestao.antimalware.indisponivel")
@@ -155,6 +162,18 @@ class ProcessadorIngestoes:
         self._concluir(ingestao, hash_reconstruido, resultado.paginas, cifrar_campos(self._cifra, ingestao.id,
                                                                                       candidatos))  # fmt: skip
         return True
+
+    def _esperar_recarga(self) -> bool:
+        """Base vencida (DD-99): o atualizador pode ter baixado a nova sem o clamd perceber, como quando os dois sobem
+        juntos. Pede a recarga e espera um pouco com a ingestão na fila; só recusa se a base continuar vencida depois
+        disso. Uma nova recarga é pedida a cada hora, enquanto a base estiver vencida."""
+        agora = self._relogio.agora()
+        if self._recarga_em is None or agora - self._recarga_em >= RECARGA_INTERVALO:
+            self._recarga_em = agora
+            log.warning("ingestao.antimalware.recarga_pedida")
+            self._antimalware.recarregar()  # AntimalwareIndisponivel: a ingestão volta à fila (DD-95)
+            return True
+        return agora - self._recarga_em < RECARGA_ESPERA
 
     def _em_processamento(self, uow: UnidadeDeTrabalho, ingestao: IngestaoGravada) -> IngestaoGravada | None:
         atual = uow.repositorio(RepositorioDocumentos).ingestao(ingestao.id, travar=True)
