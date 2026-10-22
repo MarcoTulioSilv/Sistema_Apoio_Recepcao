@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pikepdf
 import pytest
-from PIL import Image
+from PIL import Image, ImageDraw, ImageFont
 
 from sar.modulo_04_documentos import isolamento
 from sar.modulo_04_documentos.isolamento import executar
@@ -87,11 +87,19 @@ def test_reconstrucao_gera_pdfa_em_cinza_sem_texto(arquivos: list[bytes], pagina
     _conferir_pdfa(feito.conteudo, paginas)
 
 
+def _ferramenta(variavel: str, nome: str) -> str:
+    """O executável da ferramenta externa; sem ela, o teste é pulado, salvo com SAR_EXIGIR_FERRAMENTAS=1 (CI)."""
+    caminho = shutil.which(os.environ.get(variavel) or nome)
+    if caminho:
+        return caminho
+    if os.environ.get("SAR_EXIGIR_FERRAMENTAS") == "1":
+        pytest.fail(f"{nome} ausente, e o ambiente exige ({variavel})")
+    pytest.skip(f"{nome} ausente nesta máquina ({variavel}); o CI roda este teste")
+
+
 @pytest.mark.requisito("CT-DOC-03", "SEG-10", "DC-07")
 def test_pdfa_aprovado_pelo_verapdf(tmp_path: Path, sem_tesseract: None) -> None:
-    verapdf = shutil.which(os.environ.get("SAR_VERAPDF") or "verapdf")
-    if not verapdf:
-        pytest.skip("veraPDF ausente nesta máquina; o CI roda este teste (PT §6.2)")
+    verapdf = _ferramenta("SAR_VERAPDF", "verapdf")
     arquivo = tmp_path / "saida.pdf"
     arquivo.write_bytes(processar([corpus.png()], "scanner", (), LIMITES, False).conteudo)
     relatorio = subprocess.run(  # noqa: S603
@@ -196,3 +204,21 @@ def test_filho_nao_herda_credenciais(monkeypatch: pytest.MonkeyPatch) -> None:
         and "SAR_CHAVE_MESTRA" not in ambiente
         and "PATH" in {k.upper() for k in ambiente}
     )
+
+
+@pytest.mark.requisito("DD-40", "RF-703", "SEG-31")
+def test_extracao_com_o_tesseract_de_verdade(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Folha fictícia com fonte de tamanho real: o Tesseract em português lê os números, e só os campos do tipo saem."""
+    monkeypatch.setenv("SAR_TESSERACT", _ferramenta("SAR_TESSERACT", "tesseract"))
+    paciente = Fabrica(11).paciente()
+    cns = " ".join((paciente.cns[:3], paciente.cns[3:7], paciente.cns[7:11], paciente.cns[11:]))
+    folha = Image.new("L", (2480, 3508), "white")
+    desenho = ImageDraw.Draw(folha)
+    fonte = ImageFont.load_default(size=60)
+    for indice, linha in enumerate(("CARTAO NACIONAL DE SAUDE", f"Nome: {paciente.nome}", f"CNS {cns}",
+                                    f"CPF {paciente.cpf}", "DIAGNOSTICO SIGILOSO")):  # fmt: skip
+        desenho.text((200, 300 + 120 * indice), linha, fill="black", font=fonte)
+    png = io.BytesIO()
+    folha.save(png, format="PNG")
+    feito = processar([png.getvalue()], "scanner", ("cns",), LIMITES, True)
+    assert [(c.nome, c.valor, c.confianca) for c in feito.campos] == [("cns", paciente.cns, "alta")]

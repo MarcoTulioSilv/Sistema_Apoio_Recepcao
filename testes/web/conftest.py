@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import threading
-from collections.abc import Iterator
+from collections.abc import Iterable, Iterator
+from typing import TYPE_CHECKING
 
 import pytest
 from axe_playwright_python.sync_playwright import Axe
@@ -12,6 +13,9 @@ from sqlalchemy import Engine
 from werkzeug.serving import WSGIRequestHandler, make_server
 
 from sar.nucleo.portas import Relogio
+
+if TYPE_CHECKING:
+    from _typeshed.wsgi import StartResponse, WSGIApplication, WSGIEnvironment
 from sar.web import criar_app
 from sar.web.configuracao import ConfigWeb
 from testes.apoio.acesso import SENHA
@@ -26,6 +30,23 @@ class SemLogDeAcesso(WSGIRequestHandler):
 
     def log_request(self, code: int | str = "-", size: int | str = "-") -> None:
         pass
+
+
+def em_memoria(app: WSGIApplication) -> WSGIApplication:
+    """Cada resposta lida inteira e o arquivo fechado antes de ir para a rede. O servidor de desenvolvimento do
+    Werkzeug não fecha o arquivo estático quando o navegador derruba a conexão no meio (navegou antes de terminar), e
+    o ResourceWarning derrubava testes ao acaso. Só no servidor de teste: os estáticos são pequenos."""
+
+    def wsgi(environ: WSGIEnvironment, start_response: StartResponse) -> Iterable[bytes]:
+        corpo = app(environ, start_response)
+        try:
+            return [b"".join(corpo)]
+        finally:
+            fechar = getattr(corpo, "close", None)
+            if fechar is not None:
+                fechar()
+
+    return wsgi
 
 
 @pytest.fixture
@@ -45,7 +66,7 @@ def endereco(engine_web: Engine, provedor_cep: ProvedorCepFalso, relogio_do_serv
     origem = f"http://127.0.0.1:{PORTA}"  # HTTP só em desenvolvimento (DD-80); o cookie é Secure mesmo assim
     servicos = servicos_web(engine_web, provedor_cep, relogio_do_servidor)
     app = criar_app(servicos, ConfigWeb(origem=origem, desenvolvimento=True))
-    servidor = make_server("127.0.0.1", PORTA, app, request_handler=SemLogDeAcesso)
+    servidor = make_server("127.0.0.1", PORTA, em_memoria(app), request_handler=SemLogDeAcesso)
     linha = threading.Thread(target=servidor.serve_forever, daemon=True)
     linha.start()
     yield origem

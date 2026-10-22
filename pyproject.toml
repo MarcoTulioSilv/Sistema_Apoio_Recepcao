@@ -76,7 +76,7 @@ exclude = ["sar/modulo_08_dados/migracoes/"]
 disable_error_code = ["type-abstract"]
 
 [[tool.mypy.overrides]]
-module = ["waitress", "pypdfium2"]
+module = ["waitress", "pypdfium2", "win32com.*", "pythoncom"]
 ignore_missing_imports = true
 
 [tool.bandit]

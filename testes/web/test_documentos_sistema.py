@@ -4,6 +4,7 @@ Chromium, conferência e ficha, com teclado e axe-core (RNF-406) e sem erro de s
 from __future__ import annotations
 
 import json
+import threading
 from datetime import UTC, datetime
 
 import httpx
@@ -11,10 +12,14 @@ import pytest
 from playwright.sync_api import Browser, Page, Route, expect
 from sqlalchemy import Engine
 
+from agente_captura.captura import Captura
+from agente_captura.envio import Enviador
+from agente_captura.servidor import ServidorAgente
 from sar.composicao import compor_worker
 from sar.modulo_04_documentos.worker import ProcessadorIngestoes
 from testes.apoio import corpus
 from testes.apoio.acesso import CriarUsuario
+from testes.apoio.agente import ScannerFalso
 from testes.apoio.cadastro import INICIO, dados_completos, pessoa
 from testes.apoio.cadastro import montar as montar_cadastro
 from testes.apoio.documentos import AntimalwareFalso
@@ -149,3 +154,44 @@ def test_foto_pela_camera_ate_a_conferencia(
     expect(page.get_by_role("table", name="Documentos do paciente")).to_contain_text("Foto do paciente")
     assert erros == []
     contexto.close()
+
+
+# ------------------------------------------------------------------ ponta a ponta com o agente de verdade
+@pytest.mark.requisito("RNF-208", "DD-39", "DD-77", "DD-94", "DD-100")
+def test_agente_de_verdade_ate_a_conferencia(
+    criar_usuario: CriarUsuario, paciente: tuple[int, str], endereco: str, page: Page, worker: ProcessadorIngestoes,
+    sem_tesseract: None,
+) -> None:  # fmt: skip
+    """O agente real no loopback (só o scanner é falso): a página chama, ele digitaliza, converte e envia pelo token
+    ao SAR em teste (HTTP de desenvolvimento, DD-100); o worker processa; a conferência abre."""
+    pid, nome = paciente
+    erros = _vigiar(page)
+    captura = Captura(ScannerFalso(folhas=2), Enviador(endereco, None))
+    agente = ServidorAgente(47830, endereco, captura.executar)
+    parar = threading.Event()
+
+    def consumir_fila() -> None:
+        while not parar.is_set():
+            if not worker.processar_proxima():
+                parar.wait(0.2)
+
+    for alvo in (agente.serve_forever, consumir_fila):
+        threading.Thread(target=alvo, daemon=True).start()
+    try:
+        criar_usuario("sistdoc_ag")
+        entrar_no_navegador(page, endereco, "sistdoc_ag")
+        page.wait_for_load_state("networkidle")
+        page.goto(f"{endereco}/documentos/digitalizar/{pid}")
+        page.get_by_label("Tipo de documento").select_option("comprovante_endereco")
+        page.get_by_label("No alimentador (várias folhas)").check()
+        page.get_by_role("button", name="Digitalizar").click()
+        page.get_by_role("link", name="Conferir agora").click(timeout=20000)
+        expect(page.locator(".destaque-paciente")).to_contain_text(nome)
+        expect(page.get_by_alt_text("Página 2 de 2 do documento capturado")).to_be_visible()
+        page.get_by_role("button", name="Guardar o documento").click()
+        expect(page.get_by_role("table", name="Documentos do paciente")).to_contain_text("Comprovante de endereço")
+    finally:
+        parar.set()
+        agente.shutdown()
+        agente.server_close()
+    assert erros == []

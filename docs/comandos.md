@@ -30,6 +30,7 @@ Depois, as variáveis de ambiente. **Elas valem só para aquele terminal:** num 
 $env:SAR_SEGREDOS = "$PWD\segredos"          # onde estão as senhas e a chave (segredos/LEIA-ME.md)
 $env:SAR_BANCO_PORTA = "3307"                # o MySQL do docker-compose escuta nessa porta
 $env:SAR_AMBIENTE = "desenvolvimento"        # sem isso, o SAR se comporta como produção (DD-85)
+$env:SAR_TESSERACT = "C:\Program Files\Tesseract-OCR\tesseract.exe"   # leitura dos campos dos documentos (opcional)
 ```
 
 ```bash
@@ -56,7 +57,8 @@ export SAR_SEGREDOS="$PWD/segredos" SAR_BANCO_PORTA=3307 SAR_AMBIENTE=desenvolvi
 | `SAR_COFRE` / `SAR_QUARENTENA` | Pastas do cofre de documentos (vai para o backup) e da quarentena (fora do backup, SEG-29); obrigatórias em produção | `armazenamento\cofre` e `armazenamento\quarentena` no projeto (padrão em desenvolvimento) |
 | `SAR_CLAMAV_HOST` / `SAR_CLAMAV_PORTA` | Onde o clamd escuta (SEG-09) | `127.0.0.1` e `3310` (padrão, o do compose) |
 | `SAR_TESSERACT` | Executável do Tesseract, se não estiver no PATH; sem Tesseract, a extração fica desligada e a conferência é manual (RNF-702) | `C:\Program Files\Tesseract-OCR\tesseract.exe` |
-| `SAR_VERAPDF` | Executável do veraPDF, se não estiver no PATH; sem ele, o teste de PDF/A é pulado (o CI roda) | `C:\verapdf\verapdf.bat` |
+| `SAR_EXIGIR_FERRAMENTAS` | `1` faz os testes do Tesseract e do veraPDF falharem, em vez de pular, se a ferramenta faltar (como no CI) | só no CI |
+| `SAR_VERAPDF` | Executável do veraPDF, se não estiver no PATH; sem ele, o teste de PDF/A é pulado (o CI roda) | `$env:LOCALAPPDATA\verapdf\verapdf.bat` (onde a seção 2 instala) |
 
 ---
 
@@ -95,6 +97,27 @@ Invoke-WebRequest -Uri "https://github.com/tailwindlabs/tailwindcss/releases/dow
 ```
 
 Por fim, o seu usuário de desenvolvimento (seção 5) e o CSS (seção 7).
+
+### Ferramentas do MOD-04 (opcionais na máquina de desenvolvimento)
+
+Sem elas, a aplicação funciona: a conferência fica manual e o teste de PDF/A é pulado. O CI tem as duas.
+
+```powershell
+winget install --id UB-Mannheim.TesseractOCR --exact     # leitura dos campos (DD-40)
+# português: baixe tessdata_fast 4.1.0 e copie para a pasta do Tesseract (pede administrador)
+Invoke-WebRequest -Uri "https://github.com/tesseract-ocr/tessdata_fast/raw/4.1.0/por.traineddata" -OutFile "$env:TEMP\por.traineddata"
+Start-Process powershell -Verb RunAs -Wait -ArgumentList "-Command","Copy-Item '$env:TEMP\por.traineddata' 'C:\Program Files\Tesseract-OCR\tessdata\'"
+& "C:\Program Files\Tesseract-OCR\tesseract.exe" --list-langs                  # deve listar por
+```
+
+veraPDF 1.30.3 (precisa de Java; valida o PDF/A, CT-DOC-03): baixe
+`https://software.verapdf.org/releases/1.30/verapdf-greenfield-1.30.3-installer.zip`, descompacte e instale com o
+arquivo automático do CI, trocando o caminho de `/opt/verapdf` para a sua pasta `AppData\Local\verapdf`:
+
+```powershell
+java -jar verapdf-greenfield-1.30.3\verapdf-izpack-installer-1.30.3.jar auto-install.xml
+$env:SAR_VERAPDF = "$env:LOCALAPPDATA\verapdf\verapdf.bat"
+```
 
 ---
 
@@ -211,10 +234,10 @@ As mesmas etapas do pipeline do GitHub (PT §8), na ordem:
 
 ```powershell
 ruff check .; ruff format --check .                  # 1. estilo
-mypy sar                                             # 2. tipos
+mypy sar agente_captura                              # 2. tipos
 lint-imports                                         # 3. fronteiras entre módulos (25 contratos)
 pip-audit --skip-editable                            # 4. dependências com vulnerabilidade
-bandit -q -c pyproject.toml -r sar                   # 5. análise estática
+bandit -q -c pyproject.toml -r sar agente_captura    # 5. análise estática
 python scripts\verificar_rastreabilidade.py --estrito-citacoes   # 11. rastreabilidade com a ERS
 ```
 
@@ -238,7 +261,35 @@ CSS do protótipo e do guia de componentes (`docs\prototipo\componentes.html`):
 
 ---
 
-## 8. Dados de referência
+## 8. Agente de captura (estação da recepção)
+
+O agente fica em `agente_captura\`, fora do servidor, com dependências próprias (`agente_captura\requirements.txt`).
+Na estação ele roda como `sar-agente.exe`; a instalação e a medição dos 30 s estão em `docs\INSTALACAO_AGENTE.md`.
+
+Gerar o executável (numa máquina de desenvolvimento com Windows, na pasta do projeto):
+
+```powershell
+py -3.14 -m venv .venv-agente                                        # só na primeira vez
+.\.venv-agente\Scripts\python.exe -m pip install -r agente_captura\requirements-construcao.txt
+.\.venv-agente\Scripts\pyinstaller.exe --noconfirm --onefile --noconsole --name sar-agente --paths . `
+  --distpath agente_captura\dist --workpath agente_captura\build --specpath agente_captura\build `
+  agente_captura\__main__.py
+```
+
+O executável sai em `agente_captura\dist\sar-agente.exe` (cerca de 17 MB; fora do Git).
+
+Rodar sem empacotar, para testar com um scanner ligado nesta máquina:
+
+```powershell
+$env:SAR_AGENTE_CONFIG = "C:\caminho\agente.json"   # o mesmo formato da estação (docs\INSTALACAO_AGENTE.md)
+.\.venv-agente\Scripts\python.exe -m agente_captura
+```
+
+O registro vai para `$env:LOCALAPPDATA\SAR\agente.log`, só com metadados (data, páginas, tempo, resultado).
+
+---
+
+## 9. Dados de referência
 
 Tabela de municípios do IBGE (`dados\municipios_ibge.csv`), regerada quando o IBGE criar ou renomear
 município:
@@ -249,7 +300,7 @@ python scripts\gerar_municipios_ibge.py
 
 ---
 
-## 9. Problemas comuns
+## 10. Problemas comuns
 
 | Sintoma | Causa e solução |
 |---|---|
