@@ -56,7 +56,10 @@ espera_erro "P-02: duas sessões ativas do mesmo usuário" \
   "$(sql_admin "INSERT INTO sessao_usuario (token_hash, usuario_id, origem, criada_em, ultimo_acesso) VALUES (REPEAT('a',64),$U,'x',NOW(6),NOW(6));
      INSERT INTO sessao_usuario (token_hash, usuario_id, origem, criada_em, ultimo_acesso) VALUES (REPEAT('b',64),$U,'x',NOW(6),NOW(6))")" "uq_sessao_usuario__uma_ativa"
 espera_erro "Cobertura por convênio sem convênio" \
-  "$(sql_admin "INSERT INTO cobertura (periodo_id, vigencia_inicio, tipo) SELECT id, '2026-04-01', 'convenio' FROM periodo_tratamento WHERE paciente_id=$P1 AND aberto=1")" "ck_cobertura__convenio"
+  "$(sql_admin "INSERT INTO cobertura (periodo_id, tipo) SELECT id, 'convenio' FROM periodo_tratamento WHERE paciente_id=$P1 AND aberto=1")" "ck_cobertura__convenio"
+espera_erro "INV-09: segunda cobertura no mesmo período (DD-101)" \
+  "$(sql_admin "INSERT INTO cobertura (periodo_id, tipo) SELECT id, 'sus' FROM periodo_tratamento WHERE paciente_id=$P1 AND aberto=1;
+     INSERT INTO cobertura (periodo_id, tipo) SELECT id, 'sus' FROM periodo_tratamento WHERE paciente_id=$P1 AND aberto=1")" "uq_cobertura__periodo"
 
 echo "== Configuração de logs do servidor (DD-81, DD-82)"
 espera_valor "binlog desligado (log_bin = 0)" "$(sql_admin "SELECT @@log_bin")" "0"
@@ -91,6 +94,7 @@ echo "== Limpeza"
 sql_admin "SET FOREIGN_KEY_CHECKS=0;
   DELETE FROM documento WHERE arquivo='teste-arquivo'; DELETE FROM troca_pontual WHERE paciente_id=$P1;
   DELETE FROM sessao_usuario WHERE usuario_id=$U; DELETE FROM contato WHERE paciente_id=$P1;
+  DELETE c FROM cobertura c JOIN periodo_tratamento p ON p.id=c.periodo_id WHERE p.paciente_id IN ($P1,$P2);
   DELETE FROM periodo_tratamento WHERE paciente_id IN ($P1,$P2); DELETE FROM paciente WHERE id IN ($P1,$P2);
   DELETE FROM usuario WHERE id=$U; UPDATE auditoria_cabeca SET ultimo_registro_id=0, ultimo_hash=REPEAT('0',64);
   SET FOREIGN_KEY_CHECKS=1;" >/dev/null

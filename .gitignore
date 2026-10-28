@@ -28,3 +28,12 @@ docs/prototipo/node_modules/
 CLAUDE.md
 
 .env
+
+# Cofre e quarentena locais do desenvolvimento (SAR_COFRE, SAR_QUARENTENA): imagem de documento nunca vai para o Git
+/armazenamento/
+
+# Agente de captura: ambiente de construção e o executável gerado (docs/comandos.md, seção do agente)
+/.venv-agente/
+/agente_captura/build/
+/agente_captura/dist/
+/agente_captura/build-log.txt

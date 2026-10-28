@@ -30,8 +30,15 @@ PARAMETROS = dict(
         ("quarentena_prazo", "Prazo da quarentena e da ingestão pendente"),
         ("extracao_ligada", "Extração automática ligada"),
         ("antimalware_idade_maxima", "Idade máxima das assinaturas do antimalware"),
+        ("pagina_tamanho_maximo", "Tamanho máximo por página recebida"),
+        ("paginas_por_ingestao", "Páginas por digitalização"),
+        ("pixels_por_pagina", "Pixels por página"),
+        ("processamento_tempo_maximo", "Tempo máximo de processamento por página"),
         ("data_implantacao", "Data de implantação"),
     ]
 )
 
-UNIDADES = {"min": "minutos", "h": "horas", "dias": "dias", "qtd": "", "bool": "", "data": ""}
+UNIDADES = {
+    "min": "minutos", "h": "horas", "dias": "dias", "qtd": "", "bool": "", "data": "", "MB": "MB", "s": "segundos",
+    "mi": "milhões de pixels",
+}  # fmt: skip

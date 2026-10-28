@@ -1,0 +1,83 @@
+{% extends "layout.html" %}
+{% set d = ficha.dados %}
+{% block titulo_pagina %}{{ item.nome_tipo }}{% endblock %}
+{% block subtitulo %}{{ d.nome }} · Prontuário {{ d.prontuario }} · Versão {{ versao.versao }}{% if not vigente %} (substituída){% endif %}{% endblock %}
+{% block conteudo %}
+<div class="flex max-w-5xl flex-col gap-5">
+  {% include "_avisos.html" %}
+  <p class="m-0"><a href="{{ url_for('pacientes.ficha', paciente_id=ficha.paciente_id, _anchor='documentos') }}">Voltar à ficha</a></p>
+
+  {% if versao.descartado_em %}
+  <p class="m-0 rounded-lg bg-normal-fundo p-3">Descartado em {{ versao.descartado_em|data_hora }}, ao fim do prazo de guarda. Fica só o registro.</p>
+  {% elif versao.bloqueio %}
+  <p class="m-0 rounded-lg border border-urgencia-borda bg-urgencia-fundo p-3 font-bold text-urgencia" role="alert">
+    {% if versao.bloqueio == "rescan" %}Bloqueado: o antivírus detectou uma ameaça na revarredura. A administração revisa e decide.{% else %}Bloqueado: o arquivo foi alterado no disco. O TI restaura a cópia do backup; sem cópia íntegra, digitalize o papel de novo.{% endif %}</p>
+  {% elif pode.ver %}
+  <div class="flex flex-col gap-4">
+    {% for n in range(1, versao.paginas + 1) %}
+    <figure class="m-0 flex flex-col gap-2">
+      <img class="pagina-documento{% if foto %} max-w-md{% endif %}" src="{{ url_for('documentos.pagina', documento_id=versao.id, numero=n) }}" alt="{{ item.nome_tipo }}, página {{ n }} de {{ versao.paginas }}">
+      {% if versao.paginas > 1 %}<figcaption class="text-sm text-suave">Página {{ n }} de {{ versao.paginas }}</figcaption>{% endif %}
+    </figure>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <section class="cartao flex flex-col gap-3 p-5" aria-labelledby="meta-t">
+    <h2 id="meta-t" class="m-0 text-xl">Sobre o documento</h2>
+    <dl class="m-0 grid grid-cols-1 gap-x-6 gap-y-2 sm:grid-cols-[12rem_minmax(0,1fr)]">
+      <dt class="font-bold">Digitalizado em</dt><dd class="m-0">{{ versao.capturado_em|data_hora }}</dd>
+      <dt class="font-bold">Páginas</dt><dd class="numero m-0">{{ versao.paginas }}</dd>
+      <dt class="font-bold">Origem</dt><dd class="m-0">{{ "Câmera" if versao.origem == "webcam" else "Scanner" }}</dd>
+    </dl>
+    {% if item.anteriores or not vigente %}
+    <h3 class="m-0 text-lg">Versões</h3>
+    <ul class="m-0 flex flex-col gap-1 pl-5">
+      {% for v in [item.vigente] + item.anteriores|list %}
+      <li>{% if v.id == versao.id %}<strong>Versão {{ v.versao }}</strong> (esta){% else %}<a href="{{ url_for('documentos.ver', paciente_id=ficha.paciente_id, documento_id=v.id) }}">Versão {{ v.versao }}</a>{% endif %}, {{ v.capturado_em|data_hora }}{% if loop.first %} · atual{% endif %}</li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+  </section>
+
+  {% if not versao.descartado_em %}
+  <section class="cartao flex flex-col gap-4 p-5" aria-labelledby="acoes-t">
+    <h2 id="acoes-t" class="m-0 text-xl">Ações</h2>
+    <div class="flex flex-wrap gap-3">
+      {% if vigente and pode.nova_versao %}
+        {% if foto %}<a class="btn-secundario" href="{{ url_for('documentos.foto', paciente_id=ficha.paciente_id, substitui=versao.id) }}">Tirar nova foto</a>
+        {% else %}<a class="btn-secundario" href="{{ url_for('documentos.digitalizar', paciente_id=ficha.paciente_id, tipo=item.tipo, substitui=versao.id) }}">Digitalizar nova versão</a>{% endif %}
+      {% endif %}
+      {% if pode.baixar and not versao.bloqueio %}<a class="btn-neutro" href="{{ url_for('documentos.baixar', documento_id=versao.id) }}">Baixar o arquivo</a>{% endif %}
+    </div>
+    {% if pode.revincular %}
+    <details><summary class="cursor-pointer font-bold text-acao">Passar para outro paciente (anexado ao paciente errado)</summary>
+      <form class="mt-2 flex flex-wrap items-end gap-3" method="post" action="{{ url_for('documentos.revincular', paciente_id=ficha.paciente_id, documento_id=versao.id) }}">
+        <label class="campo"><span class="rotulo">Prontuário do paciente certo</span><input class="entrada w-40" type="text" name="prontuario" value="{{ prontuario or '' }}" required></label>
+        <label class="campo"><span class="rotulo">Motivo</span><input class="entrada w-80" type="text" name="motivo" value="{{ motivo or '' }}" maxlength="300" required></label>
+        <button class="btn-secundario" type="submit">Passar o documento</button>
+      </form>
+      <p class="m-0 mt-2 text-sm text-suave">Todas as versões vão juntas. O arquivo não muda; a troca fica registrada com o motivo.</p>
+    </details>
+    {% endif %}
+    {% if versao.bloqueio == "rescan" and pode.desbloquear %}
+    <details><summary class="cursor-pointer font-bold text-acao">Desbloquear após revisão (falso positivo)</summary>
+      <form class="mt-2 flex flex-wrap items-end gap-3" method="post" action="{{ url_for('documentos.pedir_desbloqueio', paciente_id=ficha.paciente_id, documento_id=versao.id) }}">
+        <label class="campo"><span class="rotulo">Motivo</span><input class="entrada w-96" type="text" name="motivo" maxlength="300" required></label>
+        <button class="btn-secundario" type="submit">Desbloquear</button>
+      </form>
+    </details>
+    {% endif %}
+    {% if pode.descartar %}
+    <details><summary class="cursor-pointer font-bold text-acao">Descartar ao fim do prazo de guarda</summary>
+      <form class="mt-2 flex flex-wrap items-end gap-3" method="post" action="{{ url_for('documentos.pedir_descarte', paciente_id=ficha.paciente_id, documento_id=versao.id) }}">
+        <label class="campo"><span class="rotulo">Motivo</span><input class="entrada w-96" type="text" name="motivo" maxlength="300" required></label>
+        <button class="btn-urgente" type="submit">Descartar o documento</button>
+      </form>
+      <p class="m-0 mt-2 text-sm text-suave">Só depois do prazo de 20 anos. O arquivo deixa de existir; fica o registro do descarte.</p>
+    </details>
+    {% endif %}
+  </section>
+  {% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,41 @@
+{% extends "layout.html" %}
+{% set d = ficha.dados %}
+{% block titulo_pagina %}Digitalizar documento{% endblock %}
+{% block subtitulo %}{{ d.nome }} · Prontuário {{ d.prontuario }}{% endblock %}
+{% block cabeca %}<script src="{{ url_for('static', filename='js/captura.js') }}" defer></script>{% endblock %}
+{% block conteudo %}
+<div class="flex max-w-3xl flex-col gap-5">
+  <section class="destaque-paciente" aria-labelledby="destino-t">
+    <h2 id="destino-t" class="m-0 text-sm text-suave">O documento vai para</h2>
+    <p class="m-0 text-xl font-bold">{{ d.nome }}</p>
+    <p class="m-0">Nascimento {{ d.data_nascimento.strftime('%d/%m/%Y') if d.data_nascimento else "—" }} · Mãe: {{ d.nome_mae or "—" }}</p>
+  </section>
+
+  <noscript><p class="m-0 rounded-lg border border-urgencia-borda bg-urgencia-fundo p-3 font-bold text-urgencia">A digitalização precisa do JavaScript ligado no navegador.</p></noscript>
+
+  <form id="captura" class="cartao flex flex-col gap-4 p-5" method="post" action="{{ url_for('documentos.abrir') }}" data-agente="{{ agente }}">
+    <input type="hidden" name="paciente_id" value="{{ ficha.paciente_id }}">
+    <input type="hidden" name="origem" value="scanner">
+    <input type="hidden" name="vinculo" value="{{ vinculo }}">
+    <input type="hidden" name="substitui" value="{{ substitui }}">
+    <label class="campo"><span class="rotulo">Tipo de documento</span>
+      <select class="entrada" name="tipo" required>
+        <option value="">Selecione…</option>
+        {% for t in tipos %}<option value="{{ t.codigo }}"{% if t.codigo == tipo %} selected{% endif %}>{{ t.nome }}</option>{% endfor %}
+      </select></label>
+    <fieldset class="m-0 flex flex-col gap-2 border-0 p-0">
+      <legend class="rotulo mb-1">Onde está o papel</legend>
+      <label class="opcao-simulador w-fit"><input type="radio" name="papel" value="vidro" checked> No vidro do scanner (uma folha)</label>
+      <label class="opcao-simulador w-fit"><input type="radio" name="papel" value="alimentador"> No alimentador (várias folhas)</label>
+    </fieldset>
+    {% if substitui %}
+    <label class="campo"><span class="rotulo">Motivo da nova versão</span><input class="entrada" type="text" name="motivo" maxlength="300" required></label>
+    {% endif %}
+    <p class="ajuda-erro m-0" role="alert" data-mensagem></p>
+    <div><button class="btn-primario" type="submit" data-digitalizar>Digitalizar</button></div>
+  </form>
+
+  <div id="situacao" aria-live="polite"></div>
+  <p class="m-0"><a href="{{ url_for('pacientes.ficha', paciente_id=ficha.paciente_id) }}">Voltar à ficha</a></p>
+</div>
+{% endblock %}

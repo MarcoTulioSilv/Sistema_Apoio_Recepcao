@@ -1,0 +1,42 @@
+{% extends "layout.html" %}
+{% set d = ficha.dados %}
+{% block titulo_pagina %}Foto do paciente{% endblock %}
+{% block subtitulo %}{{ d.nome }} · Prontuário {{ d.prontuario }}{% endblock %}
+{% block cabeca %}
+<script src="{{ url_for('static', filename='js/captura.js') }}" defer></script>
+<script src="{{ url_for('static', filename='js/camera.js') }}" defer></script>
+{% endblock %}
+{% block conteudo %}
+<div class="flex max-w-3xl flex-col gap-5">
+  {% include "_avisos.html" %}
+  <section class="destaque-paciente" aria-labelledby="destino-t">
+    <h2 id="destino-t" class="m-0 text-sm text-suave">A foto vai para</h2>
+    <p class="m-0 text-xl font-bold">{{ d.nome }}</p>
+    <p class="m-0">Nascimento {{ d.data_nascimento.strftime('%d/%m/%Y') if d.data_nascimento else "—" }} · Mãe: {{ d.nome_mae or "—" }}</p>
+  </section>
+
+  <noscript><p class="m-0 rounded-lg border border-urgencia-borda bg-urgencia-fundo p-3 font-bold text-urgencia">A câmera precisa do JavaScript ligado no navegador.</p></noscript>
+
+  <form id="camera" class="cartao flex flex-col gap-4 p-5" method="post" action="{{ url_for('documentos.abrir') }}"{% if abrir %} data-abrir-ja{% endif %}>
+    <input type="hidden" name="paciente_id" value="{{ ficha.paciente_id }}">
+    <input type="hidden" name="origem" value="webcam">
+    <input type="hidden" name="tipo" value="foto_paciente">
+    <input type="hidden" name="substitui" value="{{ substitui }}">
+    <video class="video-camera" data-video autoplay muted playsinline aria-label="Imagem da câmera"></video>
+    <img class="video-camera object-contain" data-previa alt="Foto tirada, antes de enviar" hidden>
+    {% if substitui %}
+    <label class="campo"><span class="rotulo">Motivo da nova foto</span><input class="entrada" type="text" name="motivo" maxlength="300" required></label>
+    {% endif %}
+    <div class="flex flex-wrap gap-3">
+      <button class="btn-secundario" type="button" data-abrir>Abrir a câmera</button>
+      <button class="btn-primario" type="button" data-tirar disabled>Tirar a foto</button>
+      <button class="btn-neutro" type="button" data-de-novo disabled>Tirar de novo</button>
+      <button class="btn-primario" type="submit" data-enviar disabled>Usar esta foto</button>
+    </div>
+    <p class="m-0 text-sm text-suave" role="status" data-aviso>A câmera só abre depois que o navegador pedir a permissão.</p>
+  </form>
+
+  <div id="situacao" aria-live="polite"></div>
+  <p class="m-0"><a href="{{ url_for('pacientes.ficha', paciente_id=ficha.paciente_id) }}">Voltar à ficha</a></p>
+</div>
+{% endblock %}

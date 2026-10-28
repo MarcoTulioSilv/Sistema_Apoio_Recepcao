@@ -30,6 +30,7 @@ Depois, as variáveis de ambiente. **Elas valem só para aquele terminal:** num 
 $env:SAR_SEGREDOS = "$PWD\segredos"          # onde estão as senhas e a chave (segredos/LEIA-ME.md)
 $env:SAR_BANCO_PORTA = "3307"                # o MySQL do docker-compose escuta nessa porta
 $env:SAR_AMBIENTE = "desenvolvimento"        # sem isso, o SAR se comporta como produção (DD-85)
+$env:SAR_TESSERACT = "C:\Program Files\Tesseract-OCR\tesseract.exe"   # leitura dos campos dos documentos (opcional)
 ```
 
 ```bash
@@ -52,6 +53,12 @@ export SAR_SEGREDOS="$PWD/segredos" SAR_BANCO_PORTA=3307 SAR_AMBIENTE=desenvolvi
 | `SAR_SUPERUSUARIOS` | Logins que trocam de perfil pelo cabeçalho (DD-85) | o seu login; só em desenvolvimento |
 | `SAR_WEB_PORTA` | Porta da aplicação | `8080` (padrão) |
 | `SAR_PROXIES` | Proxies confiáveis na frente (Caddy) | `0` em desenvolvimento; `1` no servidor |
+| `SAR_AGENTE_PORTA` | Porta do agente de captura nas estações, no loopback (DD-98); a mesma da configuração do agente | `47830` (padrão) |
+| `SAR_COFRE` / `SAR_QUARENTENA` | Pastas do cofre de documentos (vai para o backup) e da quarentena (fora do backup, SEG-29); obrigatórias em produção | `armazenamento\cofre` e `armazenamento\quarentena` no projeto (padrão em desenvolvimento) |
+| `SAR_CLAMAV_HOST` / `SAR_CLAMAV_PORTA` | Onde o clamd escuta (SEG-09) | `127.0.0.1` e `3310` (padrão, o do compose) |
+| `SAR_TESSERACT` | Executável do Tesseract, se não estiver no PATH; sem Tesseract, a extração fica desligada e a conferência é manual (RNF-702) | `C:\Program Files\Tesseract-OCR\tesseract.exe` |
+| `SAR_EXIGIR_FERRAMENTAS` | `1` faz os testes do Tesseract e do veraPDF falharem, em vez de pular, se a ferramenta faltar (como no CI) | só no CI |
+| `SAR_VERAPDF` | Executável do veraPDF, se não estiver no PATH; sem ele, o teste de PDF/A é pulado (o CI roda) | `$env:LOCALAPPDATA\verapdf\verapdf.bat` (onde a seção 2 instala) |
 
 ---
 
@@ -67,6 +74,7 @@ pip install -e ".[dev]"                      # dependências do projeto e das fe
 playwright install chromium                  # navegador dos testes de sistema
 python scripts\criar_segredos_dev.py         # gera segredos\ (fora do git); não sobrescreve
 docker compose up -d --wait mysql            # sobe o MySQL 9.7.2; na primeira vez cria sar e sar_teste
+docker compose up -d --wait clamav           # antimalware; na primeira vez baixa as assinaturas (alguns minutos)
 ```
 
 Defina as variáveis da seção 1 e prepare os dois bancos (o da aplicação e o dos testes):
@@ -90,12 +98,33 @@ Invoke-WebRequest -Uri "https://github.com/tailwindlabs/tailwindcss/releases/dow
 
 Por fim, o seu usuário de desenvolvimento (seção 5) e o CSS (seção 7).
 
+### Ferramentas do MOD-04 (opcionais na máquina de desenvolvimento)
+
+Sem elas, a aplicação funciona: a conferência fica manual e o teste de PDF/A é pulado. O CI tem as duas.
+
+```powershell
+winget install --id UB-Mannheim.TesseractOCR --exact     # leitura dos campos (DD-40)
+# português: baixe tessdata_fast 4.1.0 e copie para a pasta do Tesseract (pede administrador)
+Invoke-WebRequest -Uri "https://github.com/tesseract-ocr/tessdata_fast/raw/4.1.0/por.traineddata" -OutFile "$env:TEMP\por.traineddata"
+Start-Process powershell -Verb RunAs -Wait -ArgumentList "-Command","Copy-Item '$env:TEMP\por.traineddata' 'C:\Program Files\Tesseract-OCR\tessdata\'"
+& "C:\Program Files\Tesseract-OCR\tesseract.exe" --list-langs                  # deve listar por
+```
+
+veraPDF 1.30.3 (precisa de Java; valida o PDF/A, CT-DOC-03): baixe
+`https://software.verapdf.org/releases/1.30/verapdf-greenfield-1.30.3-installer.zip`, descompacte e instale com o
+arquivo automático do CI, trocando o caminho de `/opt/verapdf` para a sua pasta `AppData\Local\verapdf`:
+
+```powershell
+java -jar verapdf-greenfield-1.30.3\verapdf-izpack-installer-1.30.3.jar auto-install.xml
+$env:SAR_VERAPDF = "$env:LOCALAPPDATA\verapdf\verapdf.bat"
+```
+
 ---
 
 ## 3. Dia a dia: rodar a aplicação
 
 ```powershell
-docker compose up -d --wait mysql            # garante o banco no ar (Docker Desktop aberto)
+docker compose up -d --wait mysql clamav     # garante o banco e o antimalware no ar (Docker Desktop aberto)
 $env:SAR_SUPERUSUARIOS = "seu.login"         # o login exato que o criar-superusuario mostrou; vários: "a,b"
 python -m sar.wsgi
 ```
@@ -104,6 +133,24 @@ python -m sar.wsgi
   proteção contra requisição forjada (DD-84) recusa os formulários.
 - O terminal fica mostrando os logs em JSON. **Ctrl+C** para o servidor.
 - O superusuário escolhe o perfil no seletor "Agir como (desenvolvimento)", no cabeçalho.
+
+Os documentos digitalizados só chegam à conferência com o worker rodando, num **segundo terminal** preparado
+como na seção 1 (DD-63):
+
+```powershell
+sar worker                                   # consome a fila de ingestão a cada 2 s; Ctrl+C para parar
+```
+
+Em desenvolvimento, o cofre e a quarentena ficam em `armazenamento\` no projeto, fora do Git.
+
+Rotinas do acervo de documentos, pelo usuário do worker (o agendamento noturno chega no Incremento 6):
+
+```powershell
+sar documentos-revarrer                      # revarredura antimalware (SEG-22); detecção bloqueia o documento
+sar documentos-hash                          # confere o hash de cada documento; divergência bloqueia
+sar documentos-hash --minutos 30             # para em 30 min e mostra o --depois-de para continuar
+sar documentos-orfaos                        # remove do cofre arquivo sem documento, com mais de 1 h
+```
 
 Parar e voltar o banco:
 
@@ -164,7 +211,8 @@ Os demais usuários são criados pela tela do TI.
 ## 6. Testes e qualidade
 
 Os testes usam o banco `sar_teste` sozinhos: nunca mexem no banco `sar` da aplicação. Precisam do MySQL no
-ar e das variáveis `SAR_SEGREDOS` e `SAR_BANCO_PORTA` (seção 1).
+ar e das variáveis `SAR_SEGREDOS` e `SAR_BANCO_PORTA` (seção 1). Os testes do antimalware usam o ClamAV do
+compose e são pulados se ele estiver fora do ar; com `$env:SAR_EXIGIR_CLAMAV = "1"` (como no CI), falham.
 
 ```powershell
 pytest testes -m "not integracao and not sistema"   # unidade: rápido, sem banco
@@ -186,10 +234,10 @@ As mesmas etapas do pipeline do GitHub (PT §8), na ordem:
 
 ```powershell
 ruff check .; ruff format --check .                  # 1. estilo
-mypy sar                                             # 2. tipos
+mypy sar agente_captura                              # 2. tipos
 lint-imports                                         # 3. fronteiras entre módulos (25 contratos)
 pip-audit --skip-editable                            # 4. dependências com vulnerabilidade
-bandit -q -c pyproject.toml -r sar                   # 5. análise estática
+bandit -q -c pyproject.toml -r sar agente_captura    # 5. análise estática
 python scripts\verificar_rastreabilidade.py --estrito-citacoes   # 11. rastreabilidade com a ERS
 ```
 
@@ -213,7 +261,35 @@ CSS do protótipo e do guia de componentes (`docs\prototipo\componentes.html`):
 
 ---
 
-## 8. Dados de referência
+## 8. Agente de captura (estação da recepção)
+
+O agente fica em `agente_captura\`, fora do servidor, com dependências próprias (`agente_captura\requirements.txt`).
+Na estação ele roda como `sar-agente.exe`; a instalação e a medição dos 30 s estão em `docs\INSTALACAO_AGENTE.md`.
+
+Gerar o executável (numa máquina de desenvolvimento com Windows, na pasta do projeto):
+
+```powershell
+py -3.14 -m venv .venv-agente                                        # só na primeira vez
+.\.venv-agente\Scripts\python.exe -m pip install -r agente_captura\requirements-construcao.txt
+.\.venv-agente\Scripts\pyinstaller.exe --noconfirm --onefile --noconsole --name sar-agente --paths . `
+  --distpath agente_captura\dist --workpath agente_captura\build --specpath agente_captura\build `
+  agente_captura\__main__.py
+```
+
+O executável sai em `agente_captura\dist\sar-agente.exe` (cerca de 17 MB; fora do Git).
+
+Rodar sem empacotar, para testar com um scanner ligado nesta máquina:
+
+```powershell
+$env:SAR_AGENTE_CONFIG = "C:\caminho\agente.json"   # o mesmo formato da estação (docs\INSTALACAO_AGENTE.md)
+.\.venv-agente\Scripts\python.exe -m agente_captura
+```
+
+O registro vai para `$env:LOCALAPPDATA\SAR\agente.log`, só com metadados (data, páginas, tempo, resultado).
+
+---
+
+## 9. Dados de referência
 
 Tabela de municípios do IBGE (`dados\municipios_ibge.csv`), regerada quando o IBGE criar ou renomear
 município:
@@ -224,13 +300,16 @@ python scripts\gerar_municipios_ibge.py
 
 ---
 
-## 9. Problemas comuns
+## 10. Problemas comuns
 
 | Sintoma | Causa e solução |
 |---|---|
 | `'export' não é reconhecido` | PowerShell com sintaxe do Git Bash. Use `$env:NOME = "valor"` |
 | `sar` não é reconhecido | O `.venv` não está ativo: `.\.venv\Scripts\Activate.ps1` |
 | `Can't connect to MySQL` / conexão recusada | O banco não está no ar: abra o Docker Desktop e rode `docker compose up -d --wait mysql` |
+| `ModuleNotFoundError: No module named 'sar'` ao rodar `sar` | A instalação do projeto no `.venv` ficou pela metade (atualização de dependência interrompida). Na pasta do projeto, com o `.venv` ativado: `pip install -e ".[dev]"`. Se o pip avisar de `Ignoring invalid distribution ~...`, apague as pastas que começam com `~` em `.venv\Lib\site-packages` antes |
+| `sar migrar` para com `Períodos com mais de uma cobertura` | A migração 0006 (uma cobertura por período, DD-101) não escolhe sozinha qual cobertura fica. A administração decide; depois, no banco (seção 4, `mysql` como root), apague as que sobram com `DELETE FROM cobertura WHERE id IN (...)` e rode `sar migrar` de novo |
+| `sar worker` falha com `SAR_COFRE e SAR_QUARENTENA são obrigatórias` | O terminal do worker não tem `SAR_AMBIENTE=desenvolvimento`, e sem ela o SAR se comporta como produção (DD-85). Prepare o segundo terminal com as variáveis da seção 1, como o do servidor |
 | `segredo ausente` | `SAR_SEGREDOS` não definida neste terminal (seção 1) |
 | Formulário dá "Forbidden" (403) | Página aberta como `localhost`. Use `http://127.0.0.1:8080` |
 | Tela sem estilo | Falta gerar o CSS (seção 7) |

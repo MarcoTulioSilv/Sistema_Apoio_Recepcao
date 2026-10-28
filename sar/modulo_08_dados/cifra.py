@@ -12,7 +12,7 @@ from cryptography.hazmat.primitives.hashes import SHA256
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 
 from sar.modulo_08_dados.segredos import ler_segredo
-from sar.nucleo.erros import IntegridadeViolada
+from sar.nucleo.erros import ConfiguracaoInvalida, IntegridadeViolada
 from sar.nucleo.portas import Finalidade
 
 TAMANHO_CHAVE = 32
@@ -49,7 +49,7 @@ def carregar_chave_mestra() -> bytes:
     try:
         chave = base64.b64decode(ler_segredo("chave_mestra"), validate=True)
     except ValueError:  # binascii.Error é subclasse; texto não ASCII também chega aqui
-        raise RuntimeError("segredo chave_mestra não está em base64") from None
+        raise ConfiguracaoInvalida("segredo chave_mestra não está em base64") from None
     if len(chave) != TAMANHO_CHAVE:
-        raise RuntimeError(f"segredo chave_mestra deve ter {TAMANHO_CHAVE} bytes")
+        raise ConfiguracaoInvalida(f"segredo chave_mestra deve ter {TAMANHO_CHAVE} bytes")
     return chave

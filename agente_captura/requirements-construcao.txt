@@ -1,0 +1,3 @@
+# Para gerar o executável sar-agente.exe (docs/comandos.md, seção do agente). Não vai para a estação.
+-r requirements.txt
+pyinstaller==6.22.3

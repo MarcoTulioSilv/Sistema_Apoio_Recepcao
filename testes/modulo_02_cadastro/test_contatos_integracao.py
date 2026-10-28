@@ -35,13 +35,13 @@ def test_telefone_tem_um_dono_so_e_o_do_contato_nao_vai_para_o_paciente(
     cadastro = montar(engine_web)
     recepcao = pessoa(cadastro_zerado)
     pid = novo_paciente(cadastro, cadastro_zerado, fabrica)
-    contato = cadastro.contatos.incluir_contato(recepcao, pid, fabrica.nome(), " filha ")
+    contato = cadastro.contatos.incluir_contato(recepcao, pid, fabrica.nome(), " Filho ou filha ")
     do_paciente = cadastro.contatos.incluir_telefone(recepcao, pid, "64", "99999-0001", CELULAR)
     do_contato = cadastro.contatos.incluir_telefone(recepcao, pid, "(64)", "3631-0002", TipoTelefone.FIXO, contato)
     ficha = cadastro.pacientes.ver_ficha(recepcao, pid)
     assert [t.id for t in ficha.telefones] == [do_paciente]
     [ficha_contato] = ficha.contatos
-    assert (ficha_contato.parentesco, [t.id for t in ficha_contato.telefones]) == ("filha", [do_contato])
+    assert (ficha_contato.parentesco, [t.id for t in ficha_contato.telefones]) == ("Filho ou filha", [do_contato])
     with engine_web.connect() as c:
         donos = c.execute(text("SELECT id, paciente_id, contato_id FROM telefone ORDER BY id")).all()
     assert [tuple(d) for d in donos] == [(do_paciente, pid, None), (do_contato, None, contato)]
@@ -110,10 +110,10 @@ def test_remover_contato_leva_os_telefones_dele(
     cadastro = montar(engine_web)
     recepcao = pessoa(cadastro_zerado)
     pid = novo_paciente(cadastro, cadastro_zerado, fabrica)
-    contato = cadastro.contatos.incluir_contato(recepcao, pid, fabrica.nome(), "filho")
+    contato = cadastro.contatos.incluir_contato(recepcao, pid, fabrica.nome(), "Filho ou filha")
     nome = fabrica.nome()
-    cadastro.contatos.alterar_contato(recepcao, contato, nome, "neto")
-    cadastro.contatos.alterar_contato(recepcao, contato, nome, "neto")  # igual: nada é auditado
+    cadastro.contatos.alterar_contato(recepcao, contato, nome, "Outro parente")
+    cadastro.contatos.alterar_contato(recepcao, contato, nome, "Outro parente")  # igual: nada é auditado
     do_contato = cadastro.contatos.incluir_telefone(recepcao, pid, "64", "99999-0002", CELULAR, contato)
     cadastro.contatos.alterar_telefone(recepcao, do_contato, "64", "99999-0012", CELULAR)  # continua do contato
     proprio = cadastro.contatos.incluir_telefone(recepcao, pid, "64", "99999-0003", CELULAR)

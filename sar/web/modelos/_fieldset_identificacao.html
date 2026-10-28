@@ -1,13 +1,28 @@
 {% from "_cadastro_campos.html" import texto %}
-{# Identificação (RF-101, RF-110, RF-111), na ordem da ficha: tela de novo cadastro e edição na ficha. #}
+{# Identificação (RF-101, RF-110, RF-111), na ordem da ficha: tela de novo cadastro e edição na ficha. Na edição, a
+   foto é o primeiro item (RF-711): o rótulo e o botão de trocar ou tirar à esquerda, a foto à direita. A partir da
+   tela média, ela ocupa as duas primeiras linhas, e os campos se encaixam ao lado. No novo cadastro não há foto: ela
+   vem depois, por "Salvar e tirar a foto". #}
     <fieldset class="cartao m-0 flex flex-col gap-3 px-5 pt-3 pb-5">
       <legend class="px-1.5 text-[17px] font-bold">Identificação</legend>
-      <div class="grid grid-cols-1 gap-x-4 gap-y-3 md:grid-cols-3">
+      <div class="grid grid-cols-1 items-start gap-x-4 gap-y-3 md:grid-cols-3">
+        {% if paciente_id and (pode_foto or foto) %}
+        {# pb-6.5: o mesmo espaço que cada campo reserva embaixo para a mensagem de erro, para as linhas ficarem iguais. #}
+        <div class="flex items-stretch gap-4 pb-6.5 md:row-span-2 md:self-stretch" data-foto-edicao>
+          <div class="flex flex-col items-start gap-2">
+            <span class="rotulo">Foto</span>
+            {% if pode_foto %}<a class="btn-pequeno" href="{{ url_for('documentos.foto', paciente_id=paciente_id, substitui=foto, abrir='1') if foto else url_for('documentos.foto', paciente_id=paciente_id, abrir='1') }}">{{ "Trocar" if foto else "Tirar" }}<span class="sr-only"> a foto do paciente</span></a>{% endif %}
+          </div>
+          {# A imagem fica posicionada dentro da moldura e não influi no tamanho: quem dá a altura é a linha. #}
+          {% if foto %}<div class="foto-edicao"><img src="{{ url_for('documentos.pagina', documento_id=foto, numero=1) }}" alt="Foto atual do paciente"></div>
+          {% else %}<div class="foto-edicao foto-vazia" role="img" aria-label="Sem foto do paciente"><span aria-hidden="true">Sem foto</span></div>{% endif %}
+        </div>
+        {% endif %}
         {{ texto("nome", "Nome completo", v, erros, obrigatorio=True) }}
         {{ texto("prontuario", "Prontuário", v, erros, obrigatorio=True) }}
         {% if not paciente_id %}{{ texto("inicio", "Início do tratamento", v, erros, tipo="date", obrigatorio=True) }}{% endif %}
         {{ texto("nascimento", "Data de nascimento", v, erros, tipo="date") }}
-        <div class="campo">
+        <div class="campo pb-6.5">{# listas não têm mensagem de erro: a mesma reserva dos campos de texto #}
           <label class="rotulo" for="sexo">Sexo</label>
           <select class="entrada" id="sexo" name="sexo">
             <option value="">Não informado</option>
@@ -20,7 +35,22 @@
         {{ texto("cns", "Cartão do SUS (CNS)", v, erros, extra='inputmode="numeric" hx-post="' ~ url_for('cadastro.conferir', campo='cns') ~ '" hx-trigger="change" hx-target="#cns-erro"') }}
         {{ texto("rg", "RG", v, erros) }}
         {{ texto("rg_orgao", "Órgão emissor do RG", v, erros) }}
+        {# Na edição com foto, a foto ocupa duas células: município e estado dividem uma só, e a última linha fecha.
+           No novo cadastro, os 12 campos já fecham as linhas, e cada um tem a sua célula. #}
+        {% if paciente_id and (pode_foto or foto) %}
         <div class="campo">
+          <label class="rotulo" for="naturalidade">Naturalidade: Município - Estado</label>
+          <div class="grid grid-cols-[minmax(0,1fr)_6rem] gap-2">
+          <input class="entrada" id="naturalidade" name="naturalidade" type="text" list="municipios-naturalidade" autocomplete="off" value="{{ v.get('naturalidade', '') }}" aria-describedby="naturalidade-erro"{% if erros.get('naturalidade') %} aria-invalid="true"{% endif %}>
+          <datalist id="municipios-naturalidade">{% with municipios=municipios_naturalidade %}{% include "_opcoes_municipios.html" %}{% endwith %}</datalist>
+          <select class="entrada" id="naturalidade_uf" name="naturalidade_uf" aria-label="Naturalidade: estado" hx-get="{{ url_for('cadastro.municipios') }}" hx-trigger="change" hx-target="#municipios-naturalidade">
+            {% for uf in ufs %}<option{% if uf == uf_naturalidade %} selected{% endif %}>{{ uf }}</option>{% endfor %}
+          </select>
+          </div>
+          <p class="ajuda-erro m-0" id="naturalidade-erro" aria-live="polite">{{ erros.get('naturalidade', '') }}</p>
+        </div>
+        {% else %}
+        <div class="campo pb-6.5">
           <label class="rotulo" for="naturalidade_uf">Naturalidade: UF</label>
           <select class="entrada" id="naturalidade_uf" name="naturalidade_uf" hx-get="{{ url_for('cadastro.municipios') }}" hx-trigger="change" hx-target="#municipios-naturalidade">
             {% for uf in ufs %}<option{% if uf == uf_naturalidade %} selected{% endif %}>{{ uf }}</option>{% endfor %}
@@ -32,6 +62,7 @@
           <datalist id="municipios-naturalidade">{% with municipios=municipios_naturalidade %}{% include "_opcoes_municipios.html" %}{% endwith %}</datalist>
           <p class="ajuda-erro m-0" id="naturalidade-erro" aria-live="polite">{{ erros.get('naturalidade', '') }}</p>
         </div>
+        {% endif %}
       </div>
     </fieldset>
 

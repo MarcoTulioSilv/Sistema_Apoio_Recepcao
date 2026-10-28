@@ -88,8 +88,7 @@ class Telefone(Base):
 
 
 class PeriodoTratamento(Base):
-    """Evento embutido (DD-13). O comprovante aponta para `documento`, que ganha modelo no Incremento 4; até lá
-    a coluna fica sem a chave estrangeira no modelo, e o teste de comparação ignora essa chave."""
+    """Evento embutido (DD-13), com o comprovante ligado ao documento do MOD-04 (§6.5)."""
 
     __tablename__ = "periodo_tratamento"
     __table_args__ = (
@@ -107,7 +106,9 @@ class PeriodoTratamento(Base):
     evento_tipo: Mapped[str | None] = mapped_column(Enum(*TIPOS_EVENTO, name="tipo_evento"))
     evento_data: Mapped[date | None] = mapped_column(Date)
     evento_local: Mapped[str | None] = mapped_column(String(150))
-    evento_documento_id: Mapped[bytes | None] = mapped_column(mysql.BINARY(16))
+    evento_documento_id: Mapped[bytes | None] = mapped_column(
+        mysql.BINARY(16), ForeignKey("documento.id", name="fk_periodo_tratamento__evento_documento_id")
+    )
     evento_registrado_em: Mapped[datetime | None] = mapped_column(INSTANTE)
     aberto: Mapped[int | None] = mapped_column(
         mysql.TINYINT(unsigned=True), Computed("IF(evento_tipo IS NULL, 1, NULL)", persisted=True)
@@ -115,11 +116,11 @@ class PeriodoTratamento(Base):
 
 
 class Cobertura(Base):
-    """Só com início: o fim é o início da seguinte (DD-70)."""
+    """Uma por período, valendo do início ao fim dele (INV-09, DD-101)."""
 
     __tablename__ = "cobertura"
     __table_args__ = (
-        UniqueConstraint("periodo_id", "vigencia_inicio", name="uq_cobertura__inicio"),
+        UniqueConstraint("periodo_id", name="uq_cobertura__periodo"),
         CheckConstraint("(tipo = 'convenio') = (convenio_id IS NOT NULL)", name="convenio"),
     )
 
@@ -127,7 +128,6 @@ class Cobertura(Base):
     periodo_id: Mapped[int] = mapped_column(
         BIGINT, ForeignKey("periodo_tratamento.id", name="fk_cobertura__periodo_id")
     )
-    vigencia_inicio: Mapped[date] = mapped_column(Date)
     tipo: Mapped[str] = mapped_column(Enum("sus", "convenio", name="tipo_cobertura"))
     convenio_id: Mapped[int | None] = mapped_column(BIGINT, ForeignKey("convenio.id", name="fk_cobertura__convenio_id"))
     carteirinha: Mapped[str | None] = mapped_column(String(30))

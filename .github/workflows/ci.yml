@@ -11,6 +11,7 @@ permissions:
 env:
   TAILWIND_VERSAO: v4.3.3
   GITLEAKS_VERSAO: 8.30.1
+  VERAPDF_VERSAO: 1.30.3
   # Banco descartável do contêiner iniciado no job; a senha só existe durante ele.
   MYSQL_RAIZ: raiz-somente-ci
   SAR_SEGREDOS: ${{ github.workspace }}/segredos
@@ -19,6 +20,9 @@ env:
   SAR_BANCO_NOME: sar_teste  # o mesmo banco de testes do desenvolvimento
   MYSQL_HOST: 127.0.0.1
   MYSQL_TCP_PORT: "3306"
+  SAR_EXIGIR_CLAMAV: "1"  # os testes do antimalware falham, em vez de pular, sem o clamd (CT-DOC-02)
+  SAR_EXIGIR_FERRAMENTAS: "1"  # idem para o Tesseract (DD-40) e o veraPDF (CT-DOC-03)
+  SAR_VERAPDF: /opt/verapdf/verapdf
 
 jobs:
   pipeline:
@@ -33,6 +37,10 @@ jobs:
           docker run -d --name mysql -p 3306:3306 -e MYSQL_ROOT_PASSWORD="$MYSQL_RAIZ" mysql:9.7.2 \
             --disable-log-bin --general-log=0 --slow-query-log=0
 
+      # Mesma imagem do compose.yaml; baixa as assinaturas enquanto as primeiras etapas rodam.
+      - name: Antimalware (SEG-09)
+        run: docker run -d --name clamav -p 127.0.0.1:3310:3310 clamav/clamav:1.5.4
+
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0  # o gitleaks varre o histórico inteiro
@@ -45,13 +53,25 @@ jobs:
       - name: Dependências
         run: python -m pip install -e ".[dev]"
 
+      # Ferramentas externas do MOD-04: o Tesseract em português e o validador de PDF/A (Java já vem no runner).
+      - name: Tesseract e veraPDF
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q tesseract-ocr tesseract-ocr-por
+          curl -sSfL -o /tmp/verapdf.zip \
+            "https://software.verapdf.org/releases/1.30/verapdf-greenfield-${VERAPDF_VERSAO}-installer.zip"
+          unzip -q /tmp/verapdf.zip -d /tmp/verapdf
+          sudo java -jar "/tmp/verapdf/verapdf-greenfield-${VERAPDF_VERSAO}/verapdf-izpack-installer-${VERAPDF_VERSAO}.jar" \
+            .github/verapdf/auto-install.xml
+          "$SAR_VERAPDF" --version
+
       - name: 1. Formatação e estilo
         run: |
           ruff check .
           ruff format --check .
 
       - name: 2. Tipos
-        run: mypy sar
+        run: mypy sar agente_captura
 
       - name: 3. Fronteiras
         run: lint-imports
@@ -64,10 +84,12 @@ jobs:
           pip-audit --skip-editable
 
       - name: 5. Análise estática
-        run: bandit -q -c pyproject.toml -r sar
+        run: bandit -q -c pyproject.toml -r sar agente_captura
 
       - name: 6. Unidade
-        run: pytest testes -m "not integracao and not sistema" --cov --cov-report=
+        run: |
+          until docker exec clamav clamdcheck.sh > /dev/null 2>&1; do sleep 5; done
+          pytest testes -m "not integracao and not sistema" --cov --cov-report=
 
       - name: 7. Migração e esquema
         run: |

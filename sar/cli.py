@@ -6,6 +6,10 @@
   sar verificar-cadeia       verifica a trilha de auditoria como o job diário (§13.1), pelo usuário do worker
   sar criar-usuario-ti       primeiro TI da implantação, quando não há TI ativo (DD-85)
   sar criar-superusuario     superusuário, só em desenvolvimento (DD-85)
+  sar worker                 consumidor da fila de ingestão de documentos (DD-63), até Ctrl+C
+  sar documentos-revarrer    revarredura antimalware do acervo (SEG-22); --minutos e --depois-de para retomar
+  sar documentos-hash        conferência de hash do acervo (SEG-15, P-19); mesmas opções
+  sar documentos-orfaos      remove do cofre arquivo sem documento (DD-37)
 
 Fica fora dos módulos porque junta comandos do MOD-08 e do MOD-01, como a raiz de composição.
 """
@@ -14,20 +18,32 @@ from __future__ import annotations
 
 import argparse
 import sys
+import threading
 from collections.abc import Sequence
 
 from sqlalchemy.exc import DBAPIError
 
-from sar.composicao import Ambiente, ambiente_atual, compor_auditoria, montar_barramento, montar_executor
+from sar.composicao import (
+    Ambiente,
+    ambiente_atual,
+    antimalware_do_ambiente,
+    compor_auditoria,
+    compor_rotinas,
+    compor_worker,
+    montar_barramento,
+    montar_executor,
+    pastas_do_ambiente,
+)
 from sar.modulo_01_acesso.contrato import UsuarioCriado
 from sar.modulo_01_acesso.senhas import Hasher
 from sar.modulo_01_acesso.servicos import ServicoAuditoria, ServicoUsuarios
 from sar.modulo_08_dados import cli as banco
 from sar.modulo_08_dados.banco import ConfigBanco, criar_engine
+from sar.modulo_08_dados.cifra import carregar_chave_mestra
 from sar.modulo_08_dados.erros_banco import anotar_restricao
 from sar.modulo_08_dados.relogio import RelogioSistema
 from sar.nucleo.contexto import Contexto
-from sar.nucleo.erros import RegraViolada
+from sar.nucleo.erros import ConfiguracaoInvalida, RegraViolada
 from sar.nucleo.logs import campos_do_erro, configurar, iniciar_requisicao
 
 
@@ -90,6 +106,44 @@ def criar_superusuario(nome: str, login: str) -> int:
     return 0
 
 
+def worker(parar: threading.Event | None = None) -> int:
+    """Laço da fila de ingestão pelo usuário de banco do worker (DD-58), com o clamd do ambiente."""
+    parar = parar or threading.Event()
+    pastas = pastas_do_ambiente()  # a configuração do terminal primeiro: sem ela, nem vale ler os segredos
+    engine = criar_engine(ConfigBanco.do_ambiente("sar_worker"))
+    try:
+        processador = compor_worker(engine, carregar_chave_mestra(), pastas, antimalware_do_ambiente())
+        print("Worker da ingestão no ar. Ctrl+C para parar.", flush=True)
+        processador.rodar(parar)
+    except KeyboardInterrupt:
+        parar.set()
+    finally:
+        engine.dispose()
+    return 0
+
+
+def rotina_documentos(comando: str, depois_de: str | None, minutos: float | None) -> int:
+    """As rotinas do acervo pelo usuário de banco do worker; o agendamento noturno chega com o MOD-09 (DD-41)."""
+    engine = criar_engine(ConfigBanco.do_ambiente("sar_worker"))
+    try:
+        rotinas = compor_rotinas(engine, carregar_chave_mestra(), pastas_do_ambiente(), antimalware_do_ambiente())
+        if comando == "documentos-orfaos":
+            print(f"Arquivos órfãos removidos do cofre: {rotinas.remover_orfaos()}.")
+            return 0
+        segundos = minutos * 60 if minutos is not None else None
+        rodar = rotinas.revarrer if comando == "documentos-revarrer" else rotinas.verificar_hashes
+        resultado = rodar(depois_de, segundos)
+    finally:
+        engine.dispose()
+    print(f"Documentos verificados: {resultado.verificados}; bloqueados: {len(resultado.bloqueados)}; "
+          f"desbloqueados: {len(resultado.desbloqueados)}.")  # fmt: skip
+    for documento_id in resultado.bloqueados:
+        print(f"  bloqueado: {documento_id}")
+    if resultado.cursor is not None:
+        print(f"Parou no prazo. Para continuar: sar {comando} --depois-de {resultado.cursor}")
+    return 1 if resultado.bloqueados else 0
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="sar", description="Linha de comando do SAR")
     sub = parser.add_subparsers(dest="comando", required=True)
@@ -108,6 +162,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     p = sub.add_parser("criar-superusuario", help="superusuário de desenvolvimento")
     p.add_argument("--nome", required=True)
     p.add_argument("--login", required=True)
+    sub.add_parser("worker", help="consumidor da fila de ingestão de documentos")
+    for nome, ajuda in (("documentos-revarrer", "revarredura antimalware do acervo"),
+                        ("documentos-hash", "conferência de hash do acervo")):  # fmt: skip
+        p = sub.add_parser(nome, help=ajuda)
+        p.add_argument("--depois-de", help="cursor devolvido pela execução anterior")
+        p.add_argument("--minutos", type=float, help="para depois deste tempo e mostra o cursor")
+    sub.add_parser("documentos-orfaos", help="remove do cofre arquivo sem documento")
     args = parser.parse_args(argv)
     configurar("cli")
     iniciar_requisicao()  # liga as linhas de log e a auditoria desta execução (DD-81)
@@ -123,8 +184,15 @@ def main(argv: Sequence[str] | None = None) -> int:
             return criar_usuario_ti(args.nome, args.login, args.termo_assinado)
         elif args.comando == "criar-superusuario":
             return criar_superusuario(args.nome, args.login)
+        elif args.comando == "worker":
+            return worker()
+        elif args.comando in ("documentos-revarrer", "documentos-hash", "documentos-orfaos"):
+            return rotina_documentos(args.comando, getattr(args, "depois_de", None), getattr(args, "minutos", None))
         else:
             return verificar_cadeia()
+    except ConfiguracaoInvalida as erro:
+        print(f"Falhou: {erro}", file=sys.stderr)  # mensagem nossa, sem dado pessoal nem segredo
+        return 1
     except Exception as erro:
         if isinstance(erro, DBAPIError):
             anotar_restricao(erro)

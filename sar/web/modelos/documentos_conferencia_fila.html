@@ -1,0 +1,37 @@
+{% extends "layout.html" %}
+{% block titulo_pagina %}Conferência de documentos{% endblock %}
+{% block subtitulo %}Documentos digitalizados esperando a conferência. Expiram em 24 horas sem ação.{% endblock %}
+{% block conteudo %}
+<div class="flex max-w-5xl flex-col gap-5">
+  {% set resultado = {"rejeitado": "Documento rejeitado. Nada foi guardado.",
+                      "encerrada": "Esta digitalização já foi concluída por outra estação ou expirou."}.get(request.args.get("resultado", "")) %}
+  {% include "_avisos.html" %}
+  <section class="cartao flex flex-col gap-3 p-5" aria-labelledby="fila-t">
+    <h2 id="fila-t" class="m-0 text-xl">A conferir <span class="numero">{{ itens|length }}</span></h2>
+    {% if itens %}
+    <div class="overflow-x-auto">
+      <table class="w-full border-collapse text-left">
+        <caption class="sr-only">Documentos a conferir</caption>
+        <thead><tr class="text-sm text-suave">
+          <th scope="col" class="px-3 py-2 font-bold">Paciente</th>
+          <th scope="col" class="px-3 py-2 font-bold">Documento</th>
+          <th scope="col" class="px-3 py-2 font-bold">Pronto desde</th>
+          <th scope="col" class="px-3 py-2 font-bold">Conferir</th>
+        </tr></thead>
+        <tbody>
+        {% for i in itens %}{% set p = pacientes.get(i.paciente_id) %}
+          <tr class="border-t border-linha" data-ingestao="{{ i.id }}">
+            <td class="px-3 py-2">{% if p %}{{ p.nome }} <span class="numero text-sm text-suave">· {{ p.prontuario }}</span>{% else %}Cadastro anulado{% endif %}</td>
+            <td class="px-3 py-2">{{ nomes.get(i.tipo, i.tipo) }}{% if i.nova_versao %} <span class="etiqueta-n">Nova versão</span>{% endif %}</td>
+            <td class="px-3 py-2">{{ i.atualizada_em|data_hora }}</td>
+            <td class="px-3 py-2"><a class="btn-secundario" href="{{ url_for('documentos.conferencia', ingestao_id=i.id) }}">Conferir<span class="sr-only"> {{ nomes.get(i.tipo, i.tipo) }}{% if p %} de {{ p.nome }}{% endif %}</span></a></td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}<p class="m-0 text-suave">Nenhum documento esperando conferência.</p>
+    {% endif %}
+  </section>
+</div>
+{% endblock %}

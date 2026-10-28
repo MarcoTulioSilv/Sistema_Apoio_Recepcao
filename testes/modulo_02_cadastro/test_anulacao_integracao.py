@@ -45,7 +45,7 @@ def admin(usuarios: dict[str, int]) -> Contexto:
 def cadastro_com_contato(cadastro: Cadastro, usuarios: dict[str, int], fabrica: Fabrica) -> int:
     recepcao = pessoa(usuarios)
     pid = cadastro.pacientes.criar(recepcao, replace(dados_completos(fabrica), cep="75800000", rg="123"), INICIO)
-    contato = cadastro.contatos.incluir_contato(recepcao, pid, fabrica.nome(), "filha")
+    contato = cadastro.contatos.incluir_contato(recepcao, pid, fabrica.nome(), "Filho ou filha")
     cadastro.contatos.incluir_telefone(recepcao, pid, "64", "99999-0001", TipoTelefone.CELULAR)
     cadastro.contatos.incluir_telefone(recepcao, pid, "64", "99999-0002", TipoTelefone.CELULAR, contato)
     return pid

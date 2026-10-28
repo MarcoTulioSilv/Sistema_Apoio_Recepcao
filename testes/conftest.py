@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import logging
 import os
+import sys
 import zlib
 from collections.abc import Iterator
 from datetime import UTC, datetime
@@ -17,9 +18,9 @@ from sqlalchemy import Engine, text
 from sar.modulo_08_dados.banco import ConfigBanco, criar_engine
 from sar.nucleo.logs import RUIDOSOS
 from testes.apoio.acesso import HASH, CriarUsuario
-from testes.apoio.fabrica import VALORES_SENSIVEIS, Fabrica
+from testes.apoio.fabrica import VALORES_SENSIVEIS, Fabrica, PacienteFicticio
 from testes.apoio.relogio_controlado import RelogioControlado
-from testes.apoio.vazamento import ColetorLogs, vazamentos
+from testes.apoio.vazamento import ColetorLogs, EstadoLogging, vazamentos
 
 RAIZ = Path(__file__).resolve().parent.parent
 os.environ.setdefault("SAR_SEGREDOS", str(RAIZ / "segredos"))
@@ -80,8 +81,8 @@ ZERAR_TRILHA = (
 )
 
 
-# Operação (MOD-03) e cadastro (MOD-02), na ordem das chaves estrangeiras. A aplicação não apaga paciente; só os
-# testes.
+# Operação (MOD-03), documentos (MOD-04) e cadastro (MOD-02), na ordem das chaves estrangeiras. A aplicação não
+# apaga paciente; só os testes.
 ZERAR_CADASTRO = (
     "DELETE FROM mes_alterado",
     "DELETE FROM ciencia_enfermagem",
@@ -97,6 +98,8 @@ ZERAR_CADASTRO = (
     "DELETE FROM contato",
     "DELETE FROM cobertura",
     "DELETE FROM periodo_tratamento",
+    "DELETE FROM ingestao",
+    "UPDATE documento SET substitui_id = NULL",  # versões apontam umas para as outras
     "DELETE FROM documento",
     "DELETE FROM duplicidade_descartada",
     "DELETE FROM rascunho_cadastro",
@@ -121,10 +124,11 @@ def trilha_zerada(engine_migracao: Engine) -> Iterator[Engine]:
 @pytest.fixture(autouse=True)
 def sem_dado_de_paciente_nos_logs() -> Iterator[None]:
     """CT-LOG-01 (RNF-624, DD-81): todo teste roda com os logs capturados no formato de produção; o teste
-    falha se algum valor sensível gerado pela fábrica aparecer neles."""
+    falha se algum valor sensível gerado pela fábrica aparecer neles. No fim, o logging volta ao que era, mesmo
+    que o teste tenha rodado a linha de comando e trocado os handlers da raiz."""
     raiz = logging.getLogger()
     coletor = ColetorLogs()
-    nivel_anterior = raiz.level
+    estado = EstadoLogging()
     raiz.addHandler(coletor)
     raiz.setLevel(logging.INFO)
     ruidosos = {nome: logging.getLogger(nome).level for nome in RUIDOSOS}
@@ -133,8 +137,7 @@ def sem_dado_de_paciente_nos_logs() -> Iterator[None]:
     try:
         yield
     finally:
-        raiz.removeHandler(coletor)
-        raiz.setLevel(nivel_anterior)
+        estado.restaurar()
         for nome, nivel in ruidosos.items():
             logging.getLogger(nome).setLevel(nivel)
     achados = vazamentos(coletor.linhas, VALORES_SENSIVEIS)
@@ -225,3 +228,28 @@ def operacao_zerada(
     with trilha_zerada.begin() as c:  # antes dos usuários, que as sessões, ciências e parâmetros referenciam
         for comando in (*ZERAR_CADASTRO, "DELETE FROM parametro"):
             c.execute(text(comando))
+
+
+# ------------------------------------------------------------------ extração (MOD-04)
+@pytest.fixture
+def tesseract_falso(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> PacienteFicticio:
+    """Um "Tesseract" que devolve sempre o mesmo texto, com o CPF e o CNS do paciente fictício e uma frase que nunca
+    pode ser guardada. Vale também para o subprocesso, que herda SAR_TESSERACT."""
+    paciente = Fabrica(7).paciente()
+    texto = f"Paciente {paciente.nome}\nCPF {paciente.cpf}\nCNS {paciente.cns}\nDIAGNOSTICO SIGILOSO\n"
+    script = tmp_path / "tesseract_falso.py"
+    script.write_text(f"import sys\nsys.stdin.buffer.read()\nsys.stdout.write({texto!r})\n", encoding="utf-8")
+    if sys.platform == "win32":
+        programa = tmp_path / "tesseract.cmd"
+        programa.write_text(f'@"{sys.executable}" "{script}" %*\n', encoding="utf-8")
+    else:
+        programa = tmp_path / "tesseract"
+        programa.write_text(f'#!/bin/sh\nexec "{sys.executable}" "{script}" "$@"\n', encoding="utf-8")
+        programa.chmod(0o755)
+    monkeypatch.setenv("SAR_TESSERACT", str(programa))
+    return paciente
+
+
+@pytest.fixture
+def sem_tesseract(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    monkeypatch.setenv("SAR_TESSERACT", str(tmp_path / "nao-existe"))

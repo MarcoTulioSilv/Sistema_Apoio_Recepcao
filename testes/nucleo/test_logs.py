@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import contextlib
+import io
 import json
 import logging
 import sys
@@ -18,7 +20,7 @@ from sar.nucleo.logs import (
     iniciar_requisicao,
 )
 from testes.apoio.fabrica import VALORES_SENSIVEIS, Fabrica
-from testes.apoio.vazamento import vazamentos
+from testes.apoio.vazamento import EstadoLogging, vazamentos
 
 FORMATADOR = FormatadorJson("teste")
 
@@ -118,8 +120,7 @@ def test_detector_aponta_a_linha_com_o_valor() -> None:
 def test_configurar_liga_o_json_na_raiz_e_carimba_o_contexto(capsys: pytest.CaptureFixture[str]) -> None:
     from sar.nucleo.logs import configurar
 
-    raiz = logging.getLogger()
-    handlers, nivel, fabrica_registro = list(raiz.handlers), raiz.level, logging.getLogRecordFactory()
+    estado = EstadoLogging()
     try:
         configurar("teste")
         ident = iniciar_requisicao()
@@ -127,13 +128,24 @@ def test_configurar_liga_o_json_na_raiz_e_carimba_o_contexto(capsys: pytest.Capt
         logging.getLogger("sqlalchemy.engine").info("SELECT nome FROM paciente WHERE cpf = '52998224725'")
         encerrar_requisicao()
     finally:
-        for handler in list(raiz.handlers):
-            raiz.removeHandler(handler)
-        for handler in handlers:
-            raiz.addHandler(handler)
-        raiz.setLevel(nivel)
-        logging.setLogRecordFactory(fabrica_registro)
-        logging.captureWarnings(False)
+        estado.restaurar()
     linhas = capsys.readouterr().err.splitlines()
     assert [json.loads(linha)["evento"] for linha in linhas] == ["teste.evento"]  # o SQL nem chega a ser escrito
     assert json.loads(linhas[0])["requisicao_id"] == ident
+
+
+@pytest.mark.requisito("DD-81")
+def test_logging_restaurado_depois_do_configurar_da_linha_de_comando() -> None:
+    """A linha de comando rodada no processo do teste liga o handler dela ao stderr capturado. Antes, ele ficava
+    na raiz depois do teste; com o stderr fechado pelo pytest, o log dos testes seguintes falhava."""
+    from sar.nucleo.logs import configurar
+
+    raiz = logging.getLogger()
+    antes, fabrica = list(raiz.handlers), logging.getLogRecordFactory()
+    estado = EstadoLogging()
+    fechado = io.StringIO()
+    with contextlib.redirect_stderr(fechado):
+        configurar("cli")
+    fechado.close()
+    estado.restaurar()
+    assert raiz.handlers == antes and logging.getLogRecordFactory() is fabrica  # nada preso ao stream fechado

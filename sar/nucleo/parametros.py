@@ -23,6 +23,9 @@ class Unidade(str, Enum):
     QUANTIDADE = "qtd"
     BOOLEANO = "bool"
     DATA = "data"
+    MEGABYTES = "MB"
+    SEGUNDOS = "s"
+    MILHOES = "mi"  # milhões de pixels
 
 
 @dataclass(frozen=True, slots=True)
@@ -53,6 +56,11 @@ PARAMETROS: dict[str, Parametro] = {
         Parametro("quarentena_prazo", Unidade.HORAS, 24, 1, 72, Perfil.TI),
         Parametro("extracao_ligada", Unidade.BOOLEANO, True, None, None, Perfil.TI),
         Parametro("antimalware_idade_maxima", Unidade.HORAS, 48, 24, 168, Perfil.TI),
+        # Captura e processamento (SEG-06, SEG-30), calibrados no teste do R-34 (§8.5)
+        Parametro("pagina_tamanho_maximo", Unidade.MEGABYTES, 12, 4, 30, Perfil.TI),
+        Parametro("paginas_por_ingestao", Unidade.QUANTIDADE, 30, 1, 100, Perfil.TI),
+        Parametro("pixels_por_pagina", Unidade.MILHOES, 12, 1, 20, Perfil.TI),  # teto fixo de 20 milhões
+        Parametro("processamento_tempo_maximo", Unidade.SEGUNDOS, 20, 10, 60, Perfil.TI),
         Parametro("data_implantacao", Unidade.DATA, None, None, None, Perfil.TI, imutavel_apos_uso=True),
     ]
 }

@@ -72,6 +72,10 @@ def test_ficha_mostra_o_balanco_e_refaz_o_pareamento(
     html = get(recepcao, f"/pacientes/{pid}").get_data(as_text=True)
     assert "Frequência de 10/2026" in html and html.count("Automático, pela ordem das datas") == 2
     assert "Mês aberto" in html and "?competencia=2026-09" in html
+    cartoes = re.findall(r'bg-freq-([a-z-]+)" data-balanco="\d"><dt class="text-sm text-suave">([^<]+)</dt>', html)
+    assert cartoes == [("previstas", "Previstas"), ("realizadas", "Realizadas"),
+                       ("ausencias", "Ausências não compensadas"), ("reposicoes", "Reposições"),
+                       ("extras", "Extras provisórias"), ("a-realizar", "A realizar")]  # fmt: skip
     ausencias, presencas = opcoes(html, "ausencia_id"), opcoes(html, "presenca_id")
     assert len(ausencias) == 2 and len(presencas) == 2
 

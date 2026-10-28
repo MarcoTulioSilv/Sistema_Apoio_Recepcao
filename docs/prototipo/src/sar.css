@@ -49,6 +49,20 @@
   --color-ausente-borda: #8a3b00;
   --color-ausente-fundo: #fde7d6;
 
+  /* Balanço da frequência (RF-916): tons sóbrios que lembram o termo; o texto continua tinta e suave. */
+  --color-freq-previstas: #efe9de;
+  --color-freq-previstas-borda: #c9bba0;
+  --color-freq-realizadas: #e3ece2;
+  --color-freq-realizadas-borda: #9db89a;
+  --color-freq-ausencias: #f3e2dc;
+  --color-freq-ausencias-borda: #c99a8b;
+  --color-freq-reposicoes: #e1e8ef;
+  --color-freq-reposicoes-borda: #9cb0c4;
+  --color-freq-extras: #e9e4ee;
+  --color-freq-extras-borda: #ad9fbf;
+  --color-freq-a-realizar: #f3ecd6;
+  --color-freq-a-realizar-borda: #c8b06a;
+
   --color-menu: #1b2230;
   --color-menu-texto: #dde3ec;
   --color-menu-inativo: #8e99aa;
@@ -68,6 +82,8 @@
 @utility btn { @apply inline-flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-lg px-4 font-bold no-underline transition-colors; }
 @utility btn-primario { @apply btn bg-acao text-white hover:bg-acao-escura disabled:cursor-not-allowed disabled:bg-borda disabled:text-suave; }
 @utility btn-secundario { @apply btn border border-acao bg-superficie text-acao hover:bg-acao-clara; }
+/* Ação curta ao lado de um rótulo: o texto do tamanho do rótulo; 28px de alto, acima do alvo mínimo de 24px (WCAG 2.5.8). */
+@utility btn-pequeno { @apply inline-flex min-h-7 cursor-pointer items-center rounded-md border border-acao bg-superficie px-2.5 text-sm font-bold text-acao no-underline transition-colors hover:bg-acao-clara; }
 @utility btn-neutro {
   @apply btn border border-borda bg-superficie font-normal text-tinta hover:border-borda-forte;
   &[aria-pressed="true"] { @apply border-ausente-borda bg-ausente-fundo font-bold text-ausente; }
@@ -168,6 +184,27 @@
 }
 @utility simulador { @apply m-0 flex flex-wrap items-center gap-2 rounded-xl border border-dashed border-borda-forte px-4 pt-1 pb-3; }
 @utility opcao-simulador { @apply inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-lg border border-borda bg-superficie px-3 has-checked:border-acao has-checked:font-bold; }
+
+/* Documentos (Incremento 4): página como imagem, paciente de destino na conferência, situação da captura, câmera */
+@utility pagina-documento { @apply block h-auto w-full max-w-3xl rounded-lg border border-borda bg-superficie; }
+@utility destaque-paciente { @apply flex flex-col gap-1 rounded-xl border-2 border-acao bg-acao-clara p-4; }
+@utility situacao-captura {
+  @apply flex flex-col gap-2 rounded-xl border border-borda bg-superficie p-4;
+  &[data-estado="pronta"] { @apply border-aprovar bg-aprovar-fundo; }
+  &[data-estado="recusada"] { @apply border-urgencia-borda bg-urgencia-fundo; }
+}
+@utility video-camera { @apply block aspect-video w-full max-w-xl rounded-lg bg-menu; }
+@utility foto-paciente { @apply block h-40 w-32 shrink-0 rounded-lg border border-borda bg-fundo object-cover; }
+@utility foto-vazia { @apply flex items-center justify-center text-sm text-suave; }
+@utility foto-ficha { @apply h-72 w-54; }
+/* A moldura tem a proporção 3:4 e, a partir da tela média, a altura das duas linhas que ocupa; a imagem dentro dela
+   é posicionada, para o tamanho próprio da foto não esticar as linhas. */
+@utility foto-edicao { @apply relative aspect-[3/4] h-30 shrink-0 overflow-hidden rounded-lg border border-borda bg-fundo md:h-auto; & > img { @apply absolute inset-0 size-full object-cover; } }
+@utility moldura-foto { @apply flex h-80 w-80 shrink-0 items-center justify-center justify-self-center rounded-xl border-2 border-borda-forte bg-fundo md:h-[26rem]; }
+@utility subquadro { @apply flex min-w-0 flex-col gap-3 rounded-xl border-2 border-borda-forte bg-fundo p-4; }
+@utility altura-resumo { @apply md:h-[26rem]; }
+@utility rolagem { @apply flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto pr-1; }
+@utility botao-detalhes { @apply btn-secundario list-none; &::-webkit-details-marker { display: none; } }
 
 /* Guia de componentes (só na página do guia) */
 @utility codigo { @apply m-0 overflow-x-auto rounded-lg bg-menu p-3 text-[13px] leading-relaxed text-menu-texto; }

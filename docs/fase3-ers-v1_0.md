@@ -251,7 +251,7 @@ mesmo controle de acesso e auditoria do cadastro. O prazo de descarte (RF-920) �
 | ID | Requisito | Verif. | Origem |
 |---|---|---|---|
 | RF-301 | Registrar a cobertura em dois estados: SUS ou convênio nomeado | T | B1.1 |
-| RF-302 | Manter o histórico de cobertura com datas de vigência, preservando a anterior quando houver mudança | T | B1.1 |
+| RF-302 | Manter o histórico de cobertura: uma cobertura por período de tratamento, valendo do início ao fim dele. A mudança de cobertura encerra o período pelo evento e abre um novo, preservando a anterior no período encerrado | T | B1.1, **V4** — DEC-75 |
 
 A cobertura pertence ao **período de tratamento**, não ao paciente (modelo §7.1). O registro da
 instituição que encaminhou o paciente foi retirado do sistema (DEC-73). Estados possíveis: SUS ou convênio nomeado.
@@ -526,7 +526,7 @@ quem pediu, o quê, quando, quem decidiu, a decisão e o motivo.
 | INV-06 | Documento armazenado não é alterado nem excluído — só recebe nova versão | Bloqueio |
 | INV-07 | Número de prontuário é único | Bloqueio |
 | INV-08 | Coincidência da tríade nome + data de nascimento + nome da mãe gera **alerta**, não bloqueio | Alerta |
-| INV-09 | Vigências de cobertura de um mesmo período não se sobrepõem | Bloqueio |
+| INV-09 | Um período de tratamento tem no máximo uma cobertura, registrada só enquanto o período está aberto (DEC-75) | Bloqueio |
 | INV-10 | Vigências de alocação de um mesmo período não se sobrepõem | Bloqueio |
 | INV-11 | Todo evento permanece pendente até que seu documento comprobatório seja anexado | Pendência |
 | INV-12 | Telefone pertence ao paciente ou a um contato, nunca a ambos | Bloqueio |
@@ -986,6 +986,7 @@ Detalhamentos que não mudam o escopo aprovado, mas mudam texto de requisito ou 
 | §3.2.13 | Âncora mensal da cadeia de auditoria para a administração | DEC-72 |
 | RF-303 | Removido: registro da instituição que encaminhou o paciente | DEC-73 |
 | §3.2.13 | Âncora da cadeia retirada da matriz de pendências; passa a sair automaticamente no rodapé dos relatórios e documentos emitidos | DEC-74 |
+| RF-302, INV-09 | Uma cobertura por período; a troca de cobertura passa pelo encerramento do período e por um novo período | DEC-75 |
 
 ## Apêndice B — Decisões registradas após a Fase 2
 
@@ -1027,6 +1028,7 @@ As decisões DEC-01 a DEC-40 estão nos documentos das Fases 0 a 2. As posterior
 | DEC-72 | A âncora mensal da cadeia de auditoria aparece como pendência da administração, para anotação fora do sistema |
 | DEC-73 | A instituição que encaminhou o paciente deixa de ser registrada no sistema |
 | DEC-74 | A âncora da cadeia de auditoria deixa de ser pendência da administração (substitui DEC-72): um código de integridade sai automaticamente no rodapé dos relatórios e dos documentos emitidos, e as cópias guardadas e entregues fazem o papel da anotação fora do sistema |
+| DEC-75 | Uma cobertura por período de tratamento. Nova cobertura só no primeiro registro do período; para trocar, o período anterior é encerrado pelo evento e um novo é aberto com a cobertura nova (decidido em 27/10/2026, depois de o uso mostrar vigências acumuladas no mesmo período) |
 
 ## Apêndice C — Rastreabilidade
 

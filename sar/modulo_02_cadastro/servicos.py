@@ -5,7 +5,7 @@ from __future__ import annotations
 import calendar
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, fields
-from datetime import date, timedelta
+from datetime import date
 from typing import Literal
 
 from sar.modulo_01_acesso.contrato import AuditService, PermissionGuard
@@ -42,8 +42,8 @@ from sar.modulo_02_cadastro.regras import (
     validar_telefone,
     verificar_abertura,
     verificar_inicio,
-    verificar_inicio_cobertura,
     verificar_minimo,
+    verificar_nova_cobertura,
 )
 from sar.modulo_06_configuracao.contrato import Municipio, Referencias
 from sar.modulo_08_dados.interfaces.pacientes import (
@@ -79,7 +79,7 @@ COLUNAS_UNICAS: tuple[ColunaUnica, ...] = ("prontuario", "cpf", "cns")
 _RESTRICOES = {f"uq_paciente__{coluna}": f"{coluna}.repetido" for coluna in COLUNAS_UNICAS} | {
     "uq_periodo_tratamento__um_aberto": "INV-02",
     "uq_periodo_tratamento__inicio": "periodo.inicio_repetido",
-    "uq_cobertura__inicio": "INV-09",
+    "uq_cobertura__periodo": "INV-09",
 }
 
 
@@ -273,7 +273,7 @@ class ServicoPacientes:
                 uow, contexto, "cadastro.paciente.criar", "paciente", str(paciente_id), alteracoes
             )
             if cobertura is not None:
-                self._gravar_cobertura(uow, contexto, periodo_id, cobertura, carteirinha, inicio)
+                self._gravar_cobertura(uow, contexto, periodo_id, cobertura, carteirinha)
             self._gravar_telefones_e_contatos(uow, contexto, paciente_id, telefones_limpos, contatos_limpos)
             self._eliminar_rascunho(uow, contexto)
             return paciente_id
@@ -384,12 +384,12 @@ class ServicoPacientes:
                 {"paciente_id": (None, paciente_id), "inicio": (None, inicio)},
             )  # fmt: skip
             if cobertura is not None:
-                self._gravar_cobertura(uow, contexto, periodo_id, cobertura, carteirinha, inicio)
+                self._gravar_cobertura(uow, contexto, periodo_id, cobertura, carteirinha)
             return periodo_id
 
         return _com_unicidade(lambda: self._executar(operacao))
 
-    def registrar_cobertura(self, contexto: Contexto, periodo_id: int, cobertura: DadosCobertura, inicio: date) -> None:
+    def registrar_cobertura(self, contexto: Contexto, periodo_id: int, cobertura: DadosCobertura) -> None:
         GUARDA.exigir(contexto, "cadastro.cobertura.registrar")
         carteirinha = validar_cobertura(cobertura.tipo, cobertura.convenio_id, cobertura.carteirinha)
 
@@ -398,8 +398,8 @@ class ServicoPacientes:
             periodo = repositorio.periodo(periodo_id)
             if periodo is None:
                 raise NaoEncontrado()
-            _paciente_vivo(repositorio, periodo.paciente_id)  # trava o agregado: duas vigências não se cruzam
-            self._gravar_cobertura(uow, contexto, periodo_id, cobertura, carteirinha, inicio)
+            _paciente_vivo(repositorio, periodo.paciente_id)  # trava o agregado: duas coberturas não entram juntas
+            self._gravar_cobertura(uow, contexto, periodo_id, cobertura, carteirinha)
 
         _com_unicidade(lambda: self._executar(operacao))
 
@@ -410,9 +410,8 @@ class ServicoPacientes:
         periodo_id: int,
         cobertura: DadosCobertura,
         carteirinha: str | None,
-        inicio: date,
     ) -> None:
-        """Com o agregado já travado: período, convênio ativo, início dentro do período e sem repetir (INV-09)."""
+        """Com o agregado já travado: convênio ativo e período aberto ainda sem cobertura (INV-09, DD-101)."""
         repositorio = uow.repositorio(RepositorioPaciente)
         periodo = repositorio.periodo(periodo_id)
         if periodo is None:
@@ -423,14 +422,11 @@ class ServicoPacientes:
                 raise NaoEncontrado()
             if not convenio.ativo:
                 raise RegraViolada("cobertura.convenio_inativo")  # DD-49: inativo não entra em registro novo
-        inicios = [c.inicio for c in repositorio.coberturas([periodo_id])]
-        verificar_inicio_cobertura(inicio, periodo.inicio, periodo.evento_data, inicios)
-        cobertura_id = repositorio.criar_cobertura(
-            periodo_id, inicio, cobertura.tipo.value, cobertura.convenio_id, carteirinha
-        )
+        verificar_nova_cobertura(periodo.evento_tipo is None, bool(repositorio.coberturas([periodo_id])))
+        cobertura_id = repositorio.criar_cobertura(periodo_id, cobertura.tipo.value, cobertura.convenio_id, carteirinha)
         self._auditoria.registrar(
             uow, contexto, "cadastro.cobertura.registrar", "cobertura", str(cobertura_id),
-            {"periodo_id": (None, periodo_id), "inicio": (None, inicio), "tipo": (None, cobertura.tipo.value),
+            {"periodo_id": (None, periodo_id), "tipo": (None, cobertura.tipo.value),
              "convenio_id": (None, cobertura.convenio_id), "carteirinha": (None, carteirinha)},
         )  # fmt: skip
 
@@ -497,6 +493,14 @@ class ServicoPacientes:
         self._executar(operacao)
 
     # ---------------------------------------------------------------- leitura
+    def identificar(self, contexto: Contexto, paciente_ids: Sequence[int]) -> dict[int, Identificacao]:
+        GUARDA.exigir(contexto, "cadastro.paciente.buscar")
+        if not paciente_ids:
+            return {}
+        return self._executar(
+            lambda uow: {p.id: _identificacao(p) for p in uow.repositorio(RepositorioPaciente).vivos(paciente_ids)}
+        )
+
     def buscar(self, contexto: Contexto, termo: str) -> list[Identificacao]:
         GUARDA.exigir(contexto, "cadastro.paciente.buscar")
         limpo = " ".join(termo.split())
@@ -601,24 +605,21 @@ class ServicoPacientes:
     def _periodos_ficha(
         self, uow: UnidadeDeTrabalho, repositorio: RepositorioPaciente, periodos: list[PeriodoGravado]
     ) -> tuple[PeriodoFicha, ...]:
-        coberturas = repositorio.coberturas([p.id for p in periodos])
+        por_periodo = {c.periodo_id: c for c in repositorio.coberturas([p.id for p in periodos])}
         fichas = []
         for p in periodos:
-            do_periodo = [c for c in coberturas if c.periodo_id == p.id]
-            itens = []
-            for i, c in enumerate(do_periodo):
-                seguinte = do_periodo[i + 1].inicio if i + 1 < len(do_periodo) else None
-                convenio = self._referencias.convenio(uow, c.convenio_id) if c.convenio_id is not None else None
-                itens.append(
-                    CoberturaFicha(
-                        inicio=c.inicio,
-                        ate=seguinte - timedelta(days=1) if seguinte is not None else None,
-                        tipo=TipoCobertura(c.tipo),
-                        convenio_nome=convenio.nome if convenio else None,
-                        convenio_ativo=convenio.ativo if convenio else None,
-                        carteirinha=c.carteirinha,
-                    )
+            c = por_periodo.get(p.id)
+            convenio = self._referencias.convenio(uow, c.convenio_id) if c and c.convenio_id is not None else None
+            cobertura = (
+                CoberturaFicha(
+                    tipo=TipoCobertura(c.tipo),
+                    convenio_nome=convenio.nome if convenio else None,
+                    convenio_ativo=convenio.ativo if convenio else None,
+                    carteirinha=c.carteirinha,
                 )
+                if c is not None
+                else None
+            )
             fichas.append(
                 PeriodoFicha(
                     p.id,
@@ -627,7 +628,7 @@ class ServicoPacientes:
                     p.evento_data,
                     p.evento_local,
                     p.evento_documento_id is not None,
-                    tuple(itens),
+                    cobertura,
                 )
             )
         return tuple(fichas)

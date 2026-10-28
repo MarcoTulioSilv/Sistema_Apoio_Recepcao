@@ -35,7 +35,7 @@
           </tbody>
         </table>
       </div>
-      <div><button class="btn-secundario" type="submit" name="acao" value="confirmar">É outra pessoa: salvar o paciente</button></div>
+      <div><button class="btn-secundario" type="submit" name="acao" value="{{ 'confirmar_foto' if com_foto else 'confirmar' }}">É outra pessoa: salvar o paciente{% if com_foto %} e tirar a foto{% endif %}</button></div>
     </section>
     {% endif %}
 
@@ -105,6 +105,7 @@
       {% if tem_rascunho %}<button type="submit" class="btn-neutro min-h-12" name="acao" value="descartar">Descartar rascunho</button>{% endif %}
       <button type="submit" class="btn-secundario min-h-12" name="acao" value="rascunho">Salvar rascunho</button>
       <button type="submit" class="btn-primario min-h-12" name="acao" value="paciente" data-acao="salvar-paciente">Salvar paciente</button>
+      {% if pode_foto %}<button type="submit" class="btn-secundario min-h-12" name="acao" value="paciente_foto" data-acao="salvar-paciente">Salvar e tirar a foto</button>{% endif %}
     </div>
   </footer>
 </form>

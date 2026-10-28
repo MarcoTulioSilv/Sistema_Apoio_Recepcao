@@ -23,6 +23,7 @@ from sar.modulo_02_cadastro.contrato import (
     RascunhoService,
 )
 from sar.modulo_03_operacao.contrato import EscalaService, FrequenciaService, SessaoTurnoService
+from sar.modulo_04_documentos.contrato import DocumentoService, IngestaoService
 from sar.modulo_05_emissao.contrato import RelatorioService
 from sar.modulo_06_configuracao.contrato import ConfiguracaoService
 
@@ -33,6 +34,7 @@ class ConfigWeb:
     desenvolvimento: bool = False
     superusuarios: frozenset[int] = field(default_factory=frozenset)  # ids; só em desenvolvimento (DD-85)
     proxies_confiaveis: int = 0  # Caddy na frente: 1; o endereço do cliente vem do X-Forwarded-For
+    porta_agente: int = 47830  # agente de captura na estação, só no loopback (DD-98)
 
     def __post_init__(self) -> None:
         partes = urlsplit(self.origem)
@@ -46,6 +48,10 @@ class ConfigWeb:
     @property
     def origem_normalizada(self) -> str:
         return self.origem.rstrip("/")
+
+    @property
+    def endereco_agente(self) -> str:
+        return f"http://127.0.0.1:{self.porta_agente}"
 
 
 @dataclass(frozen=True, slots=True)
@@ -67,3 +73,5 @@ class ServicosWeb:
     turnos: SessaoTurnoService
     frequencia: FrequenciaService
     relatorios: RelatorioService
+    ingestao: IngestaoService
+    documentos: DocumentoService

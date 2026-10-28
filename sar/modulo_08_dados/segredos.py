@@ -7,6 +7,8 @@ import os
 import re
 from pathlib import Path
 
+from sar.nucleo.erros import ConfiguracaoInvalida
+
 _NOME = re.compile(r"^[a-z][a-z0-9_]*$")
 
 
@@ -21,7 +23,10 @@ def ler_segredo(nome: str) -> str:
     try:
         valor = (pasta_segredos() / nome).read_text(encoding="utf-8").strip()
     except FileNotFoundError:
-        raise RuntimeError(f"segredo ausente: {nome}") from None
+        # O caminho não é segredo (só o conteúdo é) e mostra na hora se a variável aponta para a pasta errada.
+        raise ConfiguracaoInvalida(
+            f"segredo ausente: {nome} em {pasta_segredos()}. Confira SAR_SEGREDOS neste terminal"
+        ) from None
     if not valor:
-        raise RuntimeError(f"segredo vazio: {nome}")
+        raise ConfiguracaoInvalida(f"segredo vazio: {nome}")
     return valor

@@ -57,7 +57,6 @@ class PeriodoGravado:
 class CoberturaGravada:
     id: int
     periodo_id: int
-    inicio: date
     tipo: str
     convenio_id: int | None
     carteirinha: str | None
@@ -162,12 +161,10 @@ class RepositorioPaciente(Protocol):
         """Registra, corrige ou remove (tudo None) o evento embutido no período (DD-13)."""
         ...
 
-    def criar_cobertura(
-        self, periodo_id: int, inicio: date, tipo: str, convenio_id: int | None, carteirinha: str | None
-    ) -> int: ...
+    def criar_cobertura(self, periodo_id: int, tipo: str, convenio_id: int | None, carteirinha: str | None) -> int: ...
 
     def coberturas(self, periodo_ids: list[int]) -> list[CoberturaGravada]:
-        """Em ordem de período e de início."""
+        """Em ordem de período; no máximo uma por período (INV-09, DD-101)."""
         ...
 
     def pacientes_com_periodo_em(self, data: date) -> list[int]:

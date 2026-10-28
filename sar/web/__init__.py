@@ -20,10 +20,11 @@ from sar.web import formatos
 from sar.web.configuracao import ConfigWeb, ServicosWeb
 from sar.web.rotulos import PERFIS
 
-# DD-09: nenhum recurso de fora do servidor, nenhum código ou estilo inline.
+# DD-09: nenhum recurso de fora do servidor, nenhum código ou estilo inline. A única conexão além do próprio servidor
+# é o agente de captura no loopback da estação (DD-98).
 POLITICA_CONTEUDO = (
-    "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' blob:; object-src 'none'; "
-    "base-uri 'none'; frame-ancestors 'none'; form-action 'self'"
+    "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' blob:; media-src 'self' blob:; "
+    "connect-src 'self' {agente}; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'"
 )
 CABECALHO_REQUISICAO = "X-Requisicao-Id"
 CABECALHO_AUTOMATICA = "X-SAR-Automatica"  # requisição da própria tela, que não renova a inatividade (DD-57)
@@ -31,6 +32,7 @@ COOKIE_SESSAO = "__Host-sar_sessao"  # DD-19: Secure, Path=/ e sem Domain, que o
 COOKIE_PERFIL_DEV = "__Host-sar_perfil_dev"  # só vale para o superusuário, em desenvolvimento (DD-85)
 METODOS_QUE_ALTERAM = frozenset({"POST", "PUT", "PATCH", "DELETE"})
 PUBLICOS = frozenset({"saude.saude", "static", "acesso.entrar", "acesso.entrar_enviar"})
+BLUEPRINT_CAPTURA = "captura"  # blueprint das rotas autenticadas pelo token da ingestão, sem cookie nem Origin (DD-94)
 
 ROTULOS_PERFIL = PERFIS
 
@@ -54,6 +56,7 @@ MENU: tuple[ItemMenu, ...] = (
     ItemMenu("Pacientes", "pacientes.busca", (("cadastro.paciente.buscar", None),)),
     ItemMenu("Novo cadastro", "cadastro.novo", (("cadastro.paciente.criar", None),)),
     ItemMenu("Escalas", "escalas.geral", (("operacao.escala.consultar", None),)),
+    ItemMenu("Conferência", "documentos.fila", (("documento.ingestao.conferir", None),)),
     ItemMenu("Usuários", "usuarios.lista", (("acesso.usuario.consultar", None),)),
     ItemMenu(
         "Parâmetros",
@@ -98,6 +101,7 @@ def criar_app(servicos: ServicosWeb | None = None, config: ConfigWeb | None = No
     app.config["SAR"] = config
     app.jinja_env.filters["telefone"] = formatos.telefone  # telas: 99999-0001 e 3631-0002; banco: só dígitos
     app.jinja_env.filters["cep"] = formatos.cep  # telas: 75800-000
+    app.jinja_env.filters["data_hora"] = formatos.data_hora  # telas: 13/10/2026 10:05, na hora da clínica
     app.config["SAR_SERVICOS"] = servicos
     if config.proxies_confiaveis:
         n = config.proxies_confiaveis
@@ -105,7 +109,9 @@ def criar_app(servicos: ServicosWeb | None = None, config: ConfigWeb | None = No
 
     from sar.web.rotas_acesso import bp as acesso
     from sar.web.rotas_cadastro import bp as cadastro
+    from sar.web.rotas_captura import bp as captura
     from sar.web.rotas_convenios import bp as convenios
+    from sar.web.rotas_documentos import bp as documentos
     from sar.web.rotas_escalas import bp as escalas
     from sar.web.rotas_pacientes import bp as pacientes
     from sar.web.rotas_parametros import bp as parametros
@@ -128,6 +134,8 @@ def criar_app(servicos: ServicosWeb | None = None, config: ConfigWeb | None = No
             integridade,
             turnos,
             escalas,
+            documentos,
+            captura,
         ):
             app.register_blueprint(blueprint)
 
@@ -139,13 +147,15 @@ def criar_app(servicos: ServicosWeb | None = None, config: ConfigWeb | None = No
     @app.before_request
     def conferir_origem() -> None:
         """DD-84: além do cookie SameSite=Strict, todo POST precisa vir de uma página do próprio SAR."""
+        if request.blueprint == BLUEPRINT_CAPTURA:
+            return
         if request.method in METODOS_QUE_ALTERAM and request.headers.get("Origin") != config.origem_normalizada:
             log.warning("web.origem_recusada")
             abort(403)
 
     @app.before_request
     def autenticar() -> RespostaWerkzeug | None:
-        if servicos is None or request.endpoint in PUBLICOS:
+        if servicos is None or request.endpoint in PUBLICOS or request.blueprint == BLUEPRINT_CAPTURA:
             return None
         token = request.cookies.get(COOKIE_SESSAO)
         if not token:
@@ -183,7 +193,7 @@ def criar_app(servicos: ServicosWeb | None = None, config: ConfigWeb | None = No
 
     @app.after_request
     def cabecalhos_e_registro(resposta: Response) -> Response:
-        resposta.headers["Content-Security-Policy"] = POLITICA_CONTEUDO
+        resposta.headers["Content-Security-Policy"] = POLITICA_CONTEUDO.format(agente=config.endereco_agente)
         resposta.headers["X-Content-Type-Options"] = "nosniff"
         # same-origin, e não no-referrer: com no-referrer o navegador manda "Origin: null" até no formulário da
         # própria página, e a conferência da DD-84 recusaria tudo. Para outros sites, nada vaza.

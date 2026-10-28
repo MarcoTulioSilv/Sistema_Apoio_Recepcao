@@ -11,6 +11,7 @@ from sqlalchemy import Engine
 import sar.modulo_08_dados.modelos.acesso
 import sar.modulo_08_dados.modelos.cadastro
 import sar.modulo_08_dados.modelos.configuracao
+import sar.modulo_08_dados.modelos.documentos
 import sar.modulo_08_dados.modelos.operacao  # noqa: F401 — registra os modelos no metadata
 from sar.modulo_08_dados.modelos import Base
 
@@ -20,7 +21,7 @@ pytestmark = pytest.mark.integracao
 def _so_tabelas_com_modelo(objeto: object, nome: str | None, tipo: str, refletido: bool, comparado: object) -> bool:
     if tipo == "table":
         return nome in Base.metadata.tables
-    if tipo == "foreign_key_constraint":  # periodo, troca e termo → documento, cujo modelo vem no Incremento 4
+    if tipo == "foreign_key_constraint":  # chave para tabela que ainda não tem modelo
         alvo = getattr(getattr(objeto, "referred_table", None), "name", None)
         if alvo is not None and alvo not in Base.metadata.tables:
             return False

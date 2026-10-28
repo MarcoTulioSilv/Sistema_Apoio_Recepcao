@@ -35,11 +35,11 @@
     });
     const minimos = form.querySelectorAll("[data-minimo]");
     const contagem = form.querySelector('[data-contagem="minimo"]');
-    const salvar = form.querySelector('[data-acao="salvar-paciente"]');
+    const salvar = form.querySelectorAll('[data-acao="salvar-paciente"]');  // "Salvar paciente" e "Salvar e tirar a foto"
     const atualizar = () => {
       const preenchidos = Array.from(minimos).filter((c) => c.value.trim() !== "").length;
       contagem.textContent = preenchidos;
-      salvar.disabled = preenchidos < minimos.length;
+      salvar.forEach((botao) => { botao.disabled = preenchidos < minimos.length; });
     };
     form.addEventListener("input", atualizar);
     atualizar();

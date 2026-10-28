@@ -1,0 +1,4 @@
+# Dependências do agente de captura, só na estação (Windows). Fora do servidor: o pacote sar não as usa.
+# Versões fixas, publicadas há mais de duas semanas.
+pillow==13.0.0  # exceção às duas semanas (22/10/2026): corrige vulnerabilidades da 12.3.0
+pywin32==312

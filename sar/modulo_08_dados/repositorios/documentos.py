@@ -1,0 +1,218 @@
+"""Repositório do MOD-04 Documentos (SQL)."""
+
+from __future__ import annotations
+
+from collections.abc import Sequence
+from datetime import UTC, datetime
+from typing import cast
+
+from sqlalchemy import func, select, update
+from sqlalchemy.orm import Session
+
+from sar.modulo_08_dados.interfaces.documentos import (
+    DocumentoGravado,
+    EstadoIngestao,
+    IngestaoGravada,
+    Origem,
+    TipoGravado,
+)
+from sar.modulo_08_dados.modelos.cadastro import Paciente
+from sar.modulo_08_dados.modelos.documentos import Documento, Ingestao, TipoDocumento
+
+
+def _utc(instante: datetime | None) -> datetime | None:
+    return instante.replace(tzinfo=UTC) if instante is not None else None
+
+
+def _gravar(instante: datetime | None) -> datetime | None:
+    return instante.astimezone(UTC).replace(tzinfo=None) if instante is not None else None
+
+
+def _tipo(t: TipoDocumento) -> TipoGravado:
+    campos = tuple(c.strip() for c in (t.campos_extracao or "").split(",") if c.strip())
+    return TipoGravado(t.codigo, t.nome, t.familia, t.anos_retencao, cast(Origem, t.origem), campos, t.checklist)
+
+
+def _ingestao(i: Ingestao) -> IngestaoGravada:
+    return IngestaoGravada(
+        i.id, i.paciente_id, i.tipo, cast(Origem, i.origem), i.vinculo, i.substitui_id, cast(EstadoIngestao, i.estado),
+        i.motivo_rejeicao, i.token_hash, i.hash_entrada, i.hash_reconstruido, i.paginas, i.campos_candidatos_cifrados,
+        i.documento_id, i.criada_em.replace(tzinfo=UTC), i.criada_por, i.atualizada_em.replace(tzinfo=UTC),
+    )  # fmt: skip
+
+
+def _documento(d: Documento) -> DocumentoGravado:
+    return DocumentoGravado(
+        d.id, d.paciente_id, d.tipo, d.versao, d.substitui_id, d.arquivo, d.chave_cifrada, d.nonce, d.hash_sha256,
+        d.paginas, cast(Origem, d.origem), d.capturado_em.replace(tzinfo=UTC), d.capturado_por, d.local_digitalizacao,
+        _utc(d.descartado_em), _utc(d.bloqueado_em), d.bloqueio_motivo,
+    )  # fmt: skip
+
+
+class RepositorioDocumentosSQL:
+    def __init__(self, sessao: Session) -> None:
+        self._s = sessao
+
+    # ---------------------------------------------------------------- tipos e pacientes
+    def tipo(self, codigo: str) -> TipoGravado | None:
+        t = self._s.get(TipoDocumento, codigo)
+        return _tipo(t) if t is not None else None
+
+    def tipos(self) -> list[TipoGravado]:
+        return [_tipo(t) for t in self._s.scalars(select(TipoDocumento).order_by(TipoDocumento.codigo))]
+
+    def paciente_ativo(self, paciente_id: int) -> bool:
+        anulado = self._s.execute(select(Paciente.anulado_em).where(Paciente.id == paciente_id)).first()
+        return anulado is not None and anulado[0] is None
+
+    # ---------------------------------------------------------------- ingestões
+    def criar_ingestao(self, ingestao: IngestaoGravada) -> None:
+        self._s.add(
+            Ingestao(
+                id=ingestao.id, paciente_id=ingestao.paciente_id, tipo=ingestao.tipo, origem=ingestao.origem,
+                vinculo=ingestao.vinculo, substitui_id=ingestao.substitui_id, estado=ingestao.estado,
+                motivo_rejeicao=ingestao.motivo_rejeicao, token_hash=ingestao.token_hash,
+                hash_entrada=ingestao.hash_entrada, hash_reconstruido=ingestao.hash_reconstruido,
+                paginas=ingestao.paginas, campos_candidatos_cifrados=ingestao.campos_candidatos_cifrados,
+                documento_id=ingestao.documento_id, criada_em=_gravar(ingestao.criada_em),
+                criada_por=ingestao.criada_por, atualizada_em=_gravar(ingestao.atualizada_em),
+            )
+        )  # fmt: skip
+        self._s.flush()
+
+    def ingestao(self, ingestao_id: bytes, travar: bool = False) -> IngestaoGravada | None:
+        consulta = select(Ingestao).where(Ingestao.id == ingestao_id)
+        if travar:
+            consulta = consulta.with_for_update()
+        linha = self._s.scalars(consulta).first()
+        return _ingestao(linha) if linha is not None else None
+
+    def salvar_ingestao(self, ingestao: IngestaoGravada) -> None:
+        self._s.execute(
+            update(Ingestao)
+            .where(Ingestao.id == ingestao.id)
+            .values(
+                estado=ingestao.estado, motivo_rejeicao=ingestao.motivo_rejeicao, token_hash=ingestao.token_hash,
+                hash_entrada=ingestao.hash_entrada, hash_reconstruido=ingestao.hash_reconstruido,
+                paginas=ingestao.paginas, campos_candidatos_cifrados=ingestao.campos_candidatos_cifrados,
+                documento_id=ingestao.documento_id, atualizada_em=_gravar(ingestao.atualizada_em),
+            )
+        )  # fmt: skip
+
+    def tomar_da_fila(self) -> IngestaoGravada | None:
+        consulta = (
+            select(Ingestao)
+            .where(Ingestao.estado == "recebida")
+            .order_by(Ingestao.criada_em, Ingestao.id)  # desempate estável
+            .limit(1)
+            .with_for_update(skip_locked=True)
+        )
+        linha = self._s.scalars(consulta).first()
+        return _ingestao(linha) if linha is not None else None
+
+    def em_estado(self, estados: Sequence[EstadoIngestao]) -> list[IngestaoGravada]:
+        consulta = select(Ingestao).where(Ingestao.estado.in_(estados)).order_by(Ingestao.criada_em)
+        return [_ingestao(i) for i in self._s.scalars(consulta)]
+
+    def criadas_antes(self, estados: Sequence[EstadoIngestao], limite: datetime) -> list[IngestaoGravada]:
+        consulta = select(Ingestao).where(Ingestao.estado.in_(estados), Ingestao.criada_em < _gravar(limite))
+        return [_ingestao(i) for i in self._s.scalars(consulta.order_by(Ingestao.criada_em))]
+
+    def ingestoes_do_paciente(self, paciente_id: int, estados: Sequence[EstadoIngestao]) -> list[IngestaoGravada]:
+        consulta = select(Ingestao).where(Ingestao.paciente_id == paciente_id, Ingestao.estado.in_(estados))
+        return [_ingestao(i) for i in self._s.scalars(consulta.with_for_update())]
+
+    def ids_de_ingestoes(self, ids: Sequence[bytes]) -> dict[bytes, EstadoIngestao]:
+        if not ids:
+            return {}
+        linhas = self._s.execute(select(Ingestao.id, Ingestao.estado).where(Ingestao.id.in_(ids)))
+        return {id_: cast(EstadoIngestao, estado) for id_, estado in linhas}
+
+    # ---------------------------------------------------------------- documentos
+    def criar_documento(self, documento: DocumentoGravado) -> None:
+        self._s.add(
+            Documento(
+                id=documento.id, paciente_id=documento.paciente_id, tipo=documento.tipo, versao=documento.versao,
+                substitui_id=documento.substitui_id, arquivo=documento.arquivo, chave_cifrada=documento.chave_cifrada,
+                nonce=documento.nonce, hash_sha256=documento.hash_sha256, paginas=documento.paginas,
+                origem=documento.origem, capturado_em=_gravar(documento.capturado_em),
+                capturado_por=documento.capturado_por, local_digitalizacao=documento.local_digitalizacao,
+                descartado_em=_gravar(documento.descartado_em), bloqueado_em=_gravar(documento.bloqueado_em),
+                bloqueio_motivo=documento.bloqueio_motivo,
+            )
+        )  # fmt: skip
+        self._s.flush()
+
+    def documento(self, documento_id: bytes) -> DocumentoGravado | None:
+        linha = self._s.get(Documento, documento_id)
+        return _documento(linha) if linha is not None else None
+
+    def documento_com_hash(self, hash_sha256: str) -> bytes | None:
+        return self._s.scalar(select(Documento.id).where(Documento.hash_sha256 == hash_sha256))
+
+    def sucessor(self, documento_id: bytes) -> bytes | None:
+        return self._s.scalar(select(Documento.id).where(Documento.substitui_id == documento_id))
+
+    def do_paciente(self, paciente_id: int) -> list[DocumentoGravado]:
+        consulta = select(Documento).where(Documento.paciente_id == paciente_id)
+        return [_documento(d) for d in self._s.scalars(consulta.order_by(Documento.tipo, Documento.versao))]
+
+    def nao_descartados(self) -> list[DocumentoGravado]:
+        consulta = select(Documento).where(Documento.descartado_em.is_(None)).order_by(Documento.capturado_em)
+        return [_documento(d) for d in self._s.scalars(consulta)]
+
+    def ultimo_documento_em(self, paciente_ids: Sequence[int]) -> dict[int, datetime]:
+        if not paciente_ids:
+            return {}
+        linhas = self._s.execute(
+            select(Documento.paciente_id, func.max(Documento.capturado_em))
+            .where(Documento.paciente_id.in_(paciente_ids))
+            .group_by(Documento.paciente_id)
+        )
+        return {paciente: instante.replace(tzinfo=UTC) for paciente, instante in linhas}
+
+    def revincular(self, documento_ids: Sequence[bytes], paciente_id: int) -> None:
+        self._s.execute(update(Documento).where(Documento.id.in_(documento_ids)).values(paciente_id=paciente_id))
+
+    def descartar(self, documento_id: bytes, instante: datetime) -> None:
+        self._s.execute(
+            update(Documento)
+            .where(Documento.id == documento_id, Documento.descartado_em.is_(None))
+            .values(descartado_em=_gravar(instante), chave_cifrada=None)
+        )
+
+    def bloquear(self, documento_id: bytes, instante: datetime, motivo: str) -> None:
+        self._s.execute(
+            update(Documento)
+            .where(Documento.id == documento_id, Documento.bloqueado_em.is_(None))
+            .values(bloqueado_em=_gravar(instante), bloqueio_motivo=motivo)
+        )
+
+    def tipos_presentes(self, paciente_ids: Sequence[int] | None) -> dict[int, set[str]]:
+        consulta = select(Documento.paciente_id, Documento.tipo).where(Documento.descartado_em.is_(None)).distinct()
+        if paciente_ids is not None:
+            if not paciente_ids:
+                return {}
+            consulta = consulta.where(Documento.paciente_id.in_(paciente_ids))
+        presentes: dict[int, set[str]] = {}
+        for paciente_id, tipo in self._s.execute(consulta):
+            presentes.setdefault(paciente_id, set()).add(tipo)
+        return presentes
+
+    def bloqueados(self) -> list[DocumentoGravado]:
+        consulta = select(Documento).where(Documento.bloqueado_em.is_not(None), Documento.descartado_em.is_(None))
+        return [_documento(d) for d in self._s.scalars(consulta.order_by(Documento.bloqueado_em))]
+
+    def arquivos(self) -> set[str]:
+        return set(self._s.scalars(select(Documento.arquivo)))
+
+    def acervo_depois_de(self, documento_id: bytes | None, limite: int) -> list[DocumentoGravado]:
+        consulta = select(Documento).where(Documento.descartado_em.is_(None))
+        if documento_id is not None:
+            consulta = consulta.where(Documento.id > documento_id)
+        return [_documento(d) for d in self._s.scalars(consulta.order_by(Documento.id).limit(limite))]
+
+    def desbloquear(self, documento_id: bytes) -> None:
+        self._s.execute(
+            update(Documento).where(Documento.id == documento_id).values(bloqueado_em=None, bloqueio_motivo=None)
+        )

@@ -63,7 +63,7 @@ def test_busca_por_post_e_ficha_por_perfil(
 
     visualizador = cliente(engine_web, criar_usuario, "visualizador")
     ficha = get(visualizador, f"/pacientes/{pid}").get_data(as_text=True)
-    assert dados["nome"] in ficha and "Editar dados" not in ficha and "Registrar evento" not in ficha
+    assert dados["nome"] in ficha and "Editar dados" not in ficha and "Encerrar tratamento" not in ficha
 
     ti = cliente(engine_web, criar_usuario, "ti")
     for caminho in ("/pacientes", f"/pacientes/{pid}", f"/pacientes/{pid}/editar", f"/pacientes/{pid}/anular"):
@@ -105,7 +105,7 @@ def test_telefones_e_contatos_pela_ficha(
     pid, _ = novo_paciente(recepcao, fabrica)
     nome_contato = fabrica.nome()
     post(recepcao, f"/pacientes/{pid}/telefones", {"ddd": "64", "numero": "99999-0001", "tipo": "celular"})
-    post(recepcao, f"/pacientes/{pid}/contatos", {"nome": nome_contato, "parentesco": "Filha"})
+    post(recepcao, f"/pacientes/{pid}/contatos", {"nome": nome_contato, "parentesco": "Filho ou filha"})
     with engine_web.connect() as c:
         contato = c.execute(text("SELECT id FROM contato")).scalar_one()
     resposta = post(recepcao, f"/pacientes/{pid}/telefones", {"ddd": "64", "numero": "3631-0002", "tipo": "fixo",
@@ -123,7 +123,7 @@ def test_telefones_e_contatos_pela_ficha(
         assert c.execute(text("SELECT COUNT(*) FROM telefone")).scalar_one() == 0
 
 
-@pytest.mark.requisito("RF-601", "RF-603", "RF-605", "RF-607", "RF-302")
+@pytest.mark.requisito("RF-601", "RF-603", "RF-605", "RF-607", "RF-302", "DD-101")
 def test_evento_retorno_e_cobertura_pela_ficha(
     criar_usuario: CriarUsuario, cadastro_zerado: dict[str, int], engine_web: Engine, fabrica: Fabrica
 ) -> None:
@@ -137,13 +137,14 @@ def test_evento_retorno_e_cobertura_pela_ficha(
     resposta = post(recepcao, f"/pacientes/{pid}/periodos", {"inicio": "2026-05-01", "cobertura": "sus"})
     assert resposta.headers["Location"].endswith("resultado=periodo")
     periodo = periodo_atual(engine_web, pid)
-    post(recepcao, f"/pacientes/{pid}/periodos/{periodo}/coberturas", {"inicio": "2026-06-01", "cobertura": "sus"})
     ficha = get(recepcao, f"/pacientes/{pid}").get_data(as_text=True)
-    assert "De 01/05/2026 a 31/05/2026" in ficha and "De 01/06/2026 em diante" in ficha
-    repetida = post(
-        recepcao, f"/pacientes/{pid}/periodos/{periodo}/coberturas", {"inicio": "2026-06-01", "cobertura": "sus"}
-    )
-    assert "Já existe cobertura começando nesta data." in repetida.get_data(as_text=True)
+    # Com a cobertura no período aberto e o outro encerrado, nenhum dos dois oferece registrar cobertura (DD-101).
+    assert "Registrar cobertura" not in ficha and "Registrar nova cobertura" not in ficha
+    segunda = post(recepcao, f"/pacientes/{pid}/periodos/{periodo}/coberturas", {"cobertura": "sus"})
+    assert "Este período já tem cobertura." in segunda.get_data(as_text=True)
+    with engine_web.connect() as c:
+        quantas = c.execute(text("SELECT COUNT(*) FROM cobertura WHERE periodo_id = :p"), {"p": periodo})
+        assert quantas.scalar_one() == 1
 
 
 @pytest.mark.requisito("RF-606", "DEC-42", "P-01", "CT-ACE-03")
@@ -212,13 +213,15 @@ def test_cep_verificado_de_novo_e_duplicidade_descartada_pela_ficha(
     assert "Possível duplicidade" not in get(recepcao, descarte.headers["Location"]).get_data(as_text=True)
 
 
-@pytest.mark.requisito("RF-201", "RF-202", "INV-12", "RNF-605")
+@pytest.mark.requisito("RF-201", "RF-202", "INV-12", "RNF-605", "DD-102")
 def test_edicao_de_telefone_e_contato_pela_ficha(
     criar_usuario: CriarUsuario, cadastro_zerado: dict[str, int], engine_web: Engine, fabrica: Fabrica
 ) -> None:
     recepcao = cliente(engine_web, criar_usuario, "recepcao")
     pid, _ = novo_paciente(recepcao, fabrica)
-    post(recepcao, f"/pacientes/{pid}/contatos", {"nome": fabrica.nome(), "parentesco": "Filha"})
+    livre = post(recepcao, f"/pacientes/{pid}/contatos", {"nome": fabrica.nome(), "parentesco": "Padrasto"})
+    assert "Escolha o parentesco na lista." in livre.get_data(as_text=True)  # antes, o texto livre entrava
+    post(recepcao, f"/pacientes/{pid}/contatos", {"nome": fabrica.nome(), "parentesco": "Filho ou filha"})
     with engine_web.connect() as c:
         contato = c.execute(text("SELECT id FROM contato")).scalar_one()
     post(recepcao, f"/pacientes/{pid}/telefones", {"ddd": "64", "numero": "3631-0002", "tipo": "fixo",
@@ -227,6 +230,7 @@ def test_edicao_de_telefone_e_contato_pela_ficha(
         telefone = c.execute(text("SELECT id FROM telefone")).scalar_one()
     ficha = get(recepcao, f"/pacientes/{pid}").get_data(as_text=True)
     assert f'action="/pacientes/{pid}/telefones/{telefone}/alterar"' in ficha and 'value="3631-0002"' in ficha
+    assert "<option selected>Filho ou filha</option>" in ficha and 'name="parentesco" maxlength' not in ficha
 
     resposta = post(recepcao, f"/pacientes/{pid}/telefones/{telefone}/alterar",
                     {"ddd": "64", "numero": "99999-0003", "tipo": "celular"})  # fmt: skip
@@ -236,9 +240,10 @@ def test_edicao_de_telefone_e_contato_pela_ficha(
     assert "Celular tem 9 dígitos" in invalido.get_data(as_text=True)
 
     novo_nome = fabrica.nome()
-    resposta = post(recepcao, f"/pacientes/{pid}/contatos/{contato}/alterar", {"nome": novo_nome, "parentesco": "Neta"})
+    alterar = f"/pacientes/{pid}/contatos/{contato}/alterar"
+    resposta = post(recepcao, alterar, {"nome": novo_nome, "parentesco": "Outro parente"})
     ficha = get(recepcao, resposta.headers["Location"]).get_data(as_text=True)
-    assert "Contato alterado." in ficha and novo_nome in ficha and "Neta" in ficha
+    assert "Contato alterado." in ficha and novo_nome in ficha and "· Outro parente" in ficha
     vazio = post(recepcao, f"/pacientes/{pid}/contatos/{contato}/alterar", {"nome": " ", "parentesco": ""})
     assert "Informe o nome do contato." in vazio.get_data(as_text=True)
     with engine_web.connect() as c:
@@ -254,7 +259,8 @@ def test_edicao_de_telefone_e_contato_pela_ficha(
             .scalars()
             .all()
         )
-    assert '"parentesco":["Filha","Neta"]' in alteracoes[0] and '"numero":["36310002","999990003"]' in alteracoes[1]
+    assert '"parentesco":["Filho ou filha","Outro parente"]' in alteracoes[0]
+    assert '"numero":["36310002","999990003"]' in alteracoes[1]
 
     visualizador = cliente(engine_web, criar_usuario, "visualizador")
     assert "/alterar" not in get(visualizador, f"/pacientes/{pid}").get_data(as_text=True)

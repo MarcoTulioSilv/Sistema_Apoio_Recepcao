@@ -30,7 +30,6 @@ CAMPOS = (
 _TELEFONE = re.compile(r"^tel-(\d{1,2})-(ddd|numero|tipo)$")
 _CONTATO = re.compile(r"^contato-(\d{1,2})-(nome|parentesco)$")
 _TELEFONE_CONTATO = re.compile(r"^contato-(\d{1,2})-tel-(\d{1,2})-(ddd|numero|tipo)$")
-PARENTESCOS = ("Cônjuge", "Filho ou filha", "Pai ou mãe", "Irmão ou irmã", "Outro parente", "Vizinho ou amigo")
 TIPOS_TELEFONE = {TipoTelefone.CELULAR.value: "Celular", TipoTelefone.FIXO.value: "Fixo",
                   TipoTelefone.RECADO.value: "Recado"}  # fmt: skip
 

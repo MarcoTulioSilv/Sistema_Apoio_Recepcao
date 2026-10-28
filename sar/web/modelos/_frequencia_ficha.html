@@ -14,8 +14,15 @@
   </div>
   <p class="m-0 text-sm text-suave">{% if p.mes_fechado %}Mês fechado: todas as sessões confirmadas. Extras definitivas.{% else %}Mês aberto: a classificação das extras ainda pode mudar (RF-504).{% endif %}</p>
   <dl class="m-0 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-    {% for rotulo, valor in (('Previstas', b.previstas), ('Realizadas', b.realizadas), ('Ausências não compensadas', b.ausencias_nao_compensadas), ('Reposições', b.reposicoes), ('Extras' ~ (' provisórias' if b.provisorio else ''), b.extras), ('A realizar', b.a_realizar)) %}
-    <div class="flex flex-col rounded-lg border border-borda p-3"><dt class="text-sm text-suave">{{ rotulo }}</dt><dd class="numero m-0 text-2xl font-bold">{{ valor }}</dd></div>
+    {# Cada número com a cor que lembra o termo (tokens freq-*); a cor só reforça o rótulo, que continua escrito. #}
+    {% for rotulo, valor, cor in (
+         ('Previstas', b.previstas, 'border-freq-previstas-borda bg-freq-previstas'),
+         ('Realizadas', b.realizadas, 'border-freq-realizadas-borda bg-freq-realizadas'),
+         ('Ausências não compensadas', b.ausencias_nao_compensadas, 'border-freq-ausencias-borda bg-freq-ausencias'),
+         ('Reposições', b.reposicoes, 'border-freq-reposicoes-borda bg-freq-reposicoes'),
+         ('Extras' ~ (' provisórias' if b.provisorio else ''), b.extras, 'border-freq-extras-borda bg-freq-extras'),
+         ('A realizar', b.a_realizar, 'border-freq-a-realizar-borda bg-freq-a-realizar')) %}
+    <div class="flex flex-col rounded-lg border p-3 {{ cor }}" data-balanco="{{ loop.index }}"><dt class="text-sm text-suave">{{ rotulo }}</dt><dd class="numero m-0 text-2xl font-bold">{{ valor }}</dd></div>
     {% endfor %}
   </dl>
   {% if b.extra_alem_do_limite %}<p class="m-0"><span class="etiqueta-a">Mais de 4 extras no mês (RN-01)</span></p>{% endif %}

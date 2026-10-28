@@ -19,6 +19,10 @@ class Sexo(str, Enum):
     MASCULINO = "M"
 
 
+# Parentesco do contato (RF-201): lista fechada (DD-102); o que vier fora dela é recusado.
+PARENTESCOS = ("Cônjuge", "Filho ou filha", "Pai ou mãe", "Irmão ou irmã", "Outro parente", "Vizinho ou amigo")
+
+
 class TipoTelefone(str, Enum):
     CELULAR = "celular"
     FIXO = "fixo"
@@ -130,8 +134,8 @@ class PeriodoRef:
 
 @dataclass(frozen=True, slots=True)
 class CoberturaFicha:
-    inicio: date
-    ate: date | None  # véspera do início da seguinte (DD-70); None na vigente
+    """A cobertura do período, valendo do início ao fim dele (DD-101)."""
+
     tipo: TipoCobertura
     convenio_nome: str | None
     convenio_ativo: bool | None
@@ -146,7 +150,7 @@ class PeriodoFicha:
     evento_data: date | None
     evento_local: str | None
     comprovante_anexado: bool
-    coberturas: tuple[CoberturaFicha, ...]
+    cobertura: CoberturaFicha | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -211,6 +215,11 @@ class PacienteService(Protocol):
         na ficha e na lista de pendências."""
         ...
 
+    def identificar(self, contexto: Contexto, paciente_ids: Sequence[int]) -> dict[int, Identificacao]:
+        """Nome, prontuário, nascimento e mãe de pacientes já conhecidos pela tela (a fila da conferência), numa
+        consulta só (§11.3). Como a lista de pacientes, não vai à trilha: não é busca. Anulados ficam de fora."""
+        ...
+
     def buscar(self, contexto: Contexto, termo: str) -> list[Identificacao]:
         """Pelo nome (contém, sem caixa e acento), pelo começo do prontuário, ou pelo começo do CPF ou do CNS (a
         partir de 3 dígitos, com ou sem pontuação). Termo com menos de 2 caracteres não busca. Anulados nunca
@@ -241,9 +250,9 @@ class PacienteService(Protocol):
         "periodo.antes_do_fim_anterior", "inicio.antes_do_nascimento", "periodo.inicio_repetido". NaoEncontrado."""
         ...
 
-    def registrar_cobertura(self, contexto: Contexto, periodo_id: int, cobertura: DadosCobertura, inicio: date) -> None:
-        """Nova vigência no período; a anterior termina na véspera (DD-70, RF-302). RegraViolada: "INV-09" (início
-        repetido), "cobertura.antes_do_periodo", "cobertura.depois_do_fim", "cobertura.convenio",
+    def registrar_cobertura(self, contexto: Contexto, periodo_id: int, cobertura: DadosCobertura) -> None:
+        """A cobertura do período aberto que ainda não tem (DD-101); trocar é encerrar o período e abrir outro.
+        RegraViolada: "INV-09" (o período já tem), "cobertura.periodo_encerrado", "cobertura.convenio",
         "cobertura.sus_sem_convenio", "cobertura.convenio_inativo". NaoEncontrado (período, convênio ou paciente
         anulado)."""
         ...
