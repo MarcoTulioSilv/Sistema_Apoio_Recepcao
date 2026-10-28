@@ -15,10 +15,12 @@ from sar.cli import main
 
 @pytest.mark.requisito("DD-34", "DD-85", "DD-81")
 def test_worker_sem_ambiente_diz_o_que_falta(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], tmp_path: Path
 ) -> None:
     for variavel in ("SAR_AMBIENTE", "SAR_COFRE", "SAR_QUARENTENA"):
         monkeypatch.delenv(variavel, raising=False)
+    # Sem segredos, como no CI: antes, o segredo do banco era lido primeiro e escondia o que de fato faltava.
+    monkeypatch.setenv("SAR_SEGREDOS", str(tmp_path))
     assert main(["worker"]) == 1
     erro = capsys.readouterr().err
     assert "SAR_COFRE e SAR_QUARENTENA são obrigatórias" in erro and "SAR_AMBIENTE=desenvolvimento" in erro
@@ -29,6 +31,7 @@ def test_segredo_ausente_diz_qual(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], tmp_path: Path
 ) -> None:
     monkeypatch.setenv("SAR_SEGREDOS", str(tmp_path))
+    monkeypatch.setenv("SAR_AMBIENTE", "desenvolvimento")  # as pastas passam; o que falta é o segredo
     assert main(["worker"]) == 1
     erro = capsys.readouterr().err
     assert f"segredo ausente: sar_worker em {tmp_path}" in erro and "SAR_SEGREDOS" in erro

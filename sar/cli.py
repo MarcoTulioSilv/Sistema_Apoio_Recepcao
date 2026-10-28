@@ -109,9 +109,10 @@ def criar_superusuario(nome: str, login: str) -> int:
 def worker(parar: threading.Event | None = None) -> int:
     """Laço da fila de ingestão pelo usuário de banco do worker (DD-58), com o clamd do ambiente."""
     parar = parar or threading.Event()
+    pastas = pastas_do_ambiente()  # a configuração do terminal primeiro: sem ela, nem vale ler os segredos
     engine = criar_engine(ConfigBanco.do_ambiente("sar_worker"))
     try:
-        processador = compor_worker(engine, carregar_chave_mestra(), pastas_do_ambiente(), antimalware_do_ambiente())
+        processador = compor_worker(engine, carregar_chave_mestra(), pastas, antimalware_do_ambiente())
         print("Worker da ingestão no ar. Ctrl+C para parar.", flush=True)
         processador.rodar(parar)
     except KeyboardInterrupt:
