@@ -3,6 +3,9 @@ outros erros, que pode trazer SQL ou dado pessoal)."""
 
 from __future__ import annotations
 
+import os
+import subprocess  # nosec B404
+import sys
 from pathlib import Path
 
 import pytest
@@ -29,3 +32,14 @@ def test_segredo_ausente_diz_qual(
     assert main(["worker"]) == 1
     erro = capsys.readouterr().err
     assert f"segredo ausente: sar_worker em {tmp_path}" in erro and "SAR_SEGREDOS" in erro
+
+
+def test_pacote_instalado_no_ambiente(tmp_path: Path) -> None:
+    """O comando `sar` depende do pacote instalado (`pip install -e .`), não da pasta atual: os testes acham o `sar`
+    pelo pythonpath do pytest e não perceberiam uma instalação quebrada pela metade."""
+    ambiente = {chave: valor for chave, valor in os.environ.items() if chave != "PYTHONPATH"}
+    importacao = subprocess.run(
+        [sys.executable, "-c", "import sar.cli"], cwd=tmp_path, env=ambiente, capture_output=True, text=True,
+        check=False,
+    )  # fmt: skip
+    assert importacao.returncode == 0, 'pacote sar não instalado: rode pip install -e ".[dev]" (docs/comandos.md)'

@@ -20,7 +20,7 @@ from sar.nucleo.logs import RUIDOSOS
 from testes.apoio.acesso import HASH, CriarUsuario
 from testes.apoio.fabrica import VALORES_SENSIVEIS, Fabrica, PacienteFicticio
 from testes.apoio.relogio_controlado import RelogioControlado
-from testes.apoio.vazamento import ColetorLogs, vazamentos
+from testes.apoio.vazamento import ColetorLogs, EstadoLogging, vazamentos
 
 RAIZ = Path(__file__).resolve().parent.parent
 os.environ.setdefault("SAR_SEGREDOS", str(RAIZ / "segredos"))
@@ -124,10 +124,11 @@ def trilha_zerada(engine_migracao: Engine) -> Iterator[Engine]:
 @pytest.fixture(autouse=True)
 def sem_dado_de_paciente_nos_logs() -> Iterator[None]:
     """CT-LOG-01 (RNF-624, DD-81): todo teste roda com os logs capturados no formato de produção; o teste
-    falha se algum valor sensível gerado pela fábrica aparecer neles."""
+    falha se algum valor sensível gerado pela fábrica aparecer neles. No fim, o logging volta ao que era, mesmo
+    que o teste tenha rodado a linha de comando e trocado os handlers da raiz."""
     raiz = logging.getLogger()
     coletor = ColetorLogs()
-    nivel_anterior = raiz.level
+    estado = EstadoLogging()
     raiz.addHandler(coletor)
     raiz.setLevel(logging.INFO)
     ruidosos = {nome: logging.getLogger(nome).level for nome in RUIDOSOS}
@@ -136,8 +137,7 @@ def sem_dado_de_paciente_nos_logs() -> Iterator[None]:
     try:
         yield
     finally:
-        raiz.removeHandler(coletor)
-        raiz.setLevel(nivel_anterior)
+        estado.restaurar()
         for nome, nivel in ruidosos.items():
             logging.getLogger(nome).setLevel(nivel)
     achados = vazamentos(coletor.linhas, VALORES_SENSIVEIS)
