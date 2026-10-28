@@ -7,13 +7,19 @@ from __future__ import annotations
 
 import re
 import unicodedata
-from bisect import bisect_right
 from collections.abc import Sequence
 from dataclasses import fields, replace
 from datetime import date
 from enum import Enum
 
-from sar.modulo_02_cadastro.contrato import DadosPaciente, Situacao, TipoCobertura, TipoEvento, TipoTelefone
+from sar.modulo_02_cadastro.contrato import (
+    PARENTESCOS,
+    DadosPaciente,
+    Situacao,
+    TipoCobertura,
+    TipoEvento,
+    TipoTelefone,
+)
 from sar.nucleo.erros import RegraViolada
 
 # Tamanhos das colunas de texto da 0001.
@@ -24,7 +30,6 @@ TAMANHOS = {
 TAMANHO_LOCAL_EVENTO = 150
 TAMANHO_CARTEIRINHA = 30
 TAMANHO_NOME_CONTATO = 150
-TAMANHO_PARENTESCO = 40
 NASCIMENTO_MINIMO = date(1900, 1, 1)
 
 # Campos que, vazios, viram pendência nomeada (RF-102, UC-01 A1). O complemento é opcional de verdade.
@@ -224,10 +229,14 @@ def _simples(valor: object) -> object:
 
 # ------------------------------------------------------------------ contatos e telefones (RF-201, RF-202)
 def validar_contato(nome: str | None, parentesco: str | None) -> tuple[str, str | None]:
+    """Nome obrigatório; parentesco opcional, mas só da lista fechada (DD-102)."""
     limpo = texto(nome, "contato.nome", TAMANHO_NOME_CONTATO)
     if limpo is None:
         raise RegraViolada("contato.nome")
-    return limpo, texto(parentesco, "contato.parentesco", TAMANHO_PARENTESCO)
+    grau = (parentesco or "").strip() or None
+    if grau is not None and grau not in PARENTESCOS:
+        raise RegraViolada("contato.parentesco")
+    return limpo, grau
 
 
 def validar_telefone(ddd: str, numero: str, tipo: TipoTelefone) -> tuple[str, str]:
@@ -266,23 +275,13 @@ def validar_cobertura(tipo: TipoCobertura, convenio_id: int | None, carteirinha:
     return texto(carteirinha, "cobertura.carteirinha", TAMANHO_CARTEIRINHA)
 
 
-def verificar_inicio_cobertura(
-    inicio: date, periodo_inicio: date, periodo_fim: date | None, inicios_existentes: Sequence[date]
-) -> None:
-    """A cobertura vale de seu início até o início da seguinte (DD-70); dentro do período e sem início repetido,
-    a INV-09 vale por construção."""
-    if inicio < periodo_inicio:
-        raise RegraViolada("cobertura.antes_do_periodo")
-    if periodo_fim is not None and inicio > periodo_fim:
-        raise RegraViolada("cobertura.depois_do_fim")
-    if inicio in inicios_existentes:
+def verificar_nova_cobertura(periodo_aberto: bool, ja_tem_cobertura: bool) -> None:
+    """Uma cobertura por período, valendo do início ao fim dele (INV-09, DD-101): só entra no período aberto que
+    ainda não tem. Para trocar, o evento encerra o período e o retorno abre outro, já com a cobertura nova."""
+    if not periodo_aberto:
+        raise RegraViolada("cobertura.periodo_encerrado")
+    if ja_tem_cobertura:
         raise RegraViolada("INV-09")
-
-
-def vigente_em(inicios: Sequence[date], data: date) -> int | None:
-    """Índice, na lista ordenada de inícios, da cobertura que vale na data; None se a data é anterior a todas."""
-    posicao = bisect_right(list(inicios), data)
-    return posicao - 1 if posicao else None
 
 
 # ------------------------------------------------------------------ evento (RF-601 a RF-604)

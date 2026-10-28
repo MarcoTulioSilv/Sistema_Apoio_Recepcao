@@ -56,8 +56,10 @@ def novo_paciente(c: FlaskClient, fabrica: Fabrica) -> tuple[int, str]:
     return int(achado.group(1)), prontuario
 
 
-def abrir(c: FlaskClient, paciente_id: int, tipo: str = "cartao_sus", **extra: str) -> dict[str, str]:
-    dados = {"paciente_id": str(paciente_id), "tipo": tipo, "origem": "scanner", **extra}
+def abrir(
+    c: FlaskClient, paciente_id: int, tipo: str = "cartao_sus", origem: str = "scanner", **extra: str
+) -> dict[str, str]:
+    dados = {"paciente_id": str(paciente_id), "tipo": tipo, "origem": origem, **extra}
     resposta = post(c, "/documentos/ingestoes", dados)
     assert resposta.status_code == 201, resposta.get_data(as_text=True)
     corpo: dict[str, str] = resposta.get_json()
@@ -229,3 +231,58 @@ def test_conferencia_ja_encerrada_volta_a_fila(
     for acao, dados in (("incorporar", {}), ("rejeitar", {"motivo": ""}), ("rejeitar", {"motivo": "ilegivel"})):
         resposta = post(recepcao, f"/documentos/conferencia/{ingestao_id}/{acao}", dados)
         assert resposta.status_code == 302 and "resultado=encerrada" in resposta.headers["Location"], acao
+
+
+# ------------------------------------------------------------------ foto na ficha e no cadastro (RF-711)
+def _foto_incorporada(app: Flask, c: FlaskClient, worker: ProcessadorIngestoes, paciente_id: int) -> str:
+    ingestao = abrir(c, paciente_id, "foto_paciente", origem="webcam")
+    enviar(app, ingestao, [corpus.foto_com_exif()])
+    assert worker.processar_proxima()
+    post(c, f"/documentos/conferencia/{ingestao['id']}/incorporar", {})
+    [foto] = re.findall(r'data-documento="([0-9a-f]{32})"', get(c, f"/pacientes/{paciente_id}").get_data(as_text=True))
+    return foto
+
+
+@pytest.mark.requisito("RF-711", "RF-710")
+def test_foto_nos_dados_da_ficha_e_troca_em_editar(
+    app: Flask, criar_usuario: CriarUsuario, fabrica: Fabrica, worker: ProcessadorIngestoes
+) -> None:
+    recepcao = cliente(app, criar_usuario, "recepcao")
+    pid, _ = novo_paciente(recepcao, fabrica)
+    ficha = get(recepcao, f"/pacientes/{pid}").get_data(as_text=True)
+    assert 'aria-label="Sem foto do paciente"' in ficha
+    edicao = get(recepcao, f"/pacientes/{pid}/editar").get_data(as_text=True)
+    foto_edicao = edicao[edicao.index("data-foto-edicao") : edicao.index('name="nome"')]  # primeiro item dos dados
+    assert f"/documentos/foto/{pid}?abrir=1" in foto_edicao and ">Tirar<" in foto_edicao
+    assert "Tirar foto do paciente" not in ficha  # a foto não é mais tirada pelo quadro Documentos
+    # Com a foto em duas linhas, município e estado dividem a última célula; no novo cadastro, ficam separados.
+    assert "Naturalidade: Município - Estado" in edicao and 'aria-label="Naturalidade: estado"' in edicao
+    novo = get(recepcao, "/cadastro/novo").get_data(as_text=True)
+    assert "Naturalidade: UF" in novo and "Naturalidade: Município - Estado" not in novo
+    foto = _foto_incorporada(app, recepcao, worker, pid)
+    ficha = get(recepcao, f"/pacientes/{pid}").get_data(as_text=True)
+    dados = ficha[ficha.index("data-resumo-ficha") : ficha.index('id="trat-t"')]
+    assert "foto-ficha" in dados and f'src="/documentos/{foto}/paginas/1"' in dados  # na moldura, primeira coluna
+    assert "substitui=" not in ficha  # na ficha, só a foto
+    edicao = get(recepcao, f"/pacientes/{pid}/editar").get_data(as_text=True)
+    foto_edicao = edicao[edicao.index("data-foto-edicao") : edicao.index('name="nome"')]
+    assert ">Trocar<" in foto_edicao and f"substitui={foto}" in foto_edicao and "foto-edicao" in foto_edicao
+    visualizador = cliente(app, criar_usuario, "visualizador")
+    assert f"/documentos/{foto}/paginas/1" in get(visualizador, f"/pacientes/{pid}").get_data(as_text=True)
+
+
+@pytest.mark.requisito("RF-711", "RF-108", "INV-08")
+def test_salvar_e_tirar_a_foto_no_novo_cadastro(app: Flask, criar_usuario: CriarUsuario, fabrica: Fabrica) -> None:
+    recepcao = cliente(app, criar_usuario, "recepcao")
+    assert "Salvar e tirar a foto" in get(recepcao, "/cadastro/novo").get_data(as_text=True)
+    triade = {"nome": fabrica.nome(), "nascimento": "1950-05-01", "mae": fabrica.nome(), "inicio": "2026-10-01"}
+    salvo = post(recepcao, "/cadastro/novo", {**triade, "prontuario": "FT1", "acao": "paciente_foto"})
+    achado = re.search(r"/documentos/foto/(\d+)\?abrir=1&criado=1$", salvo.headers.get("Location", ""))
+    assert achado, salvo.headers.get("Location")
+    camera = get(recepcao, salvo.headers["Location"]).get_data(as_text=True)
+    assert "data-abrir-ja" in camera and "Paciente cadastrado." in camera
+    # A mesma tríade: o aviso de duplicidade guarda a intenção de tirar a foto.
+    aviso = post(recepcao, "/cadastro/novo", {**triade, "prontuario": "FT2", "acao": "paciente_foto"})
+    assert 'value="confirmar_foto"' in aviso.get_data(as_text=True)
+    confirmado = post(recepcao, "/cadastro/novo", {**triade, "prontuario": "FT2", "acao": "confirmar_foto"})
+    assert "/documentos/foto/" in confirmado.headers["Location"]

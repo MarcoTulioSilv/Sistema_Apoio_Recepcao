@@ -204,12 +204,8 @@ class RepositorioPacienteSQL:
         linha.evento_registrado_em = registrado_em.astimezone(UTC).replace(tzinfo=None) if registrado_em else None
         self._s.flush()
 
-    def criar_cobertura(
-        self, periodo_id: int, inicio: date, tipo: str, convenio_id: int | None, carteirinha: str | None
-    ) -> int:
-        linha = Cobertura(
-            periodo_id=periodo_id, vigencia_inicio=inicio, tipo=tipo, convenio_id=convenio_id, carteirinha=carteirinha
-        )
+    def criar_cobertura(self, periodo_id: int, tipo: str, convenio_id: int | None, carteirinha: str | None) -> int:
+        linha = Cobertura(periodo_id=periodo_id, tipo=tipo, convenio_id=convenio_id, carteirinha=carteirinha)
         self._s.add(linha)
         self._s.flush()
         return linha.id
@@ -217,13 +213,9 @@ class RepositorioPacienteSQL:
     def coberturas(self, periodo_ids: list[int]) -> list[CoberturaGravada]:
         if not periodo_ids:
             return []
-        consulta = (
-            select(Cobertura)
-            .where(Cobertura.periodo_id.in_(periodo_ids))
-            .order_by(Cobertura.periodo_id, Cobertura.vigencia_inicio)
-        )
+        consulta = select(Cobertura).where(Cobertura.periodo_id.in_(periodo_ids)).order_by(Cobertura.periodo_id)
         return [
-            CoberturaGravada(c.id, c.periodo_id, c.vigencia_inicio, c.tipo, c.convenio_id, c.carteirinha)
+            CoberturaGravada(c.id, c.periodo_id, c.tipo, c.convenio_id, c.carteirinha)
             for c in self._s.scalars(consulta)
         ]
 

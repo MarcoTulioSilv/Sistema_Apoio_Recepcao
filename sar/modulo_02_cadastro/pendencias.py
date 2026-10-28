@@ -13,7 +13,6 @@ from datetime import UTC, date, datetime, time
 from sar.modulo_02_cadastro.regras import CEP_NAO_VERIFICADO, chave_triade, pendencias
 from sar.modulo_02_cadastro.servicos import dados_de
 from sar.modulo_08_dados.interfaces.pacientes import (
-    CoberturaGravada,
     PacienteGravado,
     PeriodoGravado,
     RepositorioPaciente,
@@ -163,13 +162,11 @@ class ServicoChecklist:
         repositorio = uow.repositorio(RepositorioPaciente)
         vivos = {p.id for p in repositorio.vivos(paciente_ids)}
         abertos = [p for p in repositorio.periodos_de(paciente_ids) if p.evento_tipo is None and p.paciente_id in vivos]
-        por_periodo: dict[int, list[CoberturaGravada]] = defaultdict(list)
-        for cobertura in repositorio.coberturas([p.id for p in abertos]) if abertos else []:
-            por_periodo[cobertura.periodo_id].append(cobertura)
+        coberturas = repositorio.coberturas([p.id for p in abertos]) if abertos else []
+        por_periodo = {c.periodo_id: c for c in coberturas}
         exigencias = []
         for periodo in abertos:
-            vigentes = [c for c in por_periodo[periodo.id] if c.inicio <= hoje]
-            atual = max(vigentes, key=lambda c: c.inicio) if vigentes else None
+            atual = por_periodo.get(periodo.id)  # vale o período inteiro (DD-101)
             desde = datetime.combine(periodo.inicio, time(), UTC)
             convenio = atual is not None and atual.convenio_id is not None
             exigencias.append(ExigenciaChecklist(periodo.paciente_id, convenio, desde))

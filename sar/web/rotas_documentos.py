@@ -140,7 +140,9 @@ def foto(paciente_id: int) -> str:
     contexto = contexto_atual()
     ficha = _servicos().pacientes.ver_ficha(contexto, paciente_id)
     _servicos().ingestao.tipos(contexto)  # confere a permissão antes de abrir a câmera
-    return render_template("documentos_foto.html", ficha=ficha, substitui=request.args.get("substitui", ""))
+    return render_template("documentos_foto.html", ficha=ficha, substitui=request.args.get("substitui", ""),
+                           abrir=request.args.get("abrir") == "1",
+                           resultado="Paciente cadastrado." if request.args.get("criado") == "1" else None)  # fmt: skip
 
 
 @bp.post("/ingestoes")

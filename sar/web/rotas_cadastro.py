@@ -13,14 +13,13 @@ from flask import Blueprint, current_app, redirect, render_template, request, ur
 from werkzeug.wrappers import Response
 
 from sar.modulo_01_acesso.contrato import PermissionGuard
-from sar.modulo_02_cadastro.contrato import Identificacao
+from sar.modulo_02_cadastro.contrato import PARENTESCOS, Identificacao
 from sar.modulo_06_configuracao.contrato import Municipio
 from sar.nucleo.contexto import Contexto
 from sar.nucleo.erros import ConfirmacaoNecessaria, IndisponivelExterno, NaoEncontrado, RegraViolada
 from sar.web import contexto_atual
 from sar.web.configuracao import ServicosWeb
 from sar.web.formulario_cadastro import (
-    PARENTESCOS,
     TIPOS_TELEFONE,
     Cadastro,
     contatos,
@@ -56,6 +55,7 @@ ERROS: dict[str, tuple[str | None, str]] = {
     "telefone.numero": (None, "Celular tem 9 dígitos começando por 9; fixo tem 8, começando de 2 a 5."),
     "telefone.repetido": (None, "Este número já está na lista do mesmo dono."),
     "contato.nome": (None, "Informe o nome do contato, ou remova o contato."),
+    "contato.parentesco": (None, "Escolha o parentesco na lista."),
 }
 REPETIDOS = {"prontuario.repetido": "prontuario", "cpf.repetido": "cpf", "cns.repetido": "cns"}
 NOMES_REPETIDOS = {"prontuario": "Este prontuário", "cpf": "Este CPF", "cns": "Este CNS"}
@@ -143,6 +143,7 @@ def _pagina(contexto: Contexto, v: dict[str, str], **dados: Any) -> str:
         parentescos=PARENTESCOS,
         tipos_telefone=TIPOS_TELEFONE,
         erros=dados.pop("erros", {}),
+        pode_foto=GUARDA.pode(contexto, "documento.ingestao.abrir"),
         **dados,
     )
 
@@ -207,19 +208,22 @@ def salvar() -> Response | str:
         except RegraViolada:
             return _pagina(contexto, v, erro="O rascunho passou do tamanho permitido.")
         return _pagina(contexto, v, resultado=f"Rascunho salvo às {_hora(salvo.atualizado_em)}.", tem_rascunho=True)
+    com_foto = acao.endswith("_foto")  # "Salvar e tirar a foto": a câmera abre logo depois (RF-711)
     cadastro: Cadastro | None = None
     try:
         cadastro = ler(municipios_para_codigos(contexto, v))
         paciente_id = _servicos().pacientes.criar(
-            contexto, cadastro.dados, cadastro.inicio, confirmar_duplicidade=acao == "confirmar",
+            contexto, cadastro.dados, cadastro.inicio, confirmar_duplicidade=acao.startswith("confirmar"),
             cobertura=cadastro.cobertura, telefones=cadastro.telefones, contatos=cadastro.contatos,
         )  # fmt: skip
     except ConfirmacaoNecessaria as alerta:
         candidatos = [i for pid in alerta.dados.get("candidatos", []) if (i := identificacao_de(contexto, pid))]
-        return _pagina(contexto, v, candidatos=candidatos)
+        return _pagina(contexto, v, candidatos=candidatos, com_foto=com_foto)
     except RegraViolada as erro:
         campos, geral = erro_do_formulario(contexto, erro, cadastro)
         return _pagina(contexto, v, erros=campos, erro=geral or "Confira os campos marcados.")
+    if com_foto and GUARDA.pode(contexto, "documento.ingestao.abrir"):
+        return redirect(url_for("documentos.foto", paciente_id=paciente_id, abrir="1", criado="1"))
     return redirect(url_for("pacientes.ficha", paciente_id=paciente_id, resultado="criado"))
 
 

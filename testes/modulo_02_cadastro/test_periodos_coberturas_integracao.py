@@ -1,4 +1,4 @@
-"""Períodos e coberturas no MySQL: RF-301, RF-302, RF-605, INV-01, INV-02, INV-09, DD-49, DD-70."""
+"""Períodos e coberturas no MySQL: RF-301, RF-302, RF-605, INV-01, INV-02, INV-09, DD-49, DD-101."""
 
 from __future__ import annotations
 
@@ -7,6 +7,7 @@ from datetime import date
 
 import pytest
 from sqlalchemy import Engine, text
+from sqlalchemy.exc import IntegrityError
 
 from sar.modulo_02_cadastro.contrato import DadosCobertura, Situacao, TipoCobertura
 from sar.nucleo.contexto import Perfil
@@ -43,9 +44,9 @@ def codigo(chamada: object) -> str:
 
 
 # ------------------------------------------------------------------ coberturas
-@pytest.mark.requisito("RF-301", "RF-302", "DD-70", "RNF-605")
-def test_cobertura_no_cadastro_e_historico_de_vigencias(
-    cadastro_zerado: dict[str, int], engine_web: Engine, fabrica: Fabrica
+@pytest.mark.requisito("RF-301", "RF-302", "DD-101", "RNF-605")
+def test_uma_cobertura_por_periodo_e_a_troca_pelo_retorno(
+    cadastro_zerado: dict[str, int], engine_web: Engine, engine_migracao: Engine, fabrica: Fabrica
 ) -> None:
     cadastro = montar(engine_web)
     recepcao = pessoa(cadastro_zerado)
@@ -54,19 +55,22 @@ def test_cobertura_no_cadastro_e_historico_de_vigencias(
         recepcao, dados_completos(fabrica), JANEIRO, cobertura=DadosCobertura(TipoCobertura.CONVENIO, ipasgo, " 123 ")
     )
     periodo = cadastro.pacientes.ver_ficha(recepcao, pid).periodos[0].id
-    cadastro.pacientes.registrar_cobertura(recepcao, periodo, SUS, date(2026, 4, 1))
-    [vigencias] = [p.coberturas for p in cadastro.pacientes.ver_ficha(recepcao, pid).periodos]
-    assert [(c.inicio, c.ate, c.tipo, c.convenio_nome, c.carteirinha) for c in vigencias] == [
-        (JANEIRO, date(2026, 3, 31), TipoCobertura.CONVENIO, "Ipasgo", "123"),
-        (date(2026, 4, 1), None, TipoCobertura.SUS, None, None),
+    # Antes, a segunda cobertura entrava como nova vigência e o período ficava com duas.
+    assert codigo(lambda: cadastro.pacientes.registrar_cobertura(recepcao, periodo, SUS)) == "INV-09"
+    encerrar(engine_migracao, pid, "alta", "2026-03-31")
+    cadastro.pacientes.abrir_periodo(recepcao, pid, date(2026, 4, 1), SUS)
+    coberturas = [p.cobertura for p in cadastro.pacientes.ver_ficha(recepcao, pid).periodos]
+    assert [(c.tipo, c.convenio_nome, c.carteirinha) for c in coberturas if c] == [
+        (TipoCobertura.CONVENIO, "Ipasgo", "123"),
+        (TipoCobertura.SUS, None, None),
     ]
     with engine_web.connect() as c:
         auditadas = c.execute(text("SELECT COUNT(*) FROM auditoria WHERE operacao = 'cadastro.cobertura.registrar'"))
         assert auditadas.scalar_one() == 2
 
 
-@pytest.mark.requisito("INV-09", "RF-301", "DD-49")
-def test_cobertura_fora_do_periodo_repetida_ou_com_convenio_inativo_e_recusada(
+@pytest.mark.requisito("INV-09", "RF-301", "DD-49", "DD-101")
+def test_cobertura_em_periodo_encerrado_ou_com_convenio_inativo_e_recusada(
     cadastro_zerado: dict[str, int], engine_web: Engine, engine_migracao: Engine, fabrica: Fabrica
 ) -> None:
     cadastro = montar(engine_web)
@@ -74,27 +78,24 @@ def test_cobertura_fora_do_periodo_repetida_ou_com_convenio_inativo_e_recusada(
     admin = pessoa(cadastro_zerado, "admin", Perfil.ADMINISTRACAO)
     amil = convenio(cadastro, cadastro_zerado, "Amil")
     cadastro.configuracao.inativar_convenio(admin, amil)
-    pid = cadastro.pacientes.criar(recepcao, dados_completos(fabrica), JANEIRO, cobertura=SUS)
+    pid = cadastro.pacientes.criar(recepcao, dados_completos(fabrica), JANEIRO)
     periodo = cadastro.pacientes.ver_ficha(recepcao, pid).periodos[0].id
     registrar = cadastro.pacientes.registrar_cobertura
-    assert codigo(lambda: registrar(recepcao, periodo, SUS, JANEIRO)) == "INV-09"
-    assert codigo(lambda: registrar(recepcao, periodo, SUS, date(2026, 1, 4))) == "cobertura.antes_do_periodo"
     inativo = DadosCobertura(TipoCobertura.CONVENIO, amil)
-    assert codigo(lambda: registrar(recepcao, periodo, inativo, date(2026, 2, 1))) == "cobertura.convenio_inativo"
-    sem_convenio = DadosCobertura(TipoCobertura.CONVENIO)
-    assert codigo(lambda: registrar(recepcao, periodo, sem_convenio, date(2026, 2, 1))) == "cobertura.convenio"
+    assert codigo(lambda: registrar(recepcao, periodo, inativo)) == "cobertura.convenio_inativo"
+    assert codigo(lambda: registrar(recepcao, periodo, DadosCobertura(TipoCobertura.CONVENIO))) == "cobertura.convenio"
     with pytest.raises(NaoEncontrado):
-        registrar(recepcao, periodo, DadosCobertura(TipoCobertura.CONVENIO, amil + 999), date(2026, 2, 1))
+        registrar(recepcao, periodo, DadosCobertura(TipoCobertura.CONVENIO, amil + 999))
     with pytest.raises(NaoEncontrado):
-        registrar(recepcao, periodo + 999, SUS, date(2026, 2, 1))
+        registrar(recepcao, periodo + 999, SUS)
     encerrar(engine_migracao, pid, "alta", "2026-06-30")
-    assert codigo(lambda: registrar(recepcao, periodo, SUS, date(2026, 7, 1))) == "cobertura.depois_do_fim"
-    registrar(recepcao, periodo, SUS, date(2026, 6, 30))  # correção de histórico dentro do período: vale
-    assert len(cadastro.pacientes.ver_ficha(recepcao, pid).periodos[0].coberturas) == 2
+    # Antes, o período encerrado ainda aceitava cobertura com início até a data do evento.
+    assert codigo(lambda: registrar(recepcao, periodo, SUS)) == "cobertura.periodo_encerrado"
+    assert cadastro.pacientes.ver_ficha(recepcao, pid).periodos[0].cobertura is None
 
 
-@pytest.mark.requisito("INV-09")
-def test_coberturas_simultaneas_no_mesmo_dia_gravam_uma_so(
+@pytest.mark.requisito("INV-09", "DD-101")
+def test_coberturas_simultaneas_no_periodo_sem_cobertura_gravam_uma_so(
     cadastro_zerado: dict[str, int], engine_web: Engine, fabrica: Fabrica
 ) -> None:
     cadastro = montar(engine_web)
@@ -104,13 +105,24 @@ def test_coberturas_simultaneas_no_mesmo_dia_gravam_uma_so(
 
     def registrar(_: int) -> str:
         try:
-            cadastro.pacientes.registrar_cobertura(recepcao, periodo, SUS, date(2026, 3, 1))
+            cadastro.pacientes.registrar_cobertura(recepcao, periodo, SUS)
         except RegraViolada as erro:
             return erro.codigo
         return "ok"
 
     with ThreadPoolExecutor(4) as grupo:
         assert sorted(grupo.map(registrar, range(4))) == ["INV-09"] * 3 + ["ok"]
+
+
+@pytest.mark.requisito("INV-09", "DD-101")
+def test_banco_recusa_segunda_cobertura_no_mesmo_periodo(
+    cadastro_zerado: dict[str, int], engine_web: Engine, engine_migracao: Engine, fabrica: Fabrica
+) -> None:
+    cadastro = montar(engine_web)
+    pid = cadastro.pacientes.criar(pessoa(cadastro_zerado), dados_completos(fabrica), JANEIRO, cobertura=SUS)
+    with pytest.raises(IntegrityError, match="uq_cobertura__periodo"), engine_migracao.begin() as c:
+        periodo = "SELECT id FROM periodo_tratamento WHERE paciente_id = :p"
+        c.execute(text(f"INSERT INTO cobertura (periodo_id, tipo) SELECT ({periodo}), 'sus'"), {"p": pid})
 
 
 # ------------------------------------------------------------------ períodos
@@ -129,7 +141,7 @@ def test_retorno_abre_novo_periodo_so_depois_do_encerramento(
     novo = abrir(recepcao, pid, date(2026, 5, 1), SUS)
     ficha = cadastro.pacientes.ver_ficha(recepcao, pid)
     assert ficha.situacao is Situacao.SEM_ALOCACAO
-    assert [(p.id == novo, len(p.coberturas)) for p in ficha.periodos] == [(False, 0), (True, 1)]
+    assert [(p.id == novo, p.cobertura is not None) for p in ficha.periodos] == [(False, False), (True, True)]
     encerrar(engine_migracao, pid, "obito", "2026-07-01")
     assert codigo(lambda: abrir(recepcao, pid, date(2026, 8, 1))) == "INV-01"
     with pytest.raises(NaoEncontrado):
@@ -174,4 +186,4 @@ def test_so_recepcao_e_administracao_abrem_periodo_e_registram_cobertura(
         with pytest.raises(AcessoNegado):
             cadastro.pacientes.abrir_periodo(contexto, pid, date(2026, 5, 1))
         with pytest.raises(AcessoNegado):
-            cadastro.pacientes.registrar_cobertura(contexto, periodo, SUS, date(2026, 5, 1))
+            cadastro.pacientes.registrar_cobertura(contexto, periodo, SUS)

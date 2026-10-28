@@ -206,7 +206,8 @@ que a garante.
 | INV-06 | Banco | Usuários de banco não alteram arquivo, hash nem chave (já em `verificar_esquema.sh`) |
 | INV-07, INV-15 | Banco | Prontuário, CPF e CNS repetidos recusados |
 | INV-08 | Serviço | Tríade gera alerta com confirmação |
-| INV-09, INV-10 | Banco | Unicidade de período e início (DD-27, DD-70) |
+| INV-09 | Banco e serviço | Segunda cobertura no mesmo período e cobertura em período encerrado recusadas (DD-101; a do banco em `verificar_esquema.sh`) |
+| INV-10 | Banco | Unicidade de período e início da alocação (DD-27) |
 | INV-11 | Consulta | Evento sem comprovante aparece como pendência até a ligação |
 | INV-12 | Banco | Telefone sem dono ou com dois donos recusado (já em `verificar_esquema.sh`) |
 | INV-13 | Serviço e banco | Descarte antes do prazo recusado |

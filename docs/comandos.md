@@ -308,6 +308,7 @@ python scripts\gerar_municipios_ibge.py
 | `sar` não é reconhecido | O `.venv` não está ativo: `.\.venv\Scripts\Activate.ps1` |
 | `Can't connect to MySQL` / conexão recusada | O banco não está no ar: abra o Docker Desktop e rode `docker compose up -d --wait mysql` |
 | `ModuleNotFoundError: No module named 'sar'` ao rodar `sar` | A instalação do projeto no `.venv` ficou pela metade (atualização de dependência interrompida). Na pasta do projeto, com o `.venv` ativado: `pip install -e ".[dev]"`. Se o pip avisar de `Ignoring invalid distribution ~...`, apague as pastas que começam com `~` em `.venv\Lib\site-packages` antes |
+| `sar migrar` para com `Períodos com mais de uma cobertura` | A migração 0006 (uma cobertura por período, DD-101) não escolhe sozinha qual cobertura fica. A administração decide; depois, no banco (seção 4, `mysql` como root), apague as que sobram com `DELETE FROM cobertura WHERE id IN (...)` e rode `sar migrar` de novo |
 | `sar worker` falha com `SAR_COFRE e SAR_QUARENTENA são obrigatórias` | O terminal do worker não tem `SAR_AMBIENTE=desenvolvimento`, e sem ela o SAR se comporta como produção (DD-85). Prepare o segundo terminal com as variáveis da seção 1, como o do servidor |
 | `segredo ausente` | `SAR_SEGREDOS` não definida neste terminal (seção 1) |
 | Formulário dá "Forbidden" (403) | Página aberta como `localhost`. Use `http://127.0.0.1:8080` |

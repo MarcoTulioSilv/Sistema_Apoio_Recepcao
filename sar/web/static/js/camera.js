@@ -42,6 +42,8 @@
     mostrar("camera");
   });
 
+  if (form.hasAttribute("data-abrir-ja")) botoes.abrir.click();  // veio de "Salvar e tirar a foto"
+
   botoes.tirar.addEventListener("click", () => {
     const canvas = document.createElement("canvas");
     canvas.width = video.videoWidth || 1280;

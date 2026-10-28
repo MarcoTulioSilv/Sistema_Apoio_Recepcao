@@ -13,8 +13,9 @@ from flask import Blueprint, abort, current_app, redirect, render_template, requ
 from werkzeug.wrappers import Response
 
 from sar.modulo_01_acesso.contrato import PermissionGuard
-from sar.modulo_02_cadastro.contrato import DadosCobertura, Ficha, TipoCobertura, TipoEvento, TipoTelefone
+from sar.modulo_02_cadastro.contrato import PARENTESCOS, DadosCobertura, Ficha, TipoCobertura, TipoEvento, TipoTelefone
 from sar.modulo_03_operacao.contrato import OrigemPar
+from sar.modulo_04_documentos.contrato import DocumentoDoTipo
 from sar.nucleo.contexto import Contexto
 from sar.nucleo.erros import ConflitoDeVersao, IndisponivelExterno, RegraViolada, RequerAutorizacao
 from sar.web import contexto_atual
@@ -142,9 +143,21 @@ def _frequencia(contexto: Contexto, paciente_id: int) -> dict[str, Any] | None:
     }  # fmt: skip
 
 
+FOTO = "foto_paciente"
+
+
+def _foto(contexto: Contexto, documentos: list[DocumentoDoTipo] | None) -> str | None:
+    """O id da foto vigente que pode ser mostrada: nem bloqueada nem descartada (§8.6)."""
+    if documentos is None or not GUARDA.pode(contexto, "documento.ver"):
+        return None
+    fotos = [d.vigente for d in documentos if d.tipo == FOTO and not d.vigente.bloqueio and not d.vigente.descartado_em]
+    return max(fotos, key=lambda v: v.capturado_em).id if fotos else None
+
+
 def _ficha(contexto: Contexto, paciente_id: int, **extra: Any) -> str:
     ficha = _servicos().pacientes.ver_ficha(contexto, paciente_id)
     pode = _permissoes(contexto)
+    documentos = _servicos().documentos.listar(contexto, paciente_id) if pode["documentos"] else None
     convenios = _servicos().configuracao.listar_convenios(contexto) if pode["cobertura"] or pode["periodo"] else []
     return render_template(
         "paciente_ficha.html",
@@ -156,12 +169,14 @@ def _ficha(contexto: Contexto, paciente_id: int, **extra: Any) -> str:
         eventos_com_local=EVENTOS_COM_LOCAL,
         coberturas=COBERTURAS,
         telefones=TELEFONES,
+        parentescos=PARENTESCOS,
         pendencias=PENDENCIAS,
         aberto=next((p for p in ficha.periodos if p.evento_tipo is None), None),
         ultimo=ficha.periodos[-1] if ficha.periodos else None,
         resultado=RESULTADOS.get(request.args.get("resultado", "")),
         frequencia=_frequencia(contexto, paciente_id),
-        documentos=_servicos().documentos.listar(contexto, paciente_id) if pode["documentos"] else None,
+        documentos=documentos,
+        foto=_foto(contexto, documentos),
         **extra,
     )
 
@@ -255,8 +270,12 @@ def _valores_da_ficha(f: Ficha) -> dict[str, str]:
 def _edicao(contexto: Contexto, paciente_id: int, versao: int, v: dict[str, str], **extra: Any) -> str:
     uf = v.get("naturalidade_uf") or UF_RESIDENCIA
     uf = uf if uf in UFS else UF_RESIDENCIA
+    documentos = (
+        _servicos().documentos.listar(contexto, paciente_id) if GUARDA.pode(contexto, "documento.listar") else None
+    )
     return render_template(
         "paciente_editar.html", paciente_id=paciente_id, versao=versao, v=municipios_para_nomes(contexto, v), ufs=UFS,
+        foto=_foto(contexto, documentos), pode_foto=GUARDA.pode(contexto, "documento.ingestao.abrir"),
         uf_naturalidade=uf,
         municipios_naturalidade=municipios_da_uf(contexto, uf), municipios_go=municipios_da_uf(contexto, UF_RESIDENCIA),
         erros=extra.pop("erros", {}), **extra,
@@ -397,7 +416,7 @@ def registrar_cobertura(paciente_id: int, periodo_id: int) -> Response | str:
         cobertura = _cobertura(f)
         if cobertura is None:
             raise RegraViolada("cobertura.convenio")
-        _servicos().pacientes.registrar_cobertura(c, periodo_id, cobertura, _data(f.get("inicio", "")))
+        _servicos().pacientes.registrar_cobertura(c, periodo_id, cobertura)
         return "cobertura"
 
     return _acao(paciente_id, acao)

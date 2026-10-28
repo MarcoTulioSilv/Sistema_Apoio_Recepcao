@@ -8,6 +8,7 @@
 {% endblock %}
 {% block conteudo %}
 <div class="flex max-w-3xl flex-col gap-5">
+  {% include "_avisos.html" %}
   <section class="destaque-paciente" aria-labelledby="destino-t">
     <h2 id="destino-t" class="m-0 text-sm text-suave">A foto vai para</h2>
     <p class="m-0 text-xl font-bold">{{ d.nome }}</p>
@@ -16,7 +17,7 @@
 
   <noscript><p class="m-0 rounded-lg border border-urgencia-borda bg-urgencia-fundo p-3 font-bold text-urgencia">A câmera precisa do JavaScript ligado no navegador.</p></noscript>
 
-  <form id="camera" class="cartao flex flex-col gap-4 p-5" method="post" action="{{ url_for('documentos.abrir') }}">
+  <form id="camera" class="cartao flex flex-col gap-4 p-5" method="post" action="{{ url_for('documentos.abrir') }}"{% if abrir %} data-abrir-ja{% endif %}>
     <input type="hidden" name="paciente_id" value="{{ ficha.paciente_id }}">
     <input type="hidden" name="origem" value="webcam">
     <input type="hidden" name="tipo" value="foto_paciente">

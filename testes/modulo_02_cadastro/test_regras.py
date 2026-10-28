@@ -27,9 +27,8 @@ from sar.modulo_02_cadastro.regras import (
     validar_telefone,
     verificar_abertura,
     verificar_inicio,
-    verificar_inicio_cobertura,
     verificar_minimo,
-    vigente_em,
+    verificar_nova_cobertura,
 )
 from sar.nucleo.erros import RegraViolada
 from testes.apoio.fabrica import Fabrica, cns_definitivo
@@ -214,10 +213,13 @@ def test_situacao_derivada_pelo_ultimo_periodo(
 
 
 # ------------------------------------------------------------------ contatos e telefones
-@pytest.mark.requisito("RF-201", "RF-202")
-def test_contato_exige_nome_e_telefone_por_tipo() -> None:
-    assert validar_contato("  João Fictício ", " filho ") == ("João Fictício", "filho")
-    assert codigo(lambda: validar_contato("  ", "filho")) == "contato.nome"
+@pytest.mark.requisito("RF-201", "RF-202", "DD-102")
+def test_contato_exige_nome_parentesco_da_lista_e_telefone_por_tipo() -> None:
+    assert validar_contato("  João Fictício ", " Filho ou filha ") == ("João Fictício", "Filho ou filha")
+    assert validar_contato("João Fictício", " ") == ("João Fictício", None)
+    assert codigo(lambda: validar_contato("  ", "Cônjuge")) == "contato.nome"
+    # Antes, qualquer texto entrava como parentesco.
+    assert codigo(lambda: validar_contato("João Fictício", "Padrasto")) == "contato.parentesco"
     assert validar_telefone("(64)", "99999-1234", TipoTelefone.CELULAR) == ("64", "999991234")
     assert validar_telefone("64", "3631-0000", TipoTelefone.FIXO) == ("64", "36310000")
     assert validar_telefone("64", "3631-0000", TipoTelefone.RECADO) == ("64", "36310000")
@@ -239,34 +241,16 @@ def test_abertura_de_periodo() -> None:
     )
 
 
-@pytest.mark.requisito("RF-301", "RF-302", "INV-09")
-def test_cobertura_sus_ou_convenio_dentro_do_periodo_sem_inicio_repetido() -> None:
+@pytest.mark.requisito("RF-301", "RF-302", "INV-09", "DD-101")
+def test_cobertura_sus_ou_convenio_uma_so_no_periodo_aberto() -> None:
     assert validar_cobertura(TipoCobertura.CONVENIO, 3, " 123 45 ") == "123 45"
     assert validar_cobertura(TipoCobertura.SUS, None, None) is None
     assert codigo(lambda: validar_cobertura(TipoCobertura.CONVENIO, None, None)) == "cobertura.convenio"
     assert codigo(lambda: validar_cobertura(TipoCobertura.SUS, 3, None)) == "cobertura.sus_sem_convenio"
     assert codigo(lambda: validar_cobertura(TipoCobertura.SUS, None, "123")) == "cobertura.sus_sem_convenio"
-    inicio = date(2026, 1, 1)
-    verificar_inicio_cobertura(date(2026, 3, 1), inicio, None, [inicio])
-    assert codigo(lambda: verificar_inicio_cobertura(date(2025, 12, 1), inicio, None, [])) == (
-        "cobertura.antes_do_periodo"
-    )
-    assert codigo(lambda: verificar_inicio_cobertura(date(2026, 6, 2), inicio, date(2026, 6, 1), [])) == (
-        "cobertura.depois_do_fim"
-    )
-    assert codigo(lambda: verificar_inicio_cobertura(inicio, inicio, None, [inicio])) == "INV-09"
-
-
-@pytest.mark.requisito("RF-302", "INV-09")
-@given(st.lists(st.dates(date(2020, 1, 1), date(2030, 1, 1)), min_size=1, unique=True), st.dates())
-def test_uma_e_so_uma_cobertura_vale_em_cada_data(inicios: list[date], data: date) -> None:
-    ordenados = sorted(inicios)
-    indice = vigente_em(ordenados, data)
-    if data < ordenados[0]:
-        assert indice is None
-    else:
-        assert indice is not None and ordenados[indice] <= data
-        assert indice == len(ordenados) - 1 or data < ordenados[indice + 1]
+    verificar_nova_cobertura(periodo_aberto=True, ja_tem_cobertura=False)
+    assert codigo(lambda: verificar_nova_cobertura(True, True)) == "INV-09"
+    assert codigo(lambda: verificar_nova_cobertura(False, False)) == "cobertura.periodo_encerrado"
 
 
 # ------------------------------------------------------------------ evento

@@ -116,11 +116,11 @@ class PeriodoTratamento(Base):
 
 
 class Cobertura(Base):
-    """Só com início: o fim é o início da seguinte (DD-70)."""
+    """Uma por período, valendo do início ao fim dele (INV-09, DD-101)."""
 
     __tablename__ = "cobertura"
     __table_args__ = (
-        UniqueConstraint("periodo_id", "vigencia_inicio", name="uq_cobertura__inicio"),
+        UniqueConstraint("periodo_id", name="uq_cobertura__periodo"),
         CheckConstraint("(tipo = 'convenio') = (convenio_id IS NOT NULL)", name="convenio"),
     )
 
@@ -128,7 +128,6 @@ class Cobertura(Base):
     periodo_id: Mapped[int] = mapped_column(
         BIGINT, ForeignKey("periodo_tratamento.id", name="fk_cobertura__periodo_id")
     )
-    vigencia_inicio: Mapped[date] = mapped_column(Date)
     tipo: Mapped[str] = mapped_column(Enum("sus", "convenio", name="tipo_cobertura"))
     convenio_id: Mapped[int | None] = mapped_column(BIGINT, ForeignKey("convenio.id", name="fk_cobertura__convenio_id"))
     carteirinha: Mapped[str | None] = mapped_column(String(30))

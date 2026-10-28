@@ -152,6 +152,20 @@ def test_foto_pela_camera_ate_a_conferencia(
     expect(page.locator(".destaque-paciente")).to_contain_text(nome)
     page.get_by_role("button", name="Guardar o documento").click()
     expect(page.get_by_role("table", name="Documentos do paciente")).to_contain_text("Foto do paciente")
+
+    # Na edição em tela larga, a foto de verdade fica nas duas primeiras linhas. Antes, o tamanho próprio da imagem
+    # esticava as linhas até a altura original dela.
+    page.set_viewport_size({"width": 1400, "height": 900})
+    page.goto(f"{endereco}/pacientes/{pid}/editar")
+    foto = page.get_by_alt_text("Foto atual do paciente")
+    expect(foto).to_be_visible()
+    caixa = foto.bounding_box()
+    topo = page.locator("label[for=nome]").bounding_box()
+    base = page.locator("#nascimento").bounding_box()
+    assert caixa and topo and base
+    assert caixa["y"] + caixa["height"] <= base["y"] + base["height"] + 2
+    assert caixa["height"] >= base["y"] + base["height"] - topo["y"] - 30  # e preenche as duas linhas
+    sem_violacao(page)
     assert erros == []
     contexto.close()
 

@@ -4,10 +4,8 @@
   <div class="flex flex-wrap items-center justify-between gap-3">
     <h2 id="docs-t" class="m-0 text-xl">Documentos</h2>
     {% if pode.capturar %}
-    <div class="flex flex-wrap gap-3">
-      <a class="btn-secundario" href="{{ url_for('documentos.digitalizar', paciente_id=ficha.paciente_id) }}">Digitalizar documento</a>
-      <a class="btn-secundario" href="{{ url_for('documentos.foto', paciente_id=ficha.paciente_id) }}">Tirar foto do paciente</a>
-    </div>
+    {# A foto do paciente não é tirada aqui: é em Editar dados. #}
+    <a class="btn-secundario" href="{{ url_for('documentos.digitalizar', paciente_id=ficha.paciente_id) }}">Digitalizar documento</a>
     {% endif %}
   </div>
   {% if documentos %}
