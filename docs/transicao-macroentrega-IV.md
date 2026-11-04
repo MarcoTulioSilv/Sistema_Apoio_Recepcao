@@ -95,7 +95,7 @@ risco: a fundação primeiro; depois o que vira faturamento e o que guarda docum
 | 5 | Emissão, relatórios e titular | MOD-05 (modelos .docx, conversor, relatórios, exportação) e MOD-11 | CT-EMI e CT-REL passando; oito modelos iniciais criados do zero |
 | 6 | Pendências e jobs | MOD-07 e MOD-09; backup pelo sistema operacional registrado como job | Matriz de pendências igual à da ERS (DD-55); jobs com trava e intervalo máximo |
 | 7 | Carga inicial | MOD-10 com planilhas sintéticas que reproduzem os defeitos reais | CT-MIG passando; contagem fecha em toda simulação |
-| 8 | Homologação e go-live | Servidor provisório ou dedicado; desempenho com base de volume; ensaios de recuperação; ZAP e ASVS; roteiros com as usuárias; carga real; conferência amostral; ata | Critérios da §9.2 do PT_recepcao |
+| 8 | Homologação e go-live | Servidor provisório ou dedicado; desempenho com base de volume; ensaios de recuperação; ZAP e ASVS; roteiros com as usuárias; carga real; conferência amostral; decisão do R-43 (scanner pela rede ou agente à prova de leigo, DAS §8); ata | Critérios da §9.2 do PT_recepcao |
 
 **Regra de cada incremento:** nenhum requisito sai do incremento sem teste marcado com
 `@pytest.mark.requisito(...)`. O relatório de rastreabilidade mostra o que falta e vai zerando.
