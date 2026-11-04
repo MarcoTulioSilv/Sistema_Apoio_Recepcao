@@ -22,6 +22,7 @@ from sar.modulo_04_documentos.processamento import (
     processar,
     tipo_real,
 )
+from sar.nucleo import subprocesso
 from testes.apoio import corpus
 from testes.apoio.fabrica import Fabrica, PacienteFicticio
 
@@ -178,27 +179,28 @@ def test_subprocesso_que_passa_do_tempo_e_recusado() -> None:
 def test_resposta_do_filho_fora_do_protocolo_e_falha() -> None:
     def quadro(cabecalho: dict[str, object], partes: list[bytes]) -> bytes:
         saida = io.BytesIO()
-        isolamento.escrever_quadro(saida, cabecalho, partes)
+        subprocesso.escrever_quadro(saida, cabecalho, partes)
         return saida.getvalue()
 
     valido = {"ok": True, "formato": "pdf", "paginas": 1, "campos": []}
-    assert isolamento._interpretar(quadro(valido, [b"x"]), (), 10).conteudo == b"x"
-    estranhos = [
-        b"lixo",
-        quadro({**valido, "formato": "html"}, [b"x"]),
-        quadro({**valido, "campos": [{"nome": "nome_mae", "valor": "x", "confianca": "alta"}]}, [b"x"]),
-        quadro(valido, [b"x" * 11]),  # passa do máximo
-    ]
-    for saida in estranhos:
+    assert isolamento._interpretar(*subprocesso.ler_quadro(io.BytesIO(quadro(valido, [b"x"])), 10), ()).conteudo == b"x"
+    for saida in (b"lixo", quadro(valido, [b"x" * 11])):  # fora do enquadramento; passa do máximo
         with pytest.raises(ValueError):
-            isolamento._interpretar(saida, ("cpf",), 10)
+            subprocesso.ler_quadro(io.BytesIO(saida), 10)
+    estranhos = [
+        {**valido, "formato": "html"},
+        {**valido, "campos": [{"nome": "nome_mae", "valor": "x", "confianca": "alta"}]},
+    ]
+    for cabecalho in estranhos:
+        with pytest.raises(ValueError):
+            isolamento._interpretar(cabecalho, [b"x"], ("cpf",))
 
 
 @pytest.mark.requisito("SEG-30")
 def test_filho_nao_herda_credenciais(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("SAR_BANCO_SENHA", "segredo")
     monkeypatch.setenv("SAR_CHAVE_MESTRA", "segredo")
-    ambiente = isolamento._ambiente()
+    ambiente = subprocesso.ambiente(isolamento.AMBIENTE_PERMITIDO)
     assert (
         "SAR_BANCO_SENHA" not in ambiente
         and "SAR_CHAVE_MESTRA" not in ambiente
