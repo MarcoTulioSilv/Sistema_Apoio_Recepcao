@@ -9,9 +9,10 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass
+from datetime import date
 
 from sar.modulo_01_acesso.contrato import AuditService, PermissionGuard
-from sar.modulo_02_cadastro.contrato import LeituraCadastro, PacienteService
+from sar.modulo_02_cadastro.contrato import Identificacao, LeituraCadastro, PacienteService
 from sar.modulo_03_operacao.contrato import LeituraOperacao
 from sar.modulo_04_documentos.contrato import LeituraDocumentos
 from sar.modulo_05_emissao import comum, ficha, pdf, regras
@@ -28,6 +29,8 @@ from sar.nucleo.uow import ExecutorDeOperacao, UnidadeDeTrabalho
 
 GUARDA = PermissionGuard()
 TITULO_FICHA = "Ficha de cadastro do paciente"
+TITULO_DECLARACAO = "Declaração de atendimento ao titular dos dados"
+MODELO_DECLARACAO = "TITULAR"  # DD-105: leiaute fixo, sem modelo .docx
 
 
 @dataclass(frozen=True, slots=True)
@@ -91,6 +94,27 @@ class ServicoEmissao:
         pdf_gerado = self._converter(Modelo.CRACHA, preparo, {"foto": foto})
         self._registrar(contexto, Modelo.CRACHA.value, preparo.versao, paciente_id, None)
         return DocumentoEmitido(pdf_gerado, _nome_arquivo("cracha", contexto))
+
+    def emitir_declaracao_titular(
+        self, contexto: Contexto, paciente_id: int, recebida_em: date, paginas_documentos: int, referencia: str
+    ) -> DocumentoEmitido:
+        GUARDA.exigir(contexto, "titular.copia.gerar")
+
+        def ler(uow: UnidadeDeTrabalho) -> tuple[comum.Comuns, Identificacao]:
+            identificacao = self._cadastro.identificacao(uow, paciente_id)
+            if identificacao is None:
+                raise NaoEncontrado()
+            return self._comuns(uow, contexto), identificacao
+
+        comuns, identificacao = self._executar(ler)
+        conteudo = pdf.html("declaracao_titular.html", {
+            **comuns.valores, "titulo": TITULO_DECLARACAO, "logotipo": pdf.imagem_embutida(comuns.logotipo),
+            "nome": identificacao.nome, "prontuario": identificacao.prontuario,
+            "recebida_em": regras.data_curta(recebida_em), "paginas_documentos": paginas_documentos,
+        })  # fmt: skip
+        pdf_gerado = pdf.para_pdf(conteudo)
+        self._registrar(contexto, MODELO_DECLARACAO, 0, paciente_id, referencia)
+        return DocumentoEmitido(pdf_gerado, _nome_arquivo("declaracao-titular", contexto))
 
     # ---------------------------------------------------------------- etapas
     def _preparar(

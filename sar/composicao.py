@@ -99,6 +99,7 @@ from sar.modulo_08_dados.interfaces.referencias import (
     RepositorioMunicipio,
 )
 from sar.modulo_08_dados.interfaces.sessoes import RepositorioSessao
+from sar.modulo_08_dados.interfaces.titular import RepositorioTitular
 from sar.modulo_08_dados.interfaces.trilha import RepositorioExpurgo, RepositorioTrilha
 from sar.modulo_08_dados.interfaces.usuarios import RepositorioUsuario
 from sar.modulo_08_dados.relogio import RelogioSistema
@@ -115,9 +116,13 @@ from sar.modulo_08_dados.repositorios.referencias import (
     RepositorioMunicipioSQL,
 )
 from sar.modulo_08_dados.repositorios.sessoes import RepositorioSessaoSQL
+from sar.modulo_08_dados.repositorios.titular import RepositorioTitularSQL
 from sar.modulo_08_dados.repositorios.trilha import RepositorioExpurgoSQL, RepositorioTrilhaSQL
 from sar.modulo_08_dados.repositorios.usuarios import RepositorioUsuarioSQL
 from sar.modulo_08_dados.uow import ExecutorSQL, FabricaRepositorio, GravadorAuditoria, UnidadeDeTrabalhoSQL
+from sar.modulo_11_titular.contrato import TitularService
+from sar.modulo_11_titular.pendencias import fontes as fontes_titular
+from sar.modulo_11_titular.servicos import ServicoTitular
 from sar.nucleo.erros import ConfiguracaoInvalida
 from sar.nucleo.eventos import (
     Barramento,
@@ -188,6 +193,7 @@ REPOSITORIOS: dict[type, FabricaRepositorio] = {
     RepositorioInstituicao: RepositorioInstituicaoSQL,
     RepositorioModelo: RepositorioModeloSQL,
     RepositorioEmissao: RepositorioEmissaoSQL,
+    RepositorioTitular: RepositorioTitularSQL,
     RepositorioUsuario: RepositorioUsuarioSQL,
     RepositorioSessao: RepositorioSessaoSQL,
     RepositorioAutorizacao: RepositorioAutorizacaoSQL,
@@ -260,6 +266,7 @@ class Componentes:
     relatorios: RelatorioService
     modelos: ModeloService
     emissao: EmissaoService
+    titular: TitularService
     ingestao: IngestaoService
     documentos: DocumentoService
     leitura_documentos: LeituraDocumentos
@@ -330,6 +337,9 @@ def compor(
     leitura_operacao = ServicoLeituraOperacao(leitura_cadastro, parametros)
     leitura_documentos = ServicoLeituraDocumentos(executar, auditoria, cofre, marco_retencao)
     conversor = conversor or ConversorGotenberg()
+    emissao = ServicoEmissao(
+        executar, auditoria, referencias, leitura_cadastro, pacientes, leitura_operacao, leitura_documentos, conversor
+    )
     return Componentes(
         relogio=relogio,
         cifra=cifra,
@@ -358,6 +368,7 @@ def compor(
             *fontes_documentos(
                 ServicoChecklist(), marco_retencao, antimalware or antimalware_do_ambiente(2.0), parametros
             ),
+            *fontes_titular(leitura_cadastro, parametros),
         ),
         marco_retencao=marco_retencao,
         leitura_cadastro=leitura_cadastro,
@@ -367,16 +378,8 @@ def compor(
         leitura_operacao=leitura_operacao,
         relatorios=ServicoRelatorios(executar, leitura_cadastro),
         modelos=ServicoModelos(executar, auditoria, referencias, conversor),
-        emissao=ServicoEmissao(
-            executar,
-            auditoria,
-            referencias,
-            leitura_cadastro,
-            pacientes,
-            leitura_operacao,
-            leitura_documentos,
-            conversor,
-        ),
+        emissao=emissao,
+        titular=ServicoTitular(executar, auditoria, leitura_cadastro, parametros, leitura_documentos, emissao),
         ingestao=ServicoIngestao(executar, auditoria, parametros, quarentena, cofre, cifra, relogio),
         documentos=ServicoDocumentos(executar, auditoria, cofre),
         leitura_documentos=leitura_documentos,

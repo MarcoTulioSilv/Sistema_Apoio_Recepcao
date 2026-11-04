@@ -137,6 +137,13 @@ class EmissaoService(Protocol):
         """RF-808. RegraViolada("cracha.sem_foto"): a tela orienta a capturar a foto."""
         ...
 
+    def emitir_declaracao_titular(
+        self, contexto: Contexto, paciente_id: int, recebida_em: date, paginas_documentos: int, referencia: str
+    ) -> DocumentoEmitido:
+        """A declaração que acompanha a cópia ao titular (RF-1009, DD-105), em leiaute fixo. Só a administração
+        (titular.copia.gerar); registrada como emissão do modelo TITULAR com a referência da requisição."""
+        ...
+
 
 class RelatorioService(Protocol):
     def aniversariantes(self, contexto: Contexto, data: date) -> list[str]:

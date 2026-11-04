@@ -1190,15 +1190,17 @@ Exportações não têm tabela própria: ficam na trilha de auditoria, com relat
 |---|---|---|---|
 | `EmissaoService.emitir` | Contexto, modelo, paciente, parâmetros (troca, texto livre, profissional), confirmar_reemissao | PDF em memória | `AcessoNegado`, `RegraViolada`, `ConfirmacaoNecessaria` (DOC-07 no mês) |
 | `EmissaoService.emitir_cracha` | Contexto, paciente | PDF em memória | `AcessoNegado`, `RegraViolada` (sem foto) |
+| `EmissaoService.emitir_declaracao_titular` | Contexto (A), paciente, data de recebimento, páginas da cópia, referência da requisição | PDF em memória (DD-105) | `AcessoNegado`, `NaoEncontrado` |
 | `ModeloService.enviar` | Contexto (A), código, arquivo | relatório de validação e prévia | `AcessoNegado`, `RegraViolada` (com a lista de problemas) |
 | `ModeloService.ativar` / `reverter` | Contexto (A), código, versão | — | `AcessoNegado` |
 | `RelatorioService.gerar` | Contexto, relatório, filtros | modelo tabular com marcas | `AcessoNegado`, `RegraViolada` (mês incompleto, com a lista) |
 | `RelatorioService.exportar` | Contexto, relatório, filtros, formato | arquivo em memória | `AcessoNegado`, `RegraViolada` |
 | `RelatorioService.aniversariantes` | Contexto, data | nomes | `AcessoNegado` |
 
-**Para outros módulos:** `emissoes_do_mes(paciente_id, competencia, modelo)`, usado pelo MOD-07 na
-pendência de termo (RF-809) e pelo aviso do DOC-07. O MOD-11 usa `EmissaoService` para a declaração
-de atendimento ao titular.
+**Para outros módulos:** a porta `EmissoesRegistradas` do núcleo (DD-02), implementada aqui, diz à
+pendência de termo do MOD-03 (linha 5 da §11.1, RF-809) se a declaração de troca ou o termo de extra do mês
+já foi emitido e espera o documento assinado. O aviso do DOC-07 é do próprio `EmissaoService`. O MOD-11 usa
+`EmissaoService` para a declaração de atendimento ao titular e para a ficha (DOC-01).
 
 ---
 
@@ -1543,8 +1545,18 @@ declaração pelo MOD-05; registro da entrega. Tudo auditado.
 | `TitularService.consultar` | Contexto (R, A ou V), situação | requisições com prazo derivado (DD-18) | `AcessoNegado` |
 | `TitularService.atender_acesso` | Contexto (A), requisição | pacote em memória: ficha, cópia dos documentos e declaração | `AcessoNegado`, `RegraViolada` |
 | `TitularService.concluir` / `negar` | Contexto (A), requisição, desfecho | — | `AcessoNegado`, `RegraViolada` (negativa sem fundamento) |
+| `TitularService.ver` | Contexto (R, A ou V), requisição | requisição com prazo derivado | `AcessoNegado`, `NaoEncontrado` |
 
-Implementa `FontePendencia` para a pendência 10, que vira urgência a 3 dias do prazo.
+Implementa `FontePendencia` para a pendência 10 (`pedido_titular`), alta e urgência a 3 dias do prazo.
+
+**Detalhes da construção.** Canal de recebimento em lista fechada (presencial, telefone, e-mail, carta, outro) e
+forma de entrega da cópia também (em mãos ao titular, a representante, por e-mail, pelo correio), sem nome de
+quem recebeu: a entrega vai à trilha com a forma e o número de páginas (`titular.copia.gerar`). O atendimento de
+acesso só vale para pedido aberto de confirmação e acesso e não encerra o pedido; concluir ou negar é à parte,
+com o desfecho (de 10 a 2.000 caracteres) gravado e auditado. A negativa de eliminação de dado sob guarda tem o
+fundamento pronto na tela (art. 16, I, e Lei nº 13.787/2018). A data de recebimento é gravada ao meio-dia local
+dessa data, para a data local nunca mudar; data no futuro é recusada. A consulta da lista registra na trilha só
+a quantidade, como a busca de pacientes (DD-10).
 
 ---
 
