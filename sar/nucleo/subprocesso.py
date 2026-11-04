@@ -94,7 +94,8 @@ def rodar(
     pedido = io.BytesIO()
     escrever_quadro(pedido, cabecalho, partes)
     try:
-        concluido = subprocess.run(  # noqa: S603 # nosec B603 (módulo fixo de quem chama)
+        # O módulo é fixo no código de quem chama; nunca vem de entrada.
+        concluido = subprocess.run(  # noqa: S603 # nosec B603
             [sys.executable, "-m", modulo],
             input=pedido.getvalue(), capture_output=True, timeout=tempo_maximo, check=False,
             env=ambiente(permitidos), preexec_fn=_limitar(memoria_mb, int(tempo_maximo) + 1),

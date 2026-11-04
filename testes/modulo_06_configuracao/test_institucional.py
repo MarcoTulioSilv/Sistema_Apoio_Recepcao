@@ -13,7 +13,12 @@ from sar.modulo_06_configuracao.regras import cnpj_valido, validar_institucional
 from sar.nucleo.erros import RegraViolada
 
 VALIDOS = DadosInstitucionais(
-    "  Clínica   Fictícia ", "Rua das Flores, 100 - Centro", "75803-000", "5211909", "(64) 3600-0000", "11.222.333/0001-81"
+    "  Clínica   Fictícia ",
+    "Rua das Flores, 100 - Centro",
+    "75803-000",
+    "5211909",
+    "(64) 3600-0000",
+    "11.222.333/0001-81",
 )
 
 

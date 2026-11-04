@@ -457,5 +457,7 @@ type = forbidden
 source_modules = sar
 forbidden_modules =
     httpx
+# O conversor de documentos fala só com a rede interna do SAR, sem saída para fora (DD-104).
 ignore_imports =
     sar.modulo_02_cadastro.cep -> httpx
+    sar.modulo_05_emissao.conversor -> httpx

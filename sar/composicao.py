@@ -85,6 +85,7 @@ from sar.modulo_08_dados.cadeia import gravar_encadeado
 from sar.modulo_08_dados.cifra import CifraAesGcm
 from sar.modulo_08_dados.interfaces.autorizacoes import RepositorioAutorizacao
 from sar.modulo_08_dados.interfaces.documentos import RepositorioDocumentos
+from sar.modulo_08_dados.interfaces.emissao import RepositorioEmissao, RepositorioModelo
 from sar.modulo_08_dados.interfaces.operacao import RepositorioOperacao
 from sar.modulo_08_dados.interfaces.pacientes import RepositorioPaciente
 from sar.modulo_08_dados.interfaces.parametros import RepositorioParametro
@@ -100,6 +101,7 @@ from sar.modulo_08_dados.interfaces.usuarios import RepositorioUsuario
 from sar.modulo_08_dados.relogio import RelogioSistema
 from sar.modulo_08_dados.repositorios.autorizacoes import RepositorioAutorizacaoSQL
 from sar.modulo_08_dados.repositorios.documentos import RepositorioDocumentosSQL
+from sar.modulo_08_dados.repositorios.emissao import RepositorioEmissaoSQL, RepositorioModeloSQL
 from sar.modulo_08_dados.repositorios.operacao import RepositorioOperacaoSQL
 from sar.modulo_08_dados.repositorios.pacientes import RepositorioPacienteSQL
 from sar.modulo_08_dados.repositorios.parametros import RepositorioParametroSQL
@@ -181,6 +183,8 @@ REPOSITORIOS: dict[type, FabricaRepositorio] = {
     RepositorioConvenio: RepositorioConvenioSQL,
     RepositorioMunicipio: RepositorioMunicipioSQL,
     RepositorioInstituicao: RepositorioInstituicaoSQL,
+    RepositorioModelo: RepositorioModeloSQL,
+    RepositorioEmissao: RepositorioEmissaoSQL,
     RepositorioUsuario: RepositorioUsuarioSQL,
     RepositorioSessao: RepositorioSessaoSQL,
     RepositorioAutorizacao: RepositorioAutorizacaoSQL,
