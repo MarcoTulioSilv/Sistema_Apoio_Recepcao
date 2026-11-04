@@ -31,11 +31,13 @@ $env:SAR_SEGREDOS = "$PWD\segredos"          # onde estão as senhas e a chave (
 $env:SAR_BANCO_PORTA = "3307"                # o MySQL do docker-compose escuta nessa porta
 $env:SAR_AMBIENTE = "desenvolvimento"        # sem isso, o SAR se comporta como produção (DD-85)
 $env:SAR_TESSERACT = "C:\Program Files\Tesseract-OCR\tesseract.exe"   # leitura dos campos dos documentos (opcional)
+$env:WEASYPRINT_DLL_DIRECTORIES = "C:\msys64\ucrt64\bin"               # Pango do MSYS2, para os PDFs (seção 2)
 ```
 
 ```bash
 # Git Bash
 export SAR_SEGREDOS="$PWD/segredos" SAR_BANCO_PORTA=3307 SAR_AMBIENTE=desenvolvimento
+export WEASYPRINT_DLL_DIRECTORIES="C:\msys64\ucrt64\bin"
 ```
 
 > Erro `'export' não é reconhecido`: você está no PowerShell usando a sintaxe do Git Bash. Use `$env:`.
@@ -56,6 +58,9 @@ export SAR_SEGREDOS="$PWD/segredos" SAR_BANCO_PORTA=3307 SAR_AMBIENTE=desenvolvi
 | `SAR_AGENTE_PORTA` | Porta do agente de captura nas estações, no loopback (DD-98); a mesma da configuração do agente | `47830` (padrão) |
 | `SAR_COFRE` / `SAR_QUARENTENA` | Pastas do cofre de documentos (vai para o backup) e da quarentena (fora do backup, SEG-29); obrigatórias em produção | `armazenamento\cofre` e `armazenamento\quarentena` no projeto (padrão em desenvolvimento) |
 | `SAR_CLAMAV_HOST` / `SAR_CLAMAV_PORTA` | Onde o clamd escuta (SEG-09) | `127.0.0.1` e `3310` (padrão, o do compose) |
+| `SAR_CONVERSOR` | Endereço do conversor .docx → PDF (Gotenberg, DD-104) | `http://127.0.0.1:3000` (padrão, a ponte do compose) |
+| `WEASYPRINT_DLL_DIRECTORIES` | Pasta das bibliotecas do Pango no Windows, para o WeasyPrint gerar os PDFs de relatório e de leiaute fixo | `C:\msys64\ucrt64\bin` |
+| `SAR_EXIGIR_CONVERSOR` | `1` faz os testes do conversor falharem, em vez de pular, sem ele no ar (como no CI) | só no CI |
 | `SAR_TESSERACT` | Executável do Tesseract, se não estiver no PATH; sem Tesseract, a extração fica desligada e a conferência é manual (RNF-702) | `C:\Program Files\Tesseract-OCR\tesseract.exe` |
 | `SAR_EXIGIR_FERRAMENTAS` | `1` faz os testes do Tesseract e do veraPDF falharem, em vez de pular, se a ferramenta faltar (como no CI) | só no CI |
 | `SAR_VERAPDF` | Executável do veraPDF, se não estiver no PATH; sem ele, o teste de PDF/A é pulado (o CI roda) | `$env:LOCALAPPDATA\verapdf\verapdf.bat` (onde a seção 2 instala) |
@@ -75,6 +80,17 @@ playwright install chromium                  # navegador dos testes de sistema
 python scripts\criar_segredos_dev.py         # gera segredos\ (fora do git); não sobrescreve
 docker compose up -d --wait mysql            # sobe o MySQL 9.7.2; na primeira vez cria sar e sar_teste
 docker compose up -d --wait clamav           # antimalware; na primeira vez baixa as assinaturas (alguns minutos)
+docker compose up -d --wait conversor conversor-ponte   # conversor .docx → PDF da emissão, sem saída para fora
+```
+
+Pango para o WeasyPrint (PDF dos relatórios e dos documentos de leiaute fixo), uma vez. No Linux ele vem com o
+sistema; no Windows, pelo MSYS2:
+
+```powershell
+winget install --id MSYS2.MSYS2 --exact      # instala em C:\msys64
+C:\msys64\usr\bin\bash.exe -lc "pacman -S --noconfirm mingw-w64-ucrt-x86_64-pango"
+$env:WEASYPRINT_DLL_DIRECTORIES = "C:\msys64\ucrt64\bin"
+python -c "import weasyprint; print(weasyprint.__version__)"   # deve mostrar 70.0
 ```
 
 Defina as variáveis da seção 1 e prepare os dois bancos (o da aplicação e o dos testes):
@@ -124,7 +140,7 @@ $env:SAR_VERAPDF = "$env:LOCALAPPDATA\verapdf\verapdf.bat"
 ## 3. Dia a dia: rodar a aplicação
 
 ```powershell
-docker compose up -d --wait mysql clamav     # garante o banco e o antimalware no ar (Docker Desktop aberto)
+docker compose up -d --wait mysql clamav conversor conversor-ponte   # banco, antimalware e conversor (Docker Desktop aberto)
 $env:SAR_SUPERUSUARIOS = "seu.login"         # o login exato que o criar-superusuario mostrou; vários: "a,b"
 python -m sar.wsgi
 ```
@@ -310,6 +326,8 @@ python scripts\gerar_municipios_ibge.py
 | `ModuleNotFoundError: No module named 'sar'` ao rodar `sar` | A instalação do projeto no `.venv` ficou pela metade (atualização de dependência interrompida). Na pasta do projeto, com o `.venv` ativado: `pip install -e ".[dev]"`. Se o pip avisar de `Ignoring invalid distribution ~...`, apague as pastas que começam com `~` em `.venv\Lib\site-packages` antes |
 | `sar migrar` para com `Períodos com mais de uma cobertura` | A migração 0006 (uma cobertura por período, DD-101) não escolhe sozinha qual cobertura fica. A administração decide; depois, no banco (seção 4, `mysql` como root), apague as que sobram com `DELETE FROM cobertura WHERE id IN (...)` e rode `sar migrar` de novo |
 | `sar worker` falha com `SAR_COFRE e SAR_QUARENTENA são obrigatórias` | O terminal do worker não tem `SAR_AMBIENTE=desenvolvimento`, e sem ela o SAR se comporta como produção (DD-85). Prepare o segundo terminal com as variáveis da seção 1, como o do servidor |
+| `cannot load library 'libgobject-2.0-0'` ao gerar PDF ou nos testes | Falta o Pango do MSYS2 ou a variável `WEASYPRINT_DLL_DIRECTORIES` neste terminal (seções 1 e 2) |
+| Emissão falha com o conversor fora do ar | `docker compose up -d --wait conversor conversor-ponte`; confira com `curl.exe http://127.0.0.1:3000/health` |
 | `segredo ausente` | `SAR_SEGREDOS` não definida neste terminal (seção 1) |
 | Formulário dá "Forbidden" (403) | Página aberta como `localhost`. Use `http://127.0.0.1:8080` |
 | Tela sem estilo | Falta gerar o CSS (seção 7) |
