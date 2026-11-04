@@ -348,30 +348,30 @@ A extração automática de dados (RF-703, RF-704) é isolada e desativável (RN
 
 | ID | Requisito | Verif. | Origem |
 |---|---|---|---|
-| RF-801 | Gerar os sete documentos da clínica já preenchidos com os dados do cadastro | T | B1.1 |
+| RF-801 | Gerar os documentos da clínica (DOC-01 a DOC-04 e DOC-07) já preenchidos com os dados do cadastro | T | B1.1, **V4** — DEC-76 |
 | RF-802 | Obter o cabeçalho institucional de uma configuração única — nome, endereço, CEP, município, UF e telefone | D | B1.1 |
 | RF-803 | Escrever a data de emissão por extenso, com o município | D | B1.1 |
 | RF-804 | Gerar a declaração de troca de turno a partir do registro da troca, com as duas datas e os dois turnos preenchidos | T | B1.1 |
 | RF-805 | Gerar o termo de diálise extra apenas com o cabeçalho, sob demanda, uma folha por paciente por mês, avisando se já houve emissão no mesmo mês | T | B1.1 |
-| RF-806 | Permitir digitar o nome e o registro do profissional no momento da emissão do termo de consentimento, sem cadastro prévio | T | B1.1 |
-| RF-807 | Permitir texto livre na carta de recusa pontual, descrevendo o que foi recusado | T | B1.1 |
-| RF-808 | Emitir o crachá com foto do paciente, logotipo da clínica, nome do paciente e nome da mãe | D | B1.1 |
+| RF-808 | Emitir o crachá com foto do paciente, logotipo da clínica, nome do paciente, data de nascimento e nome da mãe | D | B1.1, **V4** — DEC-76 |
 | RF-809 | Quando a enfermagem registrar troca pontual ou sessão extra, gerar para a recepção pendência de termo: emitir o documento já preenchido (DOC-03 ou DOC-07), imprimir, colher as assinaturas, digitalizar e anexar. A pendência se encerra com o documento assinado anexado | T | **V4** — DEC-48 |
 
-**Os sete documentos parametrizados** (análise dos formulários, §2 e §3.2):
+**Os documentos da clínica** (análise dos formulários, §2 e §3.2). DOC-05 e DOC-06 não são emitidos pelo
+sistema (DEC-76): a clínica usa os formulários próprios, preenchidos à mão, e a versão assinada continua
+digitalizada como os demais documentos (§3.2.7):
 
 | ID | Documento | Campos preenchidos pelo sistema |
 |---|---|---|
-| DOC-01 | Ficha de cadastro do paciente | Todos os campos do cadastro, na ordem da ficha revisada |
+| DOC-01 | Ficha de cadastro do paciente | Os campos preenchidos do cadastro, em lista, na ordem da ficha revisada (DEC-76) |
 | DOC-02 | Termo de responsabilidade — implante de cateter duplo lúmen | Nome do paciente, município e data de emissão |
 | DOC-03 | Declaração de troca de turno | Nome; data e turno de origem e de destino; município e data (RF-804) |
 | DOC-04 | Termo de responsabilidade — alimentos | Nome; endereço da clínica no corpo; município e data |
-| DOC-05 | Carta de recusa em data específica | Nome, CPF, CNS, endereço; data da recusa; texto livre; contato que assina (RF-807) |
-| DOC-06 | Termo de consentimento informado — interrupção do tratamento | Nome e CPF; nome e registro profissional digitados na emissão (RF-806); linhas para três testemunhas |
+| DOC-05 | Carta de recusa em data específica | Não emitido pelo sistema (DEC-76) |
+| DOC-06 | Termo de consentimento informado — interrupção do tratamento | Não emitido pelo sistema (DEC-76) |
 | DOC-07 | Termo de necessidade de diálise extra | Apenas cabeçalho: nome, data de nascimento, nome da mãe, turno vigente (RF-805) |
 
-Os títulos definitivos de DOC-02 a DOC-05 dependem da clínica (§1.7, item 6). Os modelos são criados
-do zero, nunca a partir de documento real de paciente editado por cima (RNF-903).
+Os modelos partem dos formulários em branco que a clínica já usa, com título e texto dela (DEC-76), e nunca
+de documento real de paciente editado por cima (RNF-903).
 
 #### 3.2.9 Relatórios
 
@@ -775,7 +775,7 @@ SEG-16 e RNF-604 são o mesmo requisito, registrado nas duas listas.
 | DC-06 | Servidor dedicado, em local fechado, sem uso diário por ninguém | Viabilidade §2 |
 | DC-07 | Documentos em PDF/A, 300 dpi, tons de cinza; foto do paciente em cores | Fase 0, confirmado em 21/09/2026 |
 | DC-08 | Extração automática isolada e desativável por configuração, sem afetar o restante do módulo | RNF-702 |
-| DC-09 | Modelos de documento criados do zero; nunca a partir de documento real editado | RNF-903 |
+| DC-09 | Modelos de documento criados do zero ou a partir dos formulários em branco da clínica (DEC-76); nunca a partir de documento real de paciente editado | RNF-903 |
 | DC-10 | Idade, situação, classificação de presença, pendências e ocupação nunca armazenadas | §3.4.3 |
 
 ### 3.8 Conformidade legal
@@ -987,6 +987,8 @@ Detalhamentos que não mudam o escopo aprovado, mas mudam texto de requisito ou 
 | RF-303 | Removido: registro da instituição que encaminhou o paciente | DEC-73 |
 | §3.2.13 | Âncora da cadeia retirada da matriz de pendências; passa a sair automaticamente no rodapé dos relatórios e documentos emitidos | DEC-74 |
 | RF-302, INV-09 | Uma cobertura por período; a troca de cobertura passa pelo encerramento do período e por um novo período | DEC-75 |
+| RF-806, RF-807 | Removidos: o sistema não emite a carta de recusa (DOC-05) nem o termo de interrupção (DOC-06) | DEC-76 |
+| RF-801, RF-808, §3.2.8 | Documentos emitidos: DOC-01 a DOC-04, DOC-07 e crachá; DOC-01 em lista só com os campos preenchidos; data de nascimento no crachá; modelos a partir dos formulários em branco da clínica | DEC-76 |
 
 ## Apêndice B — Decisões registradas após a Fase 2
 
@@ -1029,6 +1031,7 @@ As decisões DEC-01 a DEC-40 estão nos documentos das Fases 0 a 2. As posterior
 | DEC-73 | A instituição que encaminhou o paciente deixa de ser registrada no sistema |
 | DEC-74 | A âncora da cadeia de auditoria deixa de ser pendência da administração (substitui DEC-72): um código de integridade sai automaticamente no rodapé dos relatórios e dos documentos emitidos, e as cópias guardadas e entregues fazem o papel da anotação fora do sistema |
 | DEC-75 | Uma cobertura por período de tratamento. Nova cobertura só no primeiro registro do período; para trocar, o período anterior é encerrado pelo evento e um novo é aberto com a cobertura nova (decidido em 27/10/2026, depois de o uso mostrar vigências acumuladas no mesmo período) |
+| DEC-76 | Emissão com os formulários da clínica (decidido em 04/11/2026, ao montar os modelos). O sistema deixa de emitir a carta de recusa (DOC-05) e o termo de interrupção (DOC-06), que seguem como formulários próprios preenchidos à mão e voltam assinados pela digitalização; saem a RF-806 e a RF-807. A ficha (DOC-01) sai em lista, só com os campos preenchidos. O crachá traz a data de nascimento, como o crachá em uso. Os modelos partem dos formulários em branco da clínica, nunca de cópia preenchida |
 
 ## Apêndice C — Rastreabilidade
 

@@ -92,7 +92,7 @@ risco: a fundação primeiro; depois o que vira faturamento e o que guarda docum
 | 2 | Cadastro | MOD-02 com rascunho, tríade, CEP, contatos e telefones, eventos, anulação; telas de cadastro | CT-CAD passando; cadastro completo cronometrado com dados fictícios |
 | 3 | Operação | MOD-03: primeiro a `CompensacaoEngine` com testes por propriedade; depois escalas da enfermagem e a tela inicial com o ciclo da sessão | CT-FRQ passando; tela inicial no Playwright, inclusive arraste e teclado |
 | 4 | Documentos | MOD-04: pipeline, quarentena, cofre, conferência, versões, retenção; agente de captura empacotado | CT-DOC passando, com o corpus hostil; captura real até a conferência dentro de 30 s |
-| 5 | Emissão, relatórios e titular | MOD-05 (modelos .docx, conversor, relatórios, exportação) e MOD-11 | CT-EMI e CT-REL passando; oito modelos iniciais criados do zero |
+| 5 | Emissão, relatórios e titular | MOD-05 (modelos .docx, conversor, relatórios, exportação) e MOD-11 | CT-EMI e CT-REL passando; modelos iniciais a partir dos formulários em branco da clínica (DEC-76) |
 | 6 | Pendências e jobs | MOD-07 e MOD-09; backup pelo sistema operacional registrado como job | Matriz de pendências igual à da ERS (DD-55); jobs com trava e intervalo máximo |
 | 7 | Carga inicial | MOD-10 com planilhas sintéticas que reproduzem os defeitos reais | CT-MIG passando; contagem fecha em toda simulação |
 | 8 | Homologação e go-live | Servidor provisório ou dedicado; desempenho com base de volume; ensaios de recuperação; ZAP e ASVS; roteiros com as usuárias; carga real; conferência amostral; decisão do R-43 (scanner pela rede ou agente à prova de leigo, DAS §8); ata | Critérios da §9.2 do PT_recepcao |
@@ -197,10 +197,10 @@ confirmado (Brother DCP-1610NW); webcam disponível na estação (USB, 1280×720
 
 | Família | Último | Família | Último |
 |---|---|---|---|
-| RF | RF-1011 (e RF-922; RF-303 removido) | DEC | DEC-73 |
+| RF | RF-1011 (e RF-922; RF-303, RF-806 e RF-807 removidos) | DEC | DEC-76 |
 | RNF | RNF-628 | AD | AD-27 |
-| SEG | SEG-31 | DD | DD-80 |
+| SEG | SEG-31 | DD | DD-106 |
 | QAS | QAS-15 | P (pontos validados) | P-29 |
-| INV | INV-15 | R (riscos) | R-42 |
+| INV | INV-15 | R (riscos) | R-43 |
 | MOD | MOD-11 | DOC | DOC-07 |
 | CT (casos de teste) | por área: CT-FRQ-10, CT-AUD-06, CT-ACE-07, CT-CAD-07, CT-DOC-14, CT-EMI-03, CT-REL-03, CT-MIG-05 | PJ | PJ-08 |

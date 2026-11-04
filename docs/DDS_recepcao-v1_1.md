@@ -170,6 +170,10 @@ da Macroentrega III.
 | DD-100 | **Agente com servidor HTTP só na homologação, por chave explícita.** Complementa a DD-80 e o §8.5. A configuração do agente exige servidor `https://` e o certificado raiz da clínica; com `"desenvolvimento": true`, e só com esse valor, aceita `http://` sem certificado e registra o aviso no log da estação. A configuração de produção não tem a chave, e o arquivo só é editável pelo TI (DD-39) | O "pronto" do Incremento 4 inclui medir a captura real na estação (RNF-208), e o HTTPS com a autoridade interna só chega com a implantação (Incremento 8). Sem a chave, a medição exigiria montar a autoridade antes da hora. Exigir o valor `true`, e não qualquer texto, evita ligar o modo por engano |
 | DD-101 | **Uma cobertura por período.** Revisa a DD-70 e a DD-14, pela DEC-75 (emenda à RF-302 e à INV-09). A cobertura vale do início ao fim do período de tratamento e não tem data própria: a coluna `vigencia_inicio` sai e a unicidade passa a ser do período (`uq_cobertura__periodo`, migração 0006). Registrar cobertura só é aceito no período aberto que ainda não tem (`INV-09`; período encerrado: `cobertura.periodo_encerrado`); a cobertura informada no cadastro ou no retorno já entra assim. Trocar de cobertura é registrar o evento que encerra o período e abrir outro com a cobertura nova; o histórico de cobertura é o histórico dos períodos. A migração recusa rodar com período que ainda tenha mais de uma cobertura | Visto no uso: o "Registrar nova cobertura" deixava acumular vigências no mesmo período (inclusive repetidas e com início futuro), lidas na ficha como dois tratamentos abertos ao mesmo tempo. Com a cobertura presa ao período, a regra fica no banco, e não há vigência para conferir |
 | DD-102 | **Parentesco do contato em lista fechada.** Detalha a RF-201. O parentesco, opcional, só aceita um destes valores: Cônjuge, Filho ou filha, Pai ou mãe, Irmão ou irmã, Outro parente, Vizinho ou amigo (`PARENTESCOS`, no contrato do MOD-02). A regra fica no serviço (`contato.parentesco`), para o novo cadastro e a ficha, que passam a oferecer a mesma lista. A migração 0007 converte o que estava gravado fora da lista em "Outro parente", sem guardar o texto antigo e sem registro de auditoria, por ser ajuste de dado de desenvolvimento antes da implantação | Visto no uso: o novo cadastro oferecia a lista, mas a ficha aceitava texto livre ao incluir e ao editar o contato, e o dado ficava diferente para a mesma relação |
+| DD-103 | **Modelos iniciais embutidos como versão 0.** Os cinco modelos .docx iniciais (DOC-02, DOC-03, DOC-04, DOC-07 e crachá), feitos a partir dos formulários em branco da clínica (DEC-76), vêm no pacote do sistema. Sem versão enviada pela administração, ou depois de reverter a ela, a emissão usa o arquivo do pacote e registra `versao_modelo = 0`. A versão 0 passa pela mesma validação da §9.2, num teste da integração contínua, e pode ser baixada como qualquer versão | A emissão funciona desde a implantação sem um envio manual por documento; `modelo_documento` exige quem enviou, e a versão de fábrica não tem autor no sistema |
+| DD-104 | **Conversor em rede interna sem saída.** O conversor (Gotenberg, só com o LibreOffice) fica numa rede Docker `internal`, sem rota para fora; em produção só o web o alcança. Download, webhook, rotas de PDF e métricas desligados, e o LibreOffice recusa endereços públicos e privados. No desenvolvimento e no CI, em que a aplicação roda fora do Docker, uma ponte (socat) ligada às duas redes publica a porta só no loopback, sem dar saída ao conversor. A aplicação o chama por `SAR_CONVERSOR` | Concretiza o contêiner "isolado, sem saída" da DAS §7.2 e a DD-46 com uma imagem mantida, em vez de um servidor de conversão escrito no projeto |
+| DD-105 | **Declaração de atendimento ao titular em leiaute fixo.** A declaração que acompanha a cópia ao titular (§15, RF-1009) é HTML convertido pelo WeasyPrint, com o cabeçalho institucional e o rodapé da DD-86; não é um modelo .docx | Documento do sistema, não um formulário da clínica; mantém os modelos .docx nos documentos que a clínica já usa (DEC-76) |
+| DD-106 | **Ficha de cadastro (DOC-01) em leiaute fixo, só com o preenchido.** Revisa a linha do DOC-01 da §9.1. Cabeçalho institucional e uma lista rótulo–valor só dos campos preenchidos, na ordem da ficha, com contatos, telefones e períodos em qualquer quantidade; campo vazio não aparece. Gerada pelo WeasyPrint, com o rodapé da DD-86, e fora dos modelos .docx | DEC-76. A lista fechada sem laços nem condições (DD-42) não comporta lista de tamanho variável nem omitir o campo vazio; o conteúdo é só dado do cadastro, sem texto da clínica a editar (RNF-703) |
 
 ### 2.2 Alterações incorporadas ao DAS
 
@@ -1092,14 +1096,15 @@ Publica `DocumentoIncorporado` e `DocumentoRevinculado` (§3.11). A anulação c
 
 | **Documento** | **Fonte dos dados** | **Regra específica** |
 |---|---|---|
-| DOC-01 Ficha de cadastro | MOD-02, na ordem da ficha (RNF-401) | Campo faltante sai em branco, nunca com valor padrão |
+| DOC-01 Ficha de cadastro | MOD-02, na ordem da ficha (RNF-401) | Leiaute fixo, só com os campos preenchidos (DD-106) |
 | DOC-02 Termo de cateter | MOD-02 e MOD-06 | — |
 | DOC-03 Declaração de troca de turno | MOD-03, a partir da troca pontual (RF-804) | Só para troca registrada e não cancelada |
 | DOC-04 Termo de alimentos | MOD-02 e MOD-06 (endereço da clínica) | — |
-| DOC-05 Carta de recusa | MOD-02 e texto livre digitado (RF-807) | Texto livre não é gravado (DD-43) |
-| DOC-06 Termo de interrupção | MOD-02 e profissional digitado (RF-806) | Profissional não é gravado (DD-43) |
 | DOC-07 Termo de diálise extra | MOD-02 e turno vigente do MOD-03 (RF-805) | Aviso, sem bloqueio, se já houve emissão no mês (`ConfirmacaoNecessaria`) |
-| Crachá | MOD-02, foto do MOD-04, logotipo do MOD-06 (RF-808) | Sem foto, recusa com orientação de capturar a foto |
+| Crachá | MOD-02 (nome, nascimento e mãe), foto do MOD-04, logotipo do MOD-06 (RF-808) | Sem foto, recusa com orientação de capturar a foto |
+
+DOC-05 e DOC-06 não são emitidos (DEC-76): a clínica usa os formulários próprios, e a versão assinada volta pela
+digitalização, nos tipos da §8.2.
 
 Todos: cabeçalho institucional único (RF-802), disponível como variáveis em todo modelo, e data por
 extenso com o município (RF-803), por função própria, sem depender da localidade do sistema
@@ -1128,16 +1133,15 @@ operacional. Geração em memória, entrega do PDF com `Content-Disposition: inl
 | Variável partida pelo Word em trechos com formatação diferente é apontada | Problema comum ao editar `{{ nome }}` no Word; o aviso diz qual variável redigitar |
 | Fontes usadas disponíveis no conversor, ou substituta métrica conhecida | Evita que o PDF saia com leiaute diferente do Word |
 
-**Variáveis.** Cada documento tem a sua lista, exibida na tela de envio. Exemplos: DOC-01 recebe todos
-os campos do cadastro; DOC-03, `{{ data_origem }}`, `{{ turno_origem }}`, `{{ data_destino }}`,
-`{{ turno_destino }}`; DOC-05, `{{ texto_recusa }}`; DOC-06, `{{ profissional_nome }}` e
-`{{ profissional_registro }}`; crachá, `{{ foto }}` e `{{ logotipo }}` como imagens. Campo vazio sai
-em branco.
+**Variáveis.** Cada documento tem a sua lista, exibida na tela de envio. Exemplos: DOC-03, `{{ data_origem }}`,
+`{{ turno_origem }}`, `{{ data_destino }}`, `{{ turno_destino }}`; crachá, `{{ foto }}` e `{{ logotipo }}` como
+imagens. Campo vazio sai em branco.
 
 **Emissão.** Modelo ativo → preenchimento no ambiente isolado → .docx em memória → conversor → PDF em
 memória → navegador. Nada é gravado em disco no servidor nem entregue em .docx à estação.
 
-**Ponto de partida.** A construção entrega os oito modelos iniciais, criados do zero (RNF-903, DC-09).
+**Ponto de partida.** A construção entrega os cinco modelos iniciais (DOC-02, DOC-03, DOC-04, DOC-07 e crachá),
+a partir dos formulários em branco da clínica, como versão 0 embutida (DD-103, DEC-76, RNF-903, DC-09).
 
 ### 9.3 Catálogo de relatórios
 
