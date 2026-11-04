@@ -31,7 +31,7 @@ RETROATIVA = "operacao.alocacao.registrar_retroativa"
 CANCELAR_REALIZADA = "operacao.troca.cancelar_realizada"
 
 
-def _vigente(vigencias: Sequence[AlocacaoGravada], data: date) -> AlocacaoGravada | None:
+def alocacao_vigente(vigencias: Sequence[AlocacaoGravada], data: date) -> AlocacaoGravada | None:
     anteriores = [v for v in vigencias if v.vigencia_inicio <= data]
     return max(anteriores, key=lambda v: v.vigencia_inicio) if anteriores else None
 
@@ -44,7 +44,7 @@ class _Situacao:
     vigencias: list[AlocacaoGravada]
 
     def escala_em(self, data: date) -> int | None:
-        vigente = _vigente(self.vigencias, data)
+        vigente = alocacao_vigente(self.vigencias, data)
         return vigente.escala_id if vigente is not None else None
 
 
@@ -232,7 +232,7 @@ class ServicoEscalas:
             historico = tuple(
                 (v.vigencia_inicio, por_id[v.escala_id] if v.escala_id is not None else None) for v in vigencias
             )
-            atual = _vigente(vigencias, data)
+            atual = alocacao_vigente(vigencias, data)
             escala = por_id[atual.escala_id] if atual is not None and atual.escala_id is not None else None
             desde = data.replace(day=1)
             trocas = tuple(

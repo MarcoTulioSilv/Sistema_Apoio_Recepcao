@@ -432,8 +432,27 @@ class MarcaAlteracao:
     motivo: str
 
 
+@dataclass(frozen=True, slots=True)
+class TrocaParaDocumento:
+    """O que a declaração de troca de turno (DOC-03, RF-804) preenche: as duas datas e os dois turnos."""
+
+    paciente_id: int
+    origem: date
+    turno_origem: int | None  # o turno da escala em que o paciente estava alocado na data de origem
+    destino: date
+    turno_destino: int
+
+
 class LeituraOperacao(Protocol):
     """Somente leitura, na unidade de trabalho de quem chama (MOD-05, MOD-07). Paciente anulado não aparece."""
+
+    def troca(self, uow: UnidadeDeTrabalho, troca_id: int) -> TrocaParaDocumento | None:
+        """A troca registrada e não cancelada (DOC-03 só sai dela, §9.1); None se não existe ou foi cancelada."""
+        ...
+
+    def turno_em(self, uow: UnidadeDeTrabalho, paciente_id: int, data: date) -> int | None:
+        """O turno da escala vigente do paciente na data (DOC-07, RF-805); None sem período ou sem alocação."""
+        ...
 
     def mes_fechado(self, uow: UnidadeDeTrabalho, competencia: str, hoje: date) -> SituacaoDoMes: ...
 
