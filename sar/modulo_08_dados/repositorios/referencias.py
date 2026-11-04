@@ -1,12 +1,17 @@
-"""Repositórios de convênios e municípios (SQL)."""
+"""Repositórios dos dados de referência do MOD-06 (SQL): convênios, municípios, instituição e faixas etárias."""
 
 from __future__ import annotations
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
-from sar.modulo_08_dados.interfaces.referencias import DadosConvenio, DadosMunicipio
-from sar.modulo_08_dados.modelos.configuracao import Convenio, Municipio
+from sar.modulo_08_dados.interfaces.referencias import (
+    DadosConvenio,
+    DadosFaixaEtaria,
+    DadosInstituicao,
+    DadosMunicipio,
+)
+from sar.modulo_08_dados.modelos.configuracao import Convenio, FaixaEtaria, Instituicao, Municipio
 
 
 def _convenio(linha: Convenio) -> DadosConvenio:
@@ -67,3 +72,38 @@ class RepositorioMunicipioSQL:
             consulta = consulta.where(Municipio.uf == uf)
         consulta = consulta.order_by(Municipio.nome, Municipio.uf).limit(limite)
         return [_municipio(linha) for linha in self._s.scalars(consulta)]
+
+
+def _instituicao(linha: Instituicao, tem_logotipo: bool) -> DadosInstituicao:
+    return DadosInstituicao(
+        linha.nome, linha.endereco, linha.cep, linha.municipio_id, linha.uf, linha.telefone, linha.cnpj, tem_logotipo
+    )
+
+
+class RepositorioInstituicaoSQL:
+    def __init__(self, sessao: Session) -> None:
+        self._s = sessao
+
+    def obter(self, travar: bool = False) -> DadosInstituicao | None:
+        consulta = select(Instituicao, Instituicao.logotipo_tipo.is_not(None)).where(Instituicao.id == 1)
+        linha = self._s.execute(consulta.with_for_update() if travar else consulta).one_or_none()
+        return _instituicao(linha[0], bool(linha[1])) if linha is not None else None
+
+    def gravar(self, dados: DadosInstituicao) -> None:
+        linha = self._s.get(Instituicao, 1)
+        if linha is None:
+            linha = Instituicao(id=1)
+            self._s.add(linha)
+        linha.nome, linha.endereco, linha.cep = dados.nome, dados.endereco, dados.cep
+        linha.municipio_id, linha.uf, linha.telefone, linha.cnpj = dados.municipio, dados.uf, dados.telefone, dados.cnpj
+        self._s.flush()
+
+    def gravar_logotipo(self, png: bytes) -> None:
+        self._s.execute(update(Instituicao).where(Instituicao.id == 1).values(logotipo=png, logotipo_tipo="png"))
+
+    def logotipo(self) -> bytes | None:
+        return self._s.scalar(select(Instituicao.logotipo).where(Instituicao.id == 1))
+
+    def faixas_etarias(self) -> list[DadosFaixaEtaria]:
+        consulta = select(FaixaEtaria).order_by(FaixaEtaria.inicio)
+        return [DadosFaixaEtaria(f.inicio, f.fim, f.rotulo) for f in self._s.scalars(consulta)]

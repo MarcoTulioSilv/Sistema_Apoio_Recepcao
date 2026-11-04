@@ -89,7 +89,11 @@ from sar.modulo_08_dados.interfaces.operacao import RepositorioOperacao
 from sar.modulo_08_dados.interfaces.pacientes import RepositorioPaciente
 from sar.modulo_08_dados.interfaces.parametros import RepositorioParametro
 from sar.modulo_08_dados.interfaces.rascunhos import RepositorioRascunho
-from sar.modulo_08_dados.interfaces.referencias import RepositorioConvenio, RepositorioMunicipio
+from sar.modulo_08_dados.interfaces.referencias import (
+    RepositorioConvenio,
+    RepositorioInstituicao,
+    RepositorioMunicipio,
+)
 from sar.modulo_08_dados.interfaces.sessoes import RepositorioSessao
 from sar.modulo_08_dados.interfaces.trilha import RepositorioExpurgo, RepositorioTrilha
 from sar.modulo_08_dados.interfaces.usuarios import RepositorioUsuario
@@ -100,7 +104,11 @@ from sar.modulo_08_dados.repositorios.operacao import RepositorioOperacaoSQL
 from sar.modulo_08_dados.repositorios.pacientes import RepositorioPacienteSQL
 from sar.modulo_08_dados.repositorios.parametros import RepositorioParametroSQL
 from sar.modulo_08_dados.repositorios.rascunhos import RepositorioRascunhoSQL
-from sar.modulo_08_dados.repositorios.referencias import RepositorioConvenioSQL, RepositorioMunicipioSQL
+from sar.modulo_08_dados.repositorios.referencias import (
+    RepositorioConvenioSQL,
+    RepositorioInstituicaoSQL,
+    RepositorioMunicipioSQL,
+)
 from sar.modulo_08_dados.repositorios.sessoes import RepositorioSessaoSQL
 from sar.modulo_08_dados.repositorios.trilha import RepositorioExpurgoSQL, RepositorioTrilhaSQL
 from sar.modulo_08_dados.repositorios.usuarios import RepositorioUsuarioSQL
@@ -172,6 +180,7 @@ REPOSITORIOS: dict[type, FabricaRepositorio] = {
     RepositorioParametro: RepositorioParametroSQL,
     RepositorioConvenio: RepositorioConvenioSQL,
     RepositorioMunicipio: RepositorioMunicipioSQL,
+    RepositorioInstituicao: RepositorioInstituicaoSQL,
     RepositorioUsuario: RepositorioUsuarioSQL,
     RepositorioSessao: RepositorioSessaoSQL,
     RepositorioAutorizacao: RepositorioAutorizacaoSQL,
