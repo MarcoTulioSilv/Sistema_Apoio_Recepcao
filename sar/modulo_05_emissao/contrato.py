@@ -8,6 +8,7 @@ from enum import StrEnum
 from typing import Protocol
 
 from sar.nucleo.contexto import Contexto
+from sar.nucleo.uow import UnidadeDeTrabalho
 
 
 class Modelo(StrEnum):
@@ -98,6 +99,52 @@ class ModeloService(Protocol):
         """A partir daí, toda emissão usa essa versão; reverter é ativar uma anterior, inclusive a 0. Ativar a que
         já está ativa não grava nem audita. NaoEncontrado."""
         ...
+
+
+class Documento(StrEnum):
+    """Os documentos emitidos para um paciente (§9.1, DEC-76); o crachá tem operação própria."""
+
+    FICHA = "DOC-01"
+    CATETER = "DOC-02"
+    TROCA = "DOC-03"
+    ALIMENTOS = "DOC-04"
+    EXTRA = "DOC-07"
+
+
+@dataclass(frozen=True, slots=True)
+class DocumentoEmitido:
+    """Gerado de novo a cada emissão, do cadastro atual (RNF-903); entregue em memória, nunca guardado (DD-43)."""
+
+    pdf: bytes
+    nome_arquivo: str  # sem dado do paciente: código do documento e data
+
+
+class EmissaoService(Protocol):
+    def emitir(
+        self,
+        contexto: Contexto,
+        documento: Documento,
+        paciente_id: int,
+        troca_id: int | None = None,
+        confirmar_reemissao: bool = False,
+    ) -> DocumentoEmitido:
+        """Recepção e administração (§4.5). O DOC-03 sai de uma troca do paciente registrada e não cancelada
+        (`troca_id`, RF-804). O DOC-07 avisa se já houve emissão no mês: ConfirmacaoNecessaria("extra.emitido_no_mes")
+        até `confirmar_reemissao` (RF-805). NaoEncontrado (paciente ou troca), RegraViolada("instituicao.ausente")
+        sem os dados institucionais (RF-802), IndisponivelExterno se o conversor não responder."""
+        ...
+
+    def emitir_cracha(self, contexto: Contexto, paciente_id: int) -> DocumentoEmitido:
+        """RF-808. RegraViolada("cracha.sem_foto"): a tela orienta a capturar a foto."""
+        ...
+
+
+class LeituraEmissao(Protocol):
+    """Para o MOD-07 (pendência de termo, RF-809), na unidade de trabalho de quem chama."""
+
+    def emissoes_do_mes(
+        self, uow: UnidadeDeTrabalho, paciente_id: int, competencia: str, documento: Documento
+    ) -> int: ...
 
 
 class RelatorioService(Protocol):

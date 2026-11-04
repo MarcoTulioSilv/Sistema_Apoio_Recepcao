@@ -26,6 +26,9 @@ RAIZ = Path(__file__).resolve().parent.parent
 os.environ.setdefault("SAR_SEGREDOS", str(RAIZ / "segredos"))
 os.environ.setdefault("SAR_BANCO_PORTA", "3307")
 os.environ.setdefault("SAR_BANCO_NOME", "sar_teste")
+# Pango do MSYS2 para o WeasyPrint no Windows (docs/comandos.md, seção 2); no Linux vem do sistema.
+if sys.platform == "win32" and Path(r"C:\msys64\ucrt64\bin").is_dir():
+    os.environ.setdefault("WEASYPRINT_DLL_DIRECTORIES", r"C:\msys64\ucrt64\bin")
 
 
 @pytest.fixture
@@ -103,6 +106,8 @@ ZERAR_CADASTRO = (
     "DELETE FROM documento",
     "DELETE FROM duplicidade_descartada",
     "DELETE FROM rascunho_cadastro",
+    "DELETE FROM emissao_documento",
+    "DELETE FROM requisicao_titular",
     "DELETE FROM paciente",
     "DELETE FROM convenio",
 )

@@ -77,7 +77,10 @@ from sar.modulo_04_documentos.leitura import ServicoLeituraDocumentos
 from sar.modulo_04_documentos.pendencias import fontes as fontes_documentos
 from sar.modulo_04_documentos.rotinas import RotinasDocumentos
 from sar.modulo_04_documentos.worker import ProcessadorIngestoes
-from sar.modulo_05_emissao.contrato import RelatorioService
+from sar.modulo_05_emissao.contrato import EmissaoService, ModeloService, RelatorioService
+from sar.modulo_05_emissao.conversor import ConversorDocumentos, ConversorGotenberg
+from sar.modulo_05_emissao.emissao import ServicoEmissao
+from sar.modulo_05_emissao.modelos import ServicoModelos
 from sar.modulo_05_emissao.relatorios import ServicoRelatorios
 from sar.modulo_06_configuracao.contrato import ConfiguracaoService, Referencias
 from sar.modulo_06_configuracao.servicos import LeitorParametrosSQL, ServicoConfiguracao, ServicoReferencias
@@ -255,6 +258,8 @@ class Componentes:
     frequencia: FrequenciaService
     leitura_operacao: LeituraOperacao
     relatorios: RelatorioService
+    modelos: ModeloService
+    emissao: EmissaoService
     ingestao: IngestaoService
     documentos: DocumentoService
     leitura_documentos: LeituraDocumentos
@@ -283,12 +288,13 @@ def compor(
     relogio: Relogio | None = None,
     pastas: Pastas | None = None,
     antimalware: Antimalware | None = None,
+    conversor: ConversorDocumentos | None = None,
 ) -> Componentes:
     """O hasher só muda nos testes, que usam um custo menor; em produção é bcrypt com custo 12 (DD-83). O provedor
     de CEP também, para os testes nunca acessarem a internet; em produção é ViaCEP com BrasilAPI (DD-88). O relógio
     também: a tela inicial depende da hora, e o teste a fixa. As pastas do cofre e da quarentena vêm do ambiente
     (pastas_do_ambiente), e os testes passam as suas. O antimalware da web só responde à pendência 18 (DD-97), com
-    tempo curto; os testes passam um falso."""
+    tempo curto; os testes passam um falso. O conversor de documentos vem de SAR_CONVERSOR (DD-104)."""
     relogio = relogio or RelogioSistema()
     barramento = montar_barramento(relogio)
     executar = montar_executor(engine, barramento, gravar_auditoria)
@@ -320,6 +326,10 @@ def compor(
     for executor in dos_modulos:
         executores.setdefault(executor.tipo, executor)
     autorizacoes = ServicoAutorizacoes(executar, auditoria, executores)
+    pacientes = ServicoPacientes(executar, auditoria, referencias, cep, AlocacaoDaFicha(leitura_cadastro))
+    leitura_operacao = ServicoLeituraOperacao(leitura_cadastro, parametros)
+    leitura_documentos = ServicoLeituraDocumentos(executar, auditoria, cofre, marco_retencao)
+    conversor = conversor or ConversorGotenberg()
     return Componentes(
         relogio=relogio,
         cifra=cifra,
@@ -334,7 +344,7 @@ def compor(
         sessoes=GerenciadorSessao(executar, auditoria, parametros, relogio),
         usuarios=ServicoUsuarios(executar, auditoria, hasher),
         autorizacoes=autorizacoes,
-        pacientes=ServicoPacientes(executar, auditoria, referencias, cep, AlocacaoDaFicha(leitura_cadastro)),
+        pacientes=pacientes,
         contatos=ServicoContatos(executar, auditoria),
         eventos=ServicoEventos(executar, auditoria, autorizacoes, verificadores),
         anulacao=ServicoAnulacao(executar, autorizacoes, participantes),
@@ -354,11 +364,22 @@ def compor(
         escalas=ServicoEscalas(executar, auditoria, leitura_cadastro, parametros, autorizacoes),
         turnos=ServicoSessoes(executar, auditoria, leitura_cadastro, parametros, autorizacoes),
         frequencia=ServicoFrequencia(executar, auditoria, leitura_cadastro, parametros, autorizacoes),
-        leitura_operacao=ServicoLeituraOperacao(leitura_cadastro, parametros),
+        leitura_operacao=leitura_operacao,
         relatorios=ServicoRelatorios(executar, leitura_cadastro),
+        modelos=ServicoModelos(executar, auditoria, referencias, conversor),
+        emissao=ServicoEmissao(
+            executar,
+            auditoria,
+            referencias,
+            leitura_cadastro,
+            pacientes,
+            leitura_operacao,
+            leitura_documentos,
+            conversor,
+        ),
         ingestao=ServicoIngestao(executar, auditoria, parametros, quarentena, cofre, cifra, relogio),
         documentos=ServicoDocumentos(executar, auditoria, cofre),
-        leitura_documentos=ServicoLeituraDocumentos(executar, auditoria, cofre, marco_retencao),
+        leitura_documentos=leitura_documentos,
     )
 
 

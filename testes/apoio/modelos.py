@@ -18,6 +18,7 @@ from sar.nucleo.erros import IndisponivelExterno
 
 PASTA = Path(__file__).resolve().parents[2] / "sar" / "modulo_05_emissao" / "modelos_iniciais"
 Partes = dict[str, bytes]
+EXTERNO_INERTE = "http://198.51.100.7"  # endereço reservado para documentação (RFC 5737): nunca responde
 
 
 def inicial(modelo: Modelo = Modelo.CATETER) -> bytes:

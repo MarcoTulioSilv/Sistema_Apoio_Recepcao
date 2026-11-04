@@ -53,7 +53,7 @@ include = ["sar*"]
 "sar.modulo_08_dados" = ["usuarios_banco.sql", "migracoes/*.py", "migracoes/versions/*.py"]
 "sar.web" = ["modelos/**/*", "static/**/*"]
 "sar.modulo_01_acesso" = ["senhas_fracas.txt"]
-"sar.modulo_05_emissao" = ["modelos_iniciais/*.docx"]
+"sar.modulo_05_emissao" = ["modelos_iniciais/*.docx", "leiautes/*.html"]
 
 # ------------------------------------------------------------------ qualidade
 [tool.ruff]
@@ -70,7 +70,7 @@ ignore = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"testes/**" = ["S101", "S105", "S106"]  # assert e senhas fictícias nos testes
+"testes/**" = ["S101", "S105", "S106", "S607"]  # assert, senhas fictícias e o docker dos testes
 
 [tool.mypy]
 python_version = "3.14"
@@ -82,7 +82,7 @@ exclude = ["sar/modulo_08_dados/migracoes/"]
 disable_error_code = ["type-abstract"]
 
 [[tool.mypy.overrides]]
-module = ["waitress", "pypdfium2", "win32com.*", "pythoncom", "docxtpl", "lxml", "lxml.*"]
+module = ["waitress", "pypdfium2", "win32com.*", "pythoncom", "docxtpl", "lxml", "lxml.*", "weasyprint", "weasyprint.*"]
 ignore_missing_imports = true
 
 [tool.bandit]

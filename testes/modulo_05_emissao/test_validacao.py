@@ -9,11 +9,11 @@ import pytest
 
 from sar.modulo_05_emissao.contrato import Modelo, Problema
 from sar.modulo_05_emissao.validacao import validar
+from testes.apoio.modelos import EXTERNO_INERTE as EXTERNO
 from testes.apoio.modelos import Partes, alterado, inicial, no_texto
 
 TRECHO = '<w:r><w:rPr>{}</w:rPr><w:t xml:space="preserve">{}</w:t></w:r>'
 FECHA, ABRE = "</w:t></w:r>", '<w:r><w:t xml:space="preserve">'
-EXTERNO = "http://198.51.100.7"  # endereço reservado para documentação (RFC 5737): nunca é buscado
 
 
 def codigos(arquivo: bytes, modelo: Modelo = Modelo.CATETER) -> set[tuple[str, str | None]]:

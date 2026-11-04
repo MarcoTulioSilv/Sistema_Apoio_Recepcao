@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>{{ titulo }}</title>
+<style>
+  /* Leiaute fixo dos documentos do sistema (DD-105, DD-106): A4, fontes do sistema, nada buscado fora (DD-46). */
+  @page {
+    size: A4;
+    margin: 18mm 20mm 20mm 20mm;
+    @bottom-right { content: element(rodape); }
+    @bottom-left {
+      content: "Página " counter(page) " de " counter(pages);
+      font: 7pt "Liberation Sans", Arial, sans-serif;
+      color: #555;
+    }
+  }
+  .rodape { position: running(rodape); font: 7pt "Liberation Sans", Arial, sans-serif; color: #555; }
+  body { font: 11pt/1.4 "Liberation Serif", "Times New Roman", serif; color: #000; }
+  .cabecalho { display: flex; align-items: center; gap: 4mm; border-bottom: 0.6pt solid #000; padding-bottom: 3mm; }
+  .cabecalho img { height: 15mm; }
+  .cabecalho .clinica { flex: 1; text-align: center; font-family: "Liberation Sans", Arial, sans-serif; }
+  .cabecalho .nome { font-size: 13pt; font-weight: bold; text-transform: uppercase; }
+  .cabecalho .linha { font-size: 8.5pt; }
+  h1 { font-size: 13pt; text-align: center; margin: 8mm 0 6mm; text-transform: uppercase; }
+  h2 { font-size: 10.5pt; margin: 5mm 0 1.5mm; border-bottom: 0.4pt solid #888; text-transform: uppercase; }
+  dl { display: grid; grid-template-columns: 42mm 1fr; margin: 0; }
+  dt { font-weight: bold; padding: 0.6mm 0; }
+  dd { margin: 0; padding: 0.6mm 0; }
+  p { text-align: justify; margin: 0 0 3mm; }
+  .local-data { text-align: right; margin-top: 10mm; }
+  .assinatura { margin: 18mm auto 0; width: 110mm; border-top: 0.6pt solid #000; text-align: center; padding-top: 1mm; }
+</style>
+</head>
+<body>
+<div class="rodape">Código de integridade: {{ codigo_integridade }}</div>
+<div class="cabecalho">
+  {% if logotipo %}<img src="{{ logotipo }}" alt="">{% endif %}
+  <div class="clinica">
+    <div class="nome">{{ clinica_nome }}</div>
+    <div class="linha">{{ clinica_endereco }} - CEP: {{ clinica_cep }} - {{ clinica_municipio }}-{{ clinica_uf }}</div>
+    {% if clinica_telefone %}<div class="linha">Fone: {{ clinica_telefone }}</div>{% endif %}
+  </div>
+</div>
+<h1>{{ titulo }}</h1>
+{% block corpo %}{% endblock %}
+</body>
+</html>
