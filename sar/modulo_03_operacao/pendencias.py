@@ -24,7 +24,7 @@ from sar.modulo_08_dados.interfaces.operacao import RepositorioOperacao
 from sar.modulo_08_dados.relogio import FUSO_CLINICA
 from sar.nucleo.contexto import Contexto, Perfil
 from sar.nucleo.parametros import LeitorParametros
-from sar.nucleo.portas import FontePendencia, ItemPendencia, Prioridade
+from sar.nucleo.portas import EmissoesRegistradas, FontePendencia, ItemPendencia, Prioridade
 from sar.nucleo.uow import UnidadeDeTrabalho
 
 R, A, E = Perfil.RECEPCAO, Perfil.ADMINISTRACAO, Perfil.ENFERMAGEM
@@ -121,16 +121,21 @@ class FonteSemAlocacao(_Fonte):
         return itens
 
 
+def _etapa(emitido: bool, terminacao: str) -> str:
+    return f"emitid{terminacao}, aguardando o documento assinado" if emitido else "a emitir e assinar"
+
+
 class FonteTermoAEmitir(_Fonte):
-    """Linha 5: termo da troca (DOC-03) ou da extra do mês (DOC-07) ainda sem o documento assinado (RF-809). A etapa
-    "emitido e aguardando digitalização" chega com a emissão do MOD-05."""
+    """Linha 5: termo da troca (DOC-03) ou da extra do mês (DOC-07) ainda sem o documento assinado (RF-809), com a
+    etapa: a emitir, ou emitido e aguardando a digitalização (pela porta EmissoesRegistradas, do MOD-05)."""
 
     codigo = "termo_a_emitir"
     prioridade = Prioridade.ALTA
     perfis = frozenset({R, A, E})
 
-    def __init__(self, leitura: LeituraCadastro) -> None:
+    def __init__(self, leitura: LeituraCadastro, emissoes: EmissoesRegistradas | None = None) -> None:
         self._leitura = leitura
+        self._emissoes = emissoes
 
     def _itens(self, uow: UnidadeDeTrabalho, contexto: Contexto, ids: Sequence[int] | None) -> list[ItemPendencia]:
         repositorio = uow.repositorio(RepositorioOperacao)
@@ -143,10 +148,15 @@ class FonteTermoAEmitir(_Fonte):
             if chave not in com_termo:
                 meses[chave] = min(meses.get(chave, e.data), e.data)
         vivos = set(self._leitura.identificacoes(uow, sorted({t.paciente_id for t in trocas} | {p for p, _ in meses})))
+        trocas_emitidas = self._emissoes.trocas_emitidas(uow, [t.id for t in trocas]) if self._emissoes else set()
+        extras_emitidas = (
+            self._emissoes.extras_emitidas(uow, sorted({p for p, _ in meses})) if self._emissoes else set()
+        )
         itens = [
             self._item(
                 _no_inicio(t.data_origem),
-                f"Declaração de troca de turno a emitir e assinar ({t.data_origem:%d/%m} para {t.data_destino:%d/%m})",
+                f"Declaração de troca de turno {_etapa(t.id in trocas_emitidas, "a")} "
+                f"({t.data_origem:%d/%m} para {t.data_destino:%d/%m})",
                 t.paciente_id, _ficha(t.paciente_id),
             )
             for t in trocas
@@ -155,8 +165,9 @@ class FonteTermoAEmitir(_Fonte):
         for (pid, comp), primeira in sorted(meses.items()):
             if pid in vivos:
                 mes = f"{comp[5:]}/{comp[:4]}"
-                itens.append(self._item(_no_inicio(primeira), f"Termo de diálise extra de {mes} a emitir e assinar",
-                                        pid, _ficha(pid)))  # fmt: skip
+                etapa = _etapa((pid, comp) in extras_emitidas, "o")
+                itens.append(self._item(_no_inicio(primeira), f"Termo de diálise extra de {mes} {etapa}", pid,
+                                        _ficha(pid)))  # fmt: skip
         return itens
 
 
@@ -221,10 +232,12 @@ class FonteExtraAlemDoLimite(_Fonte):
         return itens
 
 
-def fontes(leitura: LeituraCadastro, parametros: LeitorParametros) -> tuple[FontePendencia, ...]:
+def fontes(
+    leitura: LeituraCadastro, parametros: LeitorParametros, emissoes: EmissoesRegistradas | None = None
+) -> tuple[FontePendencia, ...]:
     return (
         FonteSessaoNaoConfirmada(parametros),
-        FonteTermoAEmitir(leitura),
+        FonteTermoAEmitir(leitura, emissoes),
         FonteSemAlocacao(leitura),
         FontePresencaSemRegistro(leitura, parametros),
         FonteExtraAlemDoLimite(leitura, parametros),

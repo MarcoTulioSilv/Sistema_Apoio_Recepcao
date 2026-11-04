@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Protocol
@@ -56,4 +57,12 @@ class RepositorioEmissao(Protocol):
 
     def do_mes(self, paciente_id: int, competencia: str, modelo: str) -> int:
         """Quantas emissões do modelo o paciente teve na competência (aviso do DOC-07, RF-805)."""
+        ...
+
+    def referencias(self, modelo: str, referencias: Sequence[str]) -> set[str]:
+        """As referências (como "troca:12") com alguma emissão do modelo."""
+        ...
+
+    def competencias(self, modelo: str, paciente_ids: Sequence[int]) -> set[tuple[int, str]]:
+        """(paciente, competência) com alguma emissão do modelo."""
         ...

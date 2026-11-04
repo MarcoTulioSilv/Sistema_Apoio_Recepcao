@@ -7,6 +7,7 @@ Ordem: leitura (transação curta) → preenchimento e conversão (fora de trans
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 
 from sar.modulo_01_acesso.contrato import AuditService, PermissionGuard
@@ -90,9 +91,6 @@ class ServicoEmissao:
         pdf_gerado = self._converter(Modelo.CRACHA, preparo, {"foto": foto})
         self._registrar(contexto, Modelo.CRACHA.value, preparo.versao, paciente_id, None)
         return DocumentoEmitido(pdf_gerado, _nome_arquivo("cracha", contexto))
-
-    def emissoes_do_mes(self, uow: UnidadeDeTrabalho, paciente_id: int, competencia: str, documento: Documento) -> int:
-        return uow.repositorio(RepositorioEmissao).do_mes(paciente_id, competencia, documento.value)
 
     # ---------------------------------------------------------------- etapas
     def _preparar(
@@ -185,3 +183,15 @@ class ServicoEmissao:
 
 def _nome_arquivo(codigo: str, contexto: Contexto) -> str:
     return f"{codigo.lower()}-{regras.hoje(contexto.instante).isoformat()}.pdf"
+
+
+class EmissoesRegistradasSQL:
+    """Implementa a porta EmissoesRegistradas do núcleo, para a pendência de termo do MOD-03 (RF-809)."""
+
+    def trocas_emitidas(self, uow: UnidadeDeTrabalho, troca_ids: Sequence[int]) -> set[int]:
+        referencias = [f"troca:{i}" for i in troca_ids]
+        emitidas = uow.repositorio(RepositorioEmissao).referencias(Modelo.TROCA.value, referencias)
+        return {int(r.removeprefix("troca:")) for r in emitidas}
+
+    def extras_emitidas(self, uow: UnidadeDeTrabalho, paciente_ids: Sequence[int]) -> set[tuple[int, str]]:
+        return uow.repositorio(RepositorioEmissao).competencias(Modelo.EXTRA.value, paciente_ids)

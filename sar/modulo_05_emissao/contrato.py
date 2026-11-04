@@ -8,7 +8,6 @@ from enum import StrEnum
 from typing import Protocol
 
 from sar.nucleo.contexto import Contexto
-from sar.nucleo.uow import UnidadeDeTrabalho
 
 
 class Modelo(StrEnum):
@@ -137,14 +136,6 @@ class EmissaoService(Protocol):
     def emitir_cracha(self, contexto: Contexto, paciente_id: int) -> DocumentoEmitido:
         """RF-808. RegraViolada("cracha.sem_foto"): a tela orienta a capturar a foto."""
         ...
-
-
-class LeituraEmissao(Protocol):
-    """Para o MOD-07 (pendência de termo, RF-809), na unidade de trabalho de quem chama."""
-
-    def emissoes_do_mes(
-        self, uow: UnidadeDeTrabalho, paciente_id: int, competencia: str, documento: Documento
-    ) -> int: ...
 
 
 class RelatorioService(Protocol):

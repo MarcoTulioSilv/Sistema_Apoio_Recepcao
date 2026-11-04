@@ -79,7 +79,7 @@ from sar.modulo_04_documentos.rotinas import RotinasDocumentos
 from sar.modulo_04_documentos.worker import ProcessadorIngestoes
 from sar.modulo_05_emissao.contrato import EmissaoService, ModeloService, RelatorioService
 from sar.modulo_05_emissao.conversor import ConversorDocumentos, ConversorGotenberg
-from sar.modulo_05_emissao.emissao import ServicoEmissao
+from sar.modulo_05_emissao.emissao import EmissoesRegistradasSQL, ServicoEmissao
 from sar.modulo_05_emissao.modelos import ServicoModelos
 from sar.modulo_05_emissao.relatorios import ServicoRelatorios
 from sar.modulo_06_configuracao.contrato import ConfiguracaoService, Referencias
@@ -354,7 +354,7 @@ def compor(
         fontes_pendencia=(
             *FONTES_CADASTRO,
             FonteRascunhoProximoDoDescarte(parametros),
-            *fontes_operacao(leitura_cadastro, parametros),
+            *fontes_operacao(leitura_cadastro, parametros, EmissoesRegistradasSQL()),
             *fontes_documentos(
                 ServicoChecklist(), marco_retencao, antimalware or antimalware_do_ambiente(2.0), parametros
             ),

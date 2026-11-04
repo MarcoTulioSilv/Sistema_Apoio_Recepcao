@@ -18,8 +18,9 @@ from sqlalchemy import Engine, text
 
 from sar.modulo_01_acesso.servicos import ServicoAuditoria
 from sar.modulo_03_operacao.leitura import ServicoLeituraOperacao
+from sar.modulo_03_operacao.pendencias import FonteTermoAEmitir
 from sar.modulo_05_emissao.contrato import Documento
-from sar.modulo_05_emissao.emissao import ServicoEmissao
+from sar.modulo_05_emissao.emissao import EmissoesRegistradasSQL, ServicoEmissao
 from sar.modulo_06_configuracao.contrato import DadosInstitucionais
 from sar.modulo_06_configuracao.servicos import ServicoReferencias
 from sar.nucleo.contexto import Contexto, Perfil
@@ -198,3 +199,18 @@ def test_so_recepcao_e_administracao_emitem(cenario: Cenario, chave: str, perfil
 def test_paciente_inexistente_nao_e_encontrado(cenario: Cenario) -> None:
     with pytest.raises(NaoEncontrado):
         cenario.emissao.emitir(cenario.recepcao, Documento.CATETER, 999_999_999)
+
+
+@pytest.mark.requisito("RF-809", "DD-02")
+def test_pendencia_de_termo_mostra_se_ja_foi_emitido(cenario: Cenario) -> None:
+    fonte = FonteTermoAEmitir(cenario.op.cadastro.leitura, EmissoesRegistradasSQL())
+    enfermeira = contexto(cenario.ids, "enfermagem", Perfil.ENFERMAGEM)
+    troca = cenario.op.escalas.registrar_troca(enfermeira, cenario.paciente_id, date(2026, 10, 14),
+                                               date(2026, 10, 15), TER_3)  # fmt: skip
+
+    def descricoes() -> list[str]:
+        return [i.descricao for i in cenario.op.cadastro.executar(lambda uow: fonte.listar(uow, cenario.recepcao))]
+
+    assert descricoes() == ["Declaração de troca de turno a emitir e assinar (14/10 para 15/10)"]
+    cenario.emissao.emitir(cenario.recepcao, Documento.TROCA, cenario.paciente_id, troca)
+    assert descricoes() == ["Declaração de troca de turno emitida, aguardando o documento assinado (14/10 para 15/10)"]

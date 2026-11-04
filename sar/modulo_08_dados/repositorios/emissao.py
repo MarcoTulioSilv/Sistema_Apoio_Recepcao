@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from datetime import UTC, datetime
 
 from sqlalchemy import func, select, update
@@ -91,3 +92,21 @@ class RepositorioEmissaoSQL:
             EmissaoDocumento.modelo == modelo,
         )
         return int(self._s.scalar(consulta) or 0)
+
+    def referencias(self, modelo: str, referencias: Sequence[str]) -> set[str]:
+        if not referencias:
+            return set()
+        consulta = select(EmissaoDocumento.referencia).where(
+            EmissaoDocumento.modelo == modelo, EmissaoDocumento.referencia.in_(referencias)
+        )
+        return {r for r in self._s.scalars(consulta) if r is not None}
+
+    def competencias(self, modelo: str, paciente_ids: Sequence[int]) -> set[tuple[int, str]]:
+        if not paciente_ids:
+            return set()
+        consulta = (
+            select(EmissaoDocumento.paciente_id, EmissaoDocumento.competencia)
+            .where(EmissaoDocumento.modelo == modelo, EmissaoDocumento.paciente_id.in_(paciente_ids))
+            .distinct()
+        )
+        return {(pid, comp) for pid, comp in self._s.execute(consulta)}
