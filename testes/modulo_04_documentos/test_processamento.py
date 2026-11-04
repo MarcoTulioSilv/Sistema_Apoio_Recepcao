@@ -224,3 +224,13 @@ def test_extracao_com_o_tesseract_de_verdade(monkeypatch: pytest.MonkeyPatch) ->
     folha.save(png, format="PNG")
     feito = processar([png.getvalue()], "scanner", ("cns",), LIMITES, True)
     assert [(c.nome, c.valor, c.confianca) for c in feito.campos] == [("cns", paciente.cns, "alta")]
+
+
+@pytest.mark.requisito("SEG-02", "SEG-30")
+def test_imagem_truncada_recusada_mesmo_com_o_weasyprint_carregado(monkeypatch: pytest.MonkeyPatch) -> None:
+    """O WeasyPrint liga ImageFile.LOAD_TRUNCATED_IMAGES ao ser importado (como aqui); o processamento desliga antes de
+    decodificar."""
+    from PIL import ImageFile
+
+    monkeypatch.setattr(ImageFile, "LOAD_TRUNCATED_IMAGES", True)
+    assert _recusa(processar, [corpus.png()[:200]], "scanner", (), LIMITES, False) == "imagem.invalida"

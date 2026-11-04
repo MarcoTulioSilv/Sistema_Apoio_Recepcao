@@ -26,7 +26,7 @@ from dataclasses import dataclass, field
 
 import pikepdf
 import pypdfium2 as pdfium
-from PIL import Image, ImageCms
+from PIL import Image, ImageCms, ImageFile
 
 DPI = 300
 QUALIDADE_JPEG = 85
@@ -106,6 +106,7 @@ def _conferir_imagem(imagem: Image.Image, limites: Limites) -> None:
 
 def _abrir_imagem(dados: bytes, limites: Limites) -> Image.Image:
     Image.MAX_IMAGE_PIXELS = limites.pixels_por_pagina  # o Pillow também recusa bomba de descompressão
+    ImageFile.LOAD_TRUNCATED_IMAGES = False  # o WeasyPrint liga ao ser importado; aqui, truncada é recusada
     try:
         with warnings.catch_warnings():
             warnings.simplefilter("error", Image.DecompressionBombWarning)

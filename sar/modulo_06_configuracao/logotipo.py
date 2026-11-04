@@ -11,7 +11,7 @@ import io
 import sys
 import warnings
 
-from PIL import Image
+from PIL import Image, ImageFile
 
 from sar.nucleo.erros import RegraViolada
 from sar.nucleo.subprocesso import FalhaDoFilho, TempoEsgotado, escrever_quadro, ler_quadro, rodar
@@ -42,6 +42,7 @@ def conferir(arquivo: bytes) -> str:
 def reencodar(arquivo: bytes) -> bytes:
     """Decodifica com limite de pixels e grava um PNG novo, com transparência, sem metadados. Roda no filho."""
     Image.MAX_IMAGE_PIXELS = PIXELS_MAXIMO
+    ImageFile.LOAD_TRUNCATED_IMAGES = False  # o WeasyPrint liga ao ser importado; aqui, truncado é recusado
     with warnings.catch_warnings():
         warnings.simplefilter("error", Image.DecompressionBombWarning)
         imagem = Image.open(io.BytesIO(arquivo), formats=["PNG", "JPEG"])  # nenhum outro decodificador
