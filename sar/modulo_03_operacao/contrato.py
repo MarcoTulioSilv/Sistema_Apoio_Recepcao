@@ -454,6 +454,18 @@ class LeituraOperacao(Protocol):
         """O turno da escala vigente do paciente na data (DOC-07, RF-805); None sem período ou sem alocação."""
         ...
 
+    def escalas(self, uow: UnidadeDeTrabalho) -> list[Escala]:
+        """As seis escalas, em ordem de turno e dias (RF-401)."""
+        ...
+
+    def contagem(self, uow: UnidadeDeTrabalho, data: date) -> ContagemEscalas:
+        """Pacientes em tratamento na data por escala e os sem alocação (RF-908)."""
+        ...
+
+    def realizadas(self, uow: UnidadeDeTrabalho, inicio: date, fim: date) -> dict[int, int]:
+        """Sessões realizadas (presença gravada na confirmação, DD-24) por paciente no intervalo, inclusive."""
+        ...
+
     def mes_fechado(self, uow: UnidadeDeTrabalho, competencia: str, hoje: date) -> SituacaoDoMes: ...
 
     def sessoes_nao_confirmadas(

@@ -36,6 +36,22 @@ def alocacao_vigente(vigencias: Sequence[AlocacaoGravada], data: date) -> Alocac
     return max(anteriores, key=lambda v: v.vigencia_inicio) if anteriores else None
 
 
+def contar_por_escala(uow: UnidadeDeTrabalho, leitura: LeituraCadastro, data: date) -> ContagemEscalas:
+    """RF-404 e RF-908: pacientes em tratamento na data por escala, e os sem alocação (RF-403)."""
+    por_id = dados.escalas(uow)
+    ativos = leitura.pacientes_com_periodo_aberto_em(uow, data)
+    contagem = dict.fromkeys(por_id, 0)
+    sem = 0
+    for periodos, _ in dados.periodos_de(uow, leitura, ativos, por_id).values():
+        periodo = next((p for p in periodos if p.contem(data)), None)
+        escala = periodo.escala_em(data) if periodo is not None else None
+        if escala is None:
+            sem += 1
+        else:
+            contagem[escala.id] += 1
+    return ContagemEscalas(contagem, sem)
+
+
 @dataclass(frozen=True, slots=True)
 class _Situacao:
     """O que o serviço precisa saber do paciente numa data."""
@@ -183,22 +199,7 @@ class ServicoEscalas:
 
     def contagem(self, contexto: Contexto, data: date) -> ContagemEscalas:
         GUARDA.exigir(contexto, "operacao.escala.consultar")
-
-        def operacao(uow: UnidadeDeTrabalho) -> ContagemEscalas:
-            por_id = dados.escalas(uow)
-            ativos = self._leitura.pacientes_com_periodo_aberto_em(uow, data)
-            contagem = dict.fromkeys(por_id, 0)
-            sem = 0
-            for periodos, _ in dados.periodos_de(uow, self._leitura, ativos, por_id).values():
-                periodo = next((p for p in periodos if p.contem(data)), None)
-                escala = periodo.escala_em(data) if periodo is not None else None
-                if escala is None:
-                    sem += 1
-                else:
-                    contagem[escala.id] += 1
-            return ContagemEscalas(contagem, sem)
-
-        return self._executar(operacao)
+        return self._executar(lambda uow: contar_por_escala(uow, self._leitura, data))
 
     def distribuicao(self, contexto: Contexto, data: date) -> list[PacienteNaEscala]:
         GUARDA.exigir(contexto, "operacao.escala.consultar")

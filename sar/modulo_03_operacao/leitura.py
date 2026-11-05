@@ -10,6 +10,8 @@ from sar.modulo_03_operacao import dados
 from sar.modulo_03_operacao.apuracao import apurar, mes_fechado
 from sar.modulo_03_operacao.calendario import DEVIDAS, estado, limites_da_competencia, sessoes_entre
 from sar.modulo_03_operacao.contrato import (
+    ContagemEscalas,
+    Escala,
     EstadoSessao,
     MarcaAlteracao,
     PareamentoDoMes,
@@ -17,7 +19,7 @@ from sar.modulo_03_operacao.contrato import (
     SituacaoDoMes,
     TrocaParaDocumento,
 )
-from sar.modulo_03_operacao.escalas import alocacao_vigente
+from sar.modulo_03_operacao.escalas import alocacao_vigente, contar_por_escala
 from sar.modulo_03_operacao.frequencia import montar_pareamento
 from sar.modulo_08_dados.interfaces.operacao import RepositorioOperacao
 from sar.modulo_08_dados.relogio import FUSO_CLINICA
@@ -55,6 +57,20 @@ class ServicoLeituraOperacao:
         if vigente is None or vigente.escala_id is None:
             return None
         return dados.escalas(uow)[vigente.escala_id].turno
+
+    def escalas(self, uow: UnidadeDeTrabalho) -> list[Escala]:
+        return sorted(dados.escalas(uow).values(), key=lambda e: (e.turno, min(e.dias)))
+
+    def contagem(self, uow: UnidadeDeTrabalho, data: date) -> ContagemEscalas:
+        return contar_por_escala(uow, self._leitura, data)
+
+    def realizadas(self, uow: UnidadeDeTrabalho, inicio: date, fim: date) -> dict[int, int]:
+        contagem: dict[int, int] = {}
+        for presenca in uow.repositorio(RepositorioOperacao).presencas(None, inicio, fim):
+            if presenca.situacao == "presente":
+                contagem[presenca.paciente_id] = contagem.get(presenca.paciente_id, 0) + 1
+        vivos = self._leitura.identificacoes(uow, sorted(contagem))
+        return {pid: n for pid, n in contagem.items() if pid in vivos}
 
     def mes_fechado(self, uow: UnidadeDeTrabalho, competencia: str, hoje: date) -> SituacaoDoMes:
         fechado, pendentes = mes_fechado(uow, dados.implantacao(self._parametros), competencia, hoje)
