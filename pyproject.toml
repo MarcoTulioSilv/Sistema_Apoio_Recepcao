@@ -82,7 +82,7 @@ exclude = ["sar/modulo_08_dados/migracoes/"]
 disable_error_code = ["type-abstract"]
 
 [[tool.mypy.overrides]]
-module = ["waitress", "pypdfium2", "win32com.*", "pythoncom", "docxtpl", "lxml", "lxml.*", "weasyprint", "weasyprint.*"]
+module = ["waitress", "pypdfium2", "win32com.*", "pythoncom", "docxtpl", "lxml", "lxml.*", "weasyprint", "weasyprint.*", "xlsxwriter"]
 ignore_missing_imports = true
 
 [tool.bandit]

@@ -1163,6 +1163,16 @@ a partir dos formulários em branco da clínica, como versão 0 embutida (DD-103
 Agregados não suprimem células (DEC-44) e seguem a mesma permissão e auditoria dos relatórios
 nominais. Toda contagem de pacientes considera apenas cadastros não anulados.
 
+**Detalhes da construção.** "Em tratamento na data" é ter um período que cobre a data, contando o dia do evento
+(P-09). Toda contagem lista as categorias com "não informado" e fecha com o total; na faixa etária e no sexo, todas
+as categorias aparecem, mesmo com zero. Na cobertura vigente no período (RF-905), o paciente conta uma vez por
+cobertura que teve no intervalo, e o total é de pacientes distintos. Na frequência mensal, "ausências" soma as não
+compensadas e as reposições; o balanço as separa. O recorte livre lista quem esteve em tratamento em algum dia do
+intervalo, com as sessões realizadas (presenças da confirmação, DD-24). O início da série (RF-907) sai na entrada,
+nos eventos, no recorte livre e na cobertura no período; a marca de mês alterado (RF-915) traz a data e o motivo.
+A ocupação nomeia a escala pelo turno e pelos dias (DD-75). A trilha guarda os filtros em texto, com o id do
+paciente, nunca o nome. No PDF, a marca da prévia se repete no alto de cada página (DD-47).
+
 ### 9.4 Regras
 
 | **Regra** | **Tipo** | **Onde** |
@@ -1193,6 +1203,7 @@ Exportações não têm tabela própria: ficam na trilha de auditoria, com relat
 | `EmissaoService.emitir_declaracao_titular` | Contexto (A), paciente, data de recebimento, páginas da cópia, referência da requisição | PDF em memória (DD-105) | `AcessoNegado`, `NaoEncontrado` |
 | `ModeloService.enviar` | Contexto (A), código, arquivo | relatório de validação e prévia | `AcessoNegado`, `RegraViolada` (com a lista de problemas) |
 | `ModeloService.ativar` / `reverter` | Contexto (A), código, versão | — | `AcessoNegado` |
+| `RelatorioService.disponiveis` | Contexto | relatórios que o perfil vê (§4.5) | — |
 | `RelatorioService.gerar` | Contexto, relatório, filtros | modelo tabular com marcas | `AcessoNegado`, `RegraViolada` (mês incompleto, com a lista) |
 | `RelatorioService.exportar` | Contexto, relatório, filtros, formato | arquivo em memória | `AcessoNegado`, `RegraViolada` |
 | `RelatorioService.aniversariantes` | Contexto, data | nomes | `AcessoNegado` |

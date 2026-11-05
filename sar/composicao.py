@@ -376,7 +376,7 @@ def compor(
         turnos=ServicoSessoes(executar, auditoria, leitura_cadastro, parametros, autorizacoes),
         frequencia=ServicoFrequencia(executar, auditoria, leitura_cadastro, parametros, autorizacoes),
         leitura_operacao=leitura_operacao,
-        relatorios=ServicoRelatorios(executar, leitura_cadastro),
+        relatorios=ServicoRelatorios(executar, leitura_cadastro, auditoria, leitura_operacao, referencias, parametros),
         modelos=ServicoModelos(executar, auditoria, referencias, conversor),
         emissao=emissao,
         titular=ServicoTitular(executar, auditoria, leitura_cadastro, parametros, leitura_documentos, emissao),

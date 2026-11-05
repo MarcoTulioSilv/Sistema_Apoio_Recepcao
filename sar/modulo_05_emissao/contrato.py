@@ -145,7 +145,143 @@ class EmissaoService(Protocol):
         ...
 
 
+class Relatorio(StrEnum):
+    """O catálogo da §9.3. Operacionais: recepção, administração, visualizador e enfermagem; gerenciais: administração
+    e visualizador (§4.5, P-20, DEC-55)."""
+
+    ENTRADAS = "entradas"
+    CIDADE = "cidade"
+    EVENTOS = "eventos"
+    CONVENIO = "convenio"
+    FREQUENCIA_MENSAL = "frequencia_mensal"
+    BALANCO_MENSAL = "balanco_mensal"
+    PREVIA = "previa"
+    OCUPACAO = "ocupacao"
+    FAIXA_ETARIA = "faixa_etaria"
+    SEXO = "sexo"
+    RECORTE_LIVRE = "recorte_livre"
+
+    @property
+    def operacional(self) -> bool:
+        return self in _OPERACIONAIS
+
+    @property
+    def titulo(self) -> str:
+        return _TITULOS_RELATORIO[self]
+
+    @property
+    def filtros(self) -> frozenset[str]:
+        """Os filtros que o relatório pede (os demais são ignorados): periodo, data_referencia, competencia,
+        tipo_evento, modo_convenio, paciente_id."""
+        return _FILTROS[self]
+
+
+_OPERACIONAIS = frozenset({Relatorio.FREQUENCIA_MENSAL, Relatorio.BALANCO_MENSAL, Relatorio.PREVIA,
+                           Relatorio.OCUPACAO, Relatorio.RECORTE_LIVRE})  # fmt: skip
+_TITULOS_RELATORIO = {
+    Relatorio.ENTRADAS: "Entradas de pacientes por período",
+    Relatorio.CIDADE: "Pacientes por cidade",
+    Relatorio.EVENTOS: "Eventos por período",
+    Relatorio.CONVENIO: "Pacientes por convênio",
+    Relatorio.FREQUENCIA_MENSAL: "Frequência mensal",
+    Relatorio.BALANCO_MENSAL: "Balanço mensal",
+    Relatorio.PREVIA: "PRÉVIA — mês em aberto",
+    Relatorio.OCUPACAO: "Ocupação por escala",
+    Relatorio.FAIXA_ETARIA: "Pacientes por faixa etária",
+    Relatorio.SEXO: "Pacientes por sexo",
+    Relatorio.RECORTE_LIVRE: "Frequência em recorte livre",
+}
+_FILTROS = {
+    Relatorio.ENTRADAS: frozenset({"periodo"}),
+    Relatorio.CIDADE: frozenset({"data_referencia"}),
+    Relatorio.EVENTOS: frozenset({"periodo", "tipo_evento"}),
+    Relatorio.CONVENIO: frozenset({"modo_convenio", "data_referencia", "periodo"}),
+    Relatorio.FREQUENCIA_MENSAL: frozenset({"competencia"}),
+    Relatorio.BALANCO_MENSAL: frozenset({"competencia", "paciente_id"}),
+    Relatorio.PREVIA: frozenset({"paciente_id"}),
+    Relatorio.OCUPACAO: frozenset({"data_referencia"}),
+    Relatorio.FAIXA_ETARIA: frozenset({"data_referencia"}),
+    Relatorio.SEXO: frozenset({"data_referencia"}),
+    Relatorio.RECORTE_LIVRE: frozenset({"periodo"}),
+}
+
+
+class ModoConvenio(StrEnum):
+    """RF-905: a situação numa data, ou a cobertura vigente em algum momento do período."""
+
+    SITUACAO = "situacao"
+    PERIODO = "periodo"
+
+
+@dataclass(frozen=True, slots=True)
+class Filtros:
+    inicio: date | None = None
+    fim: date | None = None
+    data_referencia: date | None = None
+    competencia: str | None = None  # AAAA-MM
+    tipo_evento: str | None = None  # TipoEvento do MOD-02; None: todos
+    modo_convenio: ModoConvenio = ModoConvenio.SITUACAO
+    paciente_id: int | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class Coluna:
+    titulo: str
+    numerica: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class Marca:
+    """Sinalização que sai na tela, no PDF e no XLSX (DD-44)."""
+
+    tipo: str  # inicio_serie (RF-907), nao_confirmadas (RF-914), mes_alterado (RF-915), previa (DD-47)
+    texto: str
+
+
+@dataclass(frozen=True, slots=True)
+class Tabela:
+    """O modelo tabular único (DD-44): tela, PDF e XLSX são renderizações dele, com as mesmas colunas e marcas."""
+
+    relatorio: Relatorio
+    titulo: str
+    filtros: tuple[tuple[str, str], ...]  # (rótulo, valor já formatado), na ordem de exibição
+    colunas: tuple[Coluna, ...]
+    linhas: tuple[tuple[str | int, ...], ...]
+    marcas: tuple[Marca, ...]
+    gerado_em: datetime
+    codigo_integridade: str  # DD-86
+
+
+@dataclass(frozen=True, slots=True)
+class ArquivoRelatorio:
+    conteudo: bytes
+    nome_arquivo: str
+    tipo_mime: str
+
+
+class FormatoExportacao(StrEnum):
+    PDF = "pdf"
+    XLSX = "xlsx"
+
+
 class RelatorioService(Protocol):
+    def disponiveis(self, contexto: Contexto) -> list[Relatorio]:
+        """Os relatórios que o perfil vê (§4.5)."""
+        ...
+
+    def gerar(self, contexto: Contexto, relatorio: Relatorio, filtros: Filtros) -> Tabela:
+        """AcessoNegado conforme o perfil; RegraViolada("relatorio.filtro.<nome>") para filtro faltante ou inválido;
+        RegraViolada("relatorio.mes_incompleto") no mensal com sessão pendente, com `detalhe["pendentes"]`: a lista de
+        (data, turno) que falta (RF-913). Auditada com os filtros."""
+        ...
+
+    def exportar(
+        self, contexto: Contexto, relatorio: Relatorio, filtros: Filtros, formato: FormatoExportacao
+    ) -> ArquivoRelatorio:
+        """Só a administração (§4.5). As mesmas colunas e marcas da tela (RF-912, DD-44); XLSX só com valores, texto
+        como texto (DD-45). Auditada com o relatório, os filtros e o formato (RNF-607)."""
+        ...
+
     def aniversariantes(self, contexto: Contexto, data: date) -> list[str]:
         """Os nomes dos pacientes em tratamento que fazem aniversário na data; só na tela inicial, não exportável
         (§10, RF-909). Sem registro na trilha (§4.5). AcessoNegado para quem não é recepção nem administração."""

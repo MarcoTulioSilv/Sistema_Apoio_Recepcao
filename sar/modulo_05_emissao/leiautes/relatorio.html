@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>{{ tabela.titulo }}</title>
+<style>
+  /* O PDF do modelo tabular (DD-44): as mesmas colunas, filtros e marcas da tela; a prévia leva a marca em cada página
+     (DD-47); nada é buscado fora (DD-46). */
+  @page {
+    size: A4 {% if tabela.colunas | length > 4 %}landscape{% endif %};
+    margin: 16mm 14mm 18mm 14mm;
+    @top-center { content: element(faixa); }
+    @bottom-left { content: "Página " counter(page) " de " counter(pages); font: 7pt "Liberation Sans", Arial, sans-serif; color: #555; }
+    @bottom-right { content: element(rodape); }
+  }
+  .faixa { position: running(faixa); font: bold 9pt "Liberation Sans", Arial, sans-serif; letter-spacing: 0.04em; }
+  .rodape { position: running(rodape); font: 7pt "Liberation Sans", Arial, sans-serif; color: #555; }
+  body { font: 9pt/1.35 "Liberation Sans", Arial, sans-serif; color: #000; }
+  h1 { font-size: 13pt; margin: 0 0 2mm; }
+  .filtros { margin: 0 0 2mm; }
+  .filtros span { margin-right: 6mm; }
+  .marca { border-left: 1mm solid #000; padding: 1mm 2mm; margin: 1mm 0; font-weight: bold; }
+  table { width: 100%; border-collapse: collapse; margin-top: 3mm; }
+  thead { display: table-header-group; }
+  th { text-align: left; border-bottom: 0.8pt solid #000; padding: 1mm 1.5mm; }
+  td { border-bottom: 0.3pt solid #bbb; padding: 0.8mm 1.5mm; }
+  .num { text-align: right; }
+  tr:last-child td { border-bottom: 0.8pt solid #000; }
+</style>
+</head>
+<body>
+<div class="faixa">{% for marca in tabela.marcas if marca.tipo == "previa" %}{{ marca.texto }}{% endfor %}</div>
+<div class="rodape">Gerado em {{ gerado_em }} · Código de integridade: {{ tabela.codigo_integridade }}</div>
+<h1>{{ tabela.titulo }}</h1>
+<p class="filtros">{% for rotulo, valor in tabela.filtros %}<span><strong>{{ rotulo }}:</strong> {{ valor }}</span>{% endfor %}</p>
+{% for marca in tabela.marcas %}<p class="marca">{{ marca.texto }}</p>{% endfor %}
+<table>
+  <thead><tr>{% for coluna in tabela.colunas %}<th{% if coluna.numerica %} class="num"{% endif %}>{{ coluna.titulo }}</th>{% endfor %}</tr></thead>
+  <tbody>
+  {% for linha in tabela.linhas %}
+    <tr>{% for valor in linha %}<td{% if tabela.colunas[loop.index0].numerica %} class="num"{% endif %}>{{ valor }}</td>{% endfor %}</tr>
+  {% else %}
+    <tr><td colspan="{{ tabela.colunas | length }}">Nenhum registro para os filtros escolhidos.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+</body>
+</html>
