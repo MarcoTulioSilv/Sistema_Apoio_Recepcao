@@ -60,6 +60,7 @@ export WEASYPRINT_DLL_DIRECTORIES="C:\msys64\ucrt64\bin"
 | `SAR_CLAMAV_HOST` / `SAR_CLAMAV_PORTA` | Onde o clamd escuta (SEG-09) | `127.0.0.1` e `3310` (padrão, o do compose) |
 | `SAR_CONVERSOR` | Endereço do conversor .docx → PDF (Gotenberg, DD-104) | `http://127.0.0.1:3000` (padrão, a ponte do compose) |
 | `WEASYPRINT_DLL_DIRECTORIES` | Pasta das bibliotecas do Pango no Windows, para o WeasyPrint gerar os PDFs de relatório e de leiaute fixo | `C:\msys64\ucrt64\bin` |
+| `SAR_CAPTURAS` | Pasta onde o teste de sistema das telas do Incremento 5 guarda as capturas (seção 6) | só quando for revisar o leiaute |
 | `SAR_EXIGIR_CONVERSOR` | `1` faz os testes do conversor falharem, em vez de pular, sem ele no ar (como no CI) | só no CI |
 | `SAR_TESSERACT` | Executável do Tesseract, se não estiver no PATH; sem Tesseract, a extração fica desligada e a conferência é manual (RNF-702) | `C:\Program Files\Tesseract-OCR\tesseract.exe` |
 | `SAR_EXIGIR_FERRAMENTAS` | `1` faz os testes do Tesseract e do veraPDF falharem, em vez de pular, se a ferramenta faltar (como no CI) | só no CI |
@@ -258,6 +259,17 @@ python scripts\verificar_rastreabilidade.py --estrito-citacoes   # 11. rastreabi
 ```
 
 Corrigir o estilo automaticamente: `ruff format .` e `ruff check --fix .`
+
+Os testes da emissão, dos modelos e dos relatórios usam o conversor do compose e são pulados se ele estiver fora do
+ar; com `$env:SAR_EXIGIR_CONVERSOR = "1"` (como no CI), falham.
+
+Capturas das telas do Incremento 5 nas larguras de referência (1900, 1100 e 700), para revisar o leiaute:
+
+```powershell
+$env:SAR_CAPTURAS = "$env:TEMP\sar-capturas"; New-Item -ItemType Directory -Force $env:SAR_CAPTURAS | Out-Null
+pytest testes\web\test_emissao_sistema.py -m sistema
+Remove-Item Env:SAR_CAPTURAS
+```
 
 ---
 

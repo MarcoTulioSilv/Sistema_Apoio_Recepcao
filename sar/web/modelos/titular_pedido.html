@@ -1,0 +1,57 @@
+{% extends "layout.html" %}
+{# Um pedido do titular (§15): o prazo e, para a administração, a cópia ao titular (só no pedido de acesso), concluir e
+   negar com o fundamento. A cópia não encerra o pedido: depois de entregar, conclua. #}
+{% block titulo_pagina %}Pedido do titular{% endblock %}
+{% block subtitulo %}{{ p.nome }} · prontuário {{ p.prontuario }}{% endblock %}
+{% block junto_do_titulo %}<a class="btn-pequeno" href="{{ url_for('titular.lista') }}">Todos os pedidos</a>{% endblock %}
+{% block conteudo %}
+<div class="flex max-w-4xl flex-col gap-4">
+  {% include "_avisos.html" %}
+  <section class="cartao flex flex-col gap-2 p-5" aria-labelledby="pedido-t" data-situacao="{{ p.situacao.value }}">
+    <h2 id="pedido-t" class="m-0 text-xl">{{ tipos[p.tipo] }}</h2>
+    <dl class="m-0 grid gap-x-6 gap-y-1 sm:grid-cols-[12rem_1fr]">
+      <dt class="font-bold">Situação</dt><dd class="m-0">{{ situacoes[p.situacao] }}</dd>
+      <dt class="font-bold">Recebido em</dt><dd class="m-0">{{ p.recebida_em.strftime('%d/%m/%Y') }} · {{ canais[p.canal] }}</dd>
+      <dt class="font-bold">Prazo de resposta</dt>
+      <dd class="m-0">{{ p.prazo.strftime('%d/%m/%Y') }}{% if p.situacao.value == "aberta" %}
+        {% if p.dias_restantes < 0 %} <span class="etiqueta-u">Vencido</span>{% elif p.dias_restantes <= 3 %} <span class="etiqueta-u">Faltam {{ p.dias_restantes }} dia(s)</span>{% else %} <span class="etiqueta-n">Faltam {{ p.dias_restantes }} dias</span>{% endif %}{% endif %}</dd>
+      {% if p.desfecho %}<dt class="font-bold">Desfecho</dt><dd class="m-0">{{ p.desfecho }}</dd>
+      <dt class="font-bold">Encerrado em</dt><dd class="m-0">{{ p.atendida_em|data_hora }}</dd>{% endif %}
+    </dl>
+  </section>
+
+  {% if p.situacao.value == "aberta" %}
+    {% if pode_copia and p.tipo.value == "confirmacao_acesso" %}
+    <section class="cartao flex flex-col gap-3 p-5" aria-labelledby="copia-t">
+      <h2 id="copia-t" class="m-0 text-xl">Cópia ao titular</h2>
+      <p class="m-0">Um PDF só, com a declaração de atendimento, a ficha de cadastro e a cópia dos documentos digitalizados. A entrega fica registrada.</p>
+      <form class="flex flex-wrap items-end gap-3" method="post" action="{{ url_for('titular.copia', requisicao_id=p.id) }}">
+        <label class="campo"><span class="rotulo">Como será entregue</span>
+          <select class="entrada" name="entrega" required><option value="">Selecione…</option>
+            {% for forma, rotulo in entregas.items() %}<option value="{{ forma.value }}">{{ rotulo }}</option>{% endfor %}
+          </select></label>
+        <button class="btn-primario" type="submit">Gerar a cópia</button>
+      </form>
+    </section>
+    {% endif %}
+    {% if pode_atender %}
+    <section class="cartao flex flex-col gap-3 p-5" aria-labelledby="resposta-t">
+      <h2 id="resposta-t" class="m-0 text-xl">Resposta</h2>
+      <form class="flex flex-col gap-3" method="post" action="{{ url_for('titular.concluir', requisicao_id=p.id) }}">
+        <label class="campo"><span class="rotulo">Desfecho do atendimento</span>
+          <textarea class="entrada min-h-24" name="desfecho" maxlength="2000" required>{{ texto or '' }}</textarea></label>
+        <div><button class="btn-aprovar" type="submit">Concluir o pedido</button></div>
+      </form>
+      <details{% if sugestao_fundamento %} open{% endif %}>
+        <summary class="cursor-pointer font-bold text-acao">Negar o pedido</summary>
+        <form class="mt-2 flex flex-col gap-3" method="post" action="{{ url_for('titular.negar', requisicao_id=p.id) }}">
+          <label class="campo"><span class="rotulo">Fundamento da negativa</span>
+            <textarea class="entrada min-h-24" name="desfecho" maxlength="2000" required>{{ sugestao_fundamento }}</textarea></label>
+          <div><button class="btn-urgente" type="submit">Negar o pedido</button></div>
+        </form>
+      </details>
+    </section>
+    {% endif %}
+  {% endif %}
+</div>
+{% endblock %}
