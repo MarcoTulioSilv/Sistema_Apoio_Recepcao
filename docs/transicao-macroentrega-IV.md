@@ -29,12 +29,15 @@ pessoal sensível de saúde.
 |---|---|---|
 | I — Requisitos | Concluída. ERS em assinatura, com as decisões DEC-57 a DEC-73 incorporadas antes da assinatura | `fase3-ers-v1_0.md` (ERS-002 v1.0) |
 | II — Arquitetura | Aprovada; revisada na Macroentrega III | `DAS_recepcao-v1_1.md` |
-| III — Design detalhado | **Concluída e aprovada em 2026-10-06** | `DDS_recepcao-v1_0.md`, `PT_recepcao-v1_0.md` |
+| III — Design detalhado | **Concluída e aprovada em 2026-10-06** | `DDS_recepcao-v1_1.md`, `PT_recepcao-v1_1.md` (as v1.0 aprovadas ficam no histórico do Git) |
 | IV — Codificação e verificação | **Em andamento:** incrementos 0 a 5 concluídos (§5) | `DDS_recepcao-v1_1.md`, `PT_recepcao-v1_1.md`, `comandos.md` |
 
 ## 3. O que a Macroentrega III entregou
 
 ### 3.1 Documentos
+
+Registro do que foi entregue. As versões 1.0, o roteiro e o pacote do teste R-34 saíram do repositório depois
+de incorporados (estão no histórico do Git); os documentos em uso são os de `docs/`.
 
 | Documento | Conteúdo |
 |---|---|
@@ -113,35 +116,11 @@ risco: a fundação primeiro; depois o que vira faturamento e o que guarda docum
 
 ## 6. Como começar o repositório
 
-Sugestão de primeiros passos, no Windows com Docker Desktop e Git:
+Feito no Incremento 0. Para preparar uma máquina nova, siga `docs/comandos.md` (seções 1 e 2). O arquivo
+`dados/municipios_ibge.csv` já está no repositório; para regerá-lo, `comandos.md`, seção 9.
 
-```powershell
-# 1. Repositório e estrutura
-mkdir sar; cd sar
-git init
-mkdir docs, scripts, agente_captura, testes, sar\nucleo, sar\web, sar\modulo_08_dados\migracoes\versions
-
-# 2. Documentos aprovados
-#    copie para docs\: fase3-ers-v1_0.md e .docx, DAS_recepcao-v1_1.md e .docx,
-#    DDS_recepcao-v1_0.md, PT_recepcao-v1_0.md, ROTEIRO_R34.md
-
-# 3. Código pronto da Macroentrega III
-#    sar\nucleo\                       <- nucleo\*.py
-#    sar\modulo_08_dados\migracoes\     <- env.py e versions\0001_*.py, 0002_*.py
-#    sar\modulo_08_dados\               <- usuarios_banco.sql
-#    scripts\                           <- verificar_esquema.sh, verificar_rastreabilidade.py
-#    .importlinter                      <- importlinter.ini renomeado
-
-# 4. Primeiro commit
-git add .
-git commit -m "Macroentrega III: documentos aprovados, núcleo, esquema e verificações"
-```
-
-O arquivo `dados/municipios_ibge.csv` precisa ser gerado a partir da tabela DTB do IBGE, com três colunas
-(`codigo_ibge;nome;uf`) e códigos de 7 dígitos, antes da primeira migração completa.
-
-**Ferramenta sugerida para a construção:** Claude Code, trabalhando no repositório, com os documentos de
-`docs/` como referência. Um chat no Projeto continua útil para decisões e revisões.
+**Ferramenta usada na construção:** Claude Code, trabalhando no repositório, com os documentos de `docs/` como
+referência. Um chat no Projeto continua útil para decisões e revisões.
 
 ## 7. Pendências abertas
 
