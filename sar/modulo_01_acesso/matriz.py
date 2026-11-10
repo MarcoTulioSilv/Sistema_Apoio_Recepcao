@@ -171,7 +171,7 @@ _CATALOGO = [
     # ---- §4.8 MOD-08 Dados e MOD-09 Agendamento
     linha("`agendamento.execucoes.ver`",               "—",    "—",       "—", "✓", "—", "—", N),
     linha("`agendamento.job.executar_agora` — só jobs marcados como seguros na §13.1",
-                                                        "—",    "—",       "—", "✓", "—", "—", S),
+                                                        "—",    "—",       "—", "—", "—", "✓", S),
     linha("`agendamento.backup.registrar`",            "—",    "—",       "—", "—", "—", "✓", S),
     # ---- §4.9 MOD-10 Carga inicial
     linha("`carga.simular` / `carga.efetivar`",        "—",    "—",       "—", "✓", "—", "—", S),

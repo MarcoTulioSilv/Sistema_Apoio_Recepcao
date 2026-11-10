@@ -62,6 +62,8 @@ def servicos_web(
         componentes.modelos,
         componentes.emissao,
         componentes.titular,
+        componentes.pendencias,
+        componentes.agendamento,
     )
 
 

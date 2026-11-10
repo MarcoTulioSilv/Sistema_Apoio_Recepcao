@@ -30,6 +30,7 @@ PARAMETROS = dict(
         ("quarentena_prazo", "Prazo da quarentena e da ingestão pendente"),
         ("extracao_ligada", "Extração automática ligada"),
         ("antimalware_idade_maxima", "Idade máxima das assinaturas do antimalware"),
+        ("disco_alarme_ocupacao", "Ocupação de disco que abre o alarme"),
         ("pagina_tamanho_maximo", "Tamanho máximo por página recebida"),
         ("paginas_por_ingestao", "Páginas por digitalização"),
         ("pixels_por_pagina", "Pixels por página"),
@@ -40,5 +41,41 @@ PARAMETROS = dict(
 
 UNIDADES = {
     "min": "minutos", "h": "horas", "dias": "dias", "qtd": "", "bool": "", "data": "", "MB": "MB", "s": "segundos",
-    "mi": "milhões de pixels",
+    "mi": "milhões de pixels", "%": "%",
 }  # fmt: skip
+
+# Pendências (DDS §11.1): o nome curto de cada linha, nas etiquetas dos cartões e no título dos itens, e o texto do
+# botão que leva a resolver. Sem botão: "Abrir".
+PENDENCIAS_CURTAS = {
+    "cadastro_incompleto": "Cadastro incompleto",
+    "checklist_faltante": "Documento faltante",
+    "evento_sem_comprovante": "Evento sem comprovante",
+    "sessao_nao_confirmada": "Sessão não confirmada",
+    "termo_a_emitir": "Termo a emitir",
+    "sem_alocacao": "Sem alocação",
+    "presenca_sem_registro": "Presença fora da escala",
+    "extra_alem_do_limite": "Extra além do limite",
+    "possivel_duplicidade": "Possível duplicidade",
+    "pedido_titular": "Pedido do titular",
+    "solicitacao_autorizacao": "Solicitação de autorização",
+    "falha_cadeia": "Falha na cadeia de auditoria",
+    "rascunho_proximo_descarte": "Rascunho perto do descarte",
+    "aguardando_conferencia": "Documento a conferir",
+    "documento_bloqueado": "Documento bloqueado",
+    "elegiveis_descarte": "Retenção vencida",
+    "job_atrasado": "Job atrasado",
+    "antimalware_desatualizado": "Antimalware desatualizado",
+    "disco_acima_do_limite": "Disco acima do alarme",
+}
+ACOES_PENDENCIA = {
+    "cadastro_incompleto": "Completar",
+    "sessao_nao_confirmada": "Confirmar",
+    "aguardando_conferencia": "Conferir",
+    "solicitacao_autorizacao": "Decidir",
+    "rascunho_proximo_descarte": "Retomar",
+    "job_atrasado": "Ver os jobs",
+    "disco_acima_do_limite": "Ver os jobs",
+    "falha_cadeia": "Ver a integridade",
+}
+PRIORIDADES = {"U": ("Urgência", "text-urgencia", "etiqueta-u"), "A": ("Alta", "text-alta", "etiqueta-a"),
+               "N": ("Normal", "text-normal", "etiqueta-n")}  # fmt: skip

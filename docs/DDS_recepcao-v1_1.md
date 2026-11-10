@@ -178,6 +178,8 @@ da Macroentrega III.
 | DD-108 | **Recorte de datas num seletor só, e calendário próprio em português.** Onde a tela pede um intervalo (início e fim), as duas datas são escolhidas no mesmo calendário: o primeiro clique marca o início, o segundo o fim, com atalhos de mês e o teclado (setas, Page Up e Page Down, Enter e Esc). Os campos enviados continuam dois; sem script, a tela mostra os dois campos de data como antes. Vale para o período dos relatórios e para a trilha de auditoria. **Os demais campos de data usam o mesmo calendário, em português**, e não o do navegador, que segue o idioma dele: a data avulsa (relatórios, escalas, ficha, cadastro, parâmetros, titular) é digitada como dd/mm/aaaa ou escolhida no calendário (atalho "Hoje"; "Limpar" se não for obrigatória; dias fora do mínimo e do máximo indisponíveis); o mês (competência) sai de um quadro com os doze meses, com as setas trocando o ano e os atalhos "Mês passado" e "Este mês". O valor enviado continua no formato ISO (`aaaa-mm-dd`, `aaaa-mm`); sem script, voltam os campos do navegador | Pedido do uso (05/11/2026): escolher o recorte sem abrir dois calendários, e calendário em português em qualquer navegador. O servidor continua conferindo as datas e o intervalo |
 | DD-109 | **Dados de cadastro escolhidos e gerados num relatório só.** Revisa a apresentação da §9.3 (decidido em 09/11/2026, no uso das telas): cidade (RF-903), convênio (RF-905), faixa etária (RF-910) e sexo (RF-911) deixam de ser escolhidos um a um. Na lista de relatórios, a seção "Pacientes e cadastro" é um formulário com uma caixa de seleção por dado, a data de referência comum e o modo do convênio (com o período quando é a cobertura no período); o resultado traz as tabelas escolhidas, como são, na ordem do catálogo, com os filtros comuns no alto e as marcas de cada uma junto dela. Na tela, cada tabela é um quadro numa matriz (quatro lado a lado na tela larga, dois na média, um na estreita), com a lista rolando por dentro e o total no rodapé; nos quadros que rolam (mais de oito linhas), o rodapé traz também uma pesquisa, que filtra as linhas enquanto se digita, sem diferenciar maiúsculas nem acentos, e mostra quantas estão à vista, sem mudar o total. Vale também para os blocos da ocupação por escala (paciente ou prontuário). Só na tela; sem script, fica só o total. O PDF e o XLSX são um arquivo só, com as mesmas tabelas na mesma ordem (na planilha, na mesma aba). Entradas (RF-902) e eventos (RF-904) passam para a seção "Frequência e escalas" só na tela. Os quatro dados de cadastro não têm mais tela própria nem exportação avulsa: saem só por esse relatório. As permissões não mudam (§4.5, P-20): cada dado continua gerencial, e cada um é auditado ao ver e ao exportar como antes (RNF-607) | Os quatro são contagens dos mesmos pacientes na mesma data: escolher juntos evita gerar e baixar quatro vezes. As tabelas e os números são os mesmos de cada relatório |
 | DD-110 | **Fundo de vidro fosco com a marca da clínica.** Em todas as telas, inclusive a de entrar, o fundo é um vidro fosco no estilo dos vidros canelados dos anos 80 e 90: atrás dele, duas luzes desfocadas nos cantos (azul-acinzentado e cinza-fumê); nele, frisos verticais finos, uma faixa de luz na diagonal e a marca da clínica a 22%. A marca é um arquivo próprio do sistema (`static/img/fundo-marca.png`, já esmaecido, sem metadados), independente do logotipo cadastrado (RF-1202), por isso aparece antes do login sem expor endereço novo. Só CSS, sem script e dentro da CSP (DD-09); os cartões, o cabeçalho e o menu continuam opacos, e o contraste do texto não muda. No alto contraste, nas cores forçadas e na impressão, o fundo volta a ser liso | Pedido do uso (09/11/2026), validado em maquete: dar identidade às telas sem prejudicar a leitura |
+| DD-111 | **Alarme de ocupação de disco por parâmetro técnico.** A pendência 19 (RNF-621) abre quando a ocupação medida pelo job de hora em hora passa do parâmetro "ocupação de disco que abre o alarme" (§10.1): 85% por padrão, de 50% a 95%, alterado pelo TI. O job mede as pastas montadas no worker (o armazenamento e as listadas em `SAR_DISCOS_MONITORADOS`) e grava na própria execução (`job_execucao.itens`) o percentual da mais cheia; a pendência compara a última medição com o parâmetro. É um alarme, não um limite: nada é bloqueado (decidido em 10/11/2026) | Disco cheio para tudo de uma vez: o banco deixa de gravar, a digitalização falha, o backup local não cabe. O alarme dá ao TI tempo de liberar espaço ou trocar o disco, e o valor pode acompanhar o tamanho do disco do servidor definitivo |
+| DD-112 | **Execução manual de job pela linha de comando do servidor.** Revisa o §4.8 e a §13.3 (decidido em 10/11/2026): `agendamento.job.executar_agora` sai da tela. O TI executa um job marcado como manual na §13.1 no próprio servidor (`sar job executar <nome>`), com o contexto de sistema, a mesma trava (DD-61) e o mesmo registro em `job_execucao`; a execução é auditada. Pela tela, o TI só consulta as execuções (`agendamento.execucoes.ver`), sem botão | O worker é quem tem as pastas, o antimalware e o usuário de banco das rotinas (DD-58); a web não precisa de escrita em `job_execucao` nem de um canal de pedidos até o worker. Quem executa uma rotina manualmente já está no servidor para investigar |
 
 ### 2.2 Alterações incorporadas ao DAS
 
@@ -504,8 +506,10 @@ Relatórios por perfil conforme P-20 (resolvido). Exportação é da administra�
 | **Operação** | **R** | **A** | **V** | **T** | **E** | **S** | **Auditada** |
 |---|---|---|---|---|---|---|---|
 | `agendamento.execucoes.ver` | — | — | — | ✓ | — | — | Não |
-| `agendamento.job.executar_agora` — só jobs marcados como seguros na §13.1 | — | — | — | ✓ | — | — | Sim |
+| `agendamento.job.executar_agora` — só jobs marcados como seguros na §13.1 | — | — | — | — | — | ✓ | Sim |
 | `agendamento.backup.registrar` (linha de comando do servidor) | — | — | — | — | — | ✓ | Sim |
+
+Executar agora é feito pelo TI no próprio servidor, pela linha de comando (`sar job executar`), com o contexto de sistema (DD-112); pela tela, o TI só consulta as execuções.
 
 O MOD-08 não tem operação de usuário: é infraestrutura usada pelos demais módulos.
 
@@ -1246,6 +1250,7 @@ Valores padrão decididos até aqui. **Operacional** é alterado pela administra
 | Tempo máximo de processamento por página | 20 s | 10–60 s | Técnico | SEG-30; alvo de 15 s (§8.5) |
 | Extração automática ligada | Sim | Sim/Não | Técnico | RNF-702, QAS-08 |
 | Idade máxima das assinaturas do antimalware | 48 h | 24–168 h | Técnico | SEG-21 |
+| Ocupação de disco que abre o alarme | 85% | 50–95% | Técnico | RNF-621, DD-111 |
 | Data de implantação | Definida na implantação | Imutável após a primeira confirmação | Técnico | DD-51 |
 
 Limites de captura e processamento calibrados no teste do R-34 (§8.5). Prazos do rascunho definidos pela clínica: 3 dias de guarda, com aviso no dia anterior ao descarte. O prazo do titular
@@ -1430,7 +1435,7 @@ Agendamento em `America/Sao_Paulo`. Todos são idempotentes. Rotinas leves rodam
 início da noite. **Rotinas pesadas rodam de madrugada, a partir das 02:00, com 10 minutos entre uma e
 outra (P-26, DD-64)**; as semanais e mensais, só aos domingos, quando a clínica não opera.
 
-| **Job** | **Módulo** | **Quando** | **Intervalo máximo entre sucessos** | **Se perdeu o horário** | **Execução manual pelo TI** |
+| **Job** | **Módulo** | **Quando** | **Intervalo máximo entre sucessos** | **Se perdeu o horário** | **Execução manual pelo TI (linha de comando, DD-112)** |
 |---|---|---|---|---|---|
 | Consumidor da fila de ingestão | MOD-04 | Contínuo, a cada 2 s (DD-63) | 5 min com fila não vazia | Retoma ao subir | — |
 | Expiração de ingestões e limpeza da quarentena | MOD-04 | A cada 15 min | 1 h | Roda ao subir | Sim |
@@ -1472,14 +1477,19 @@ nunca repositórios (DAS §4.2).
 | `pesado` | Entra na série da madrugada, com a trava compartilhada e o limite das 04:30 (DD-64) |
 | `intervalo_maximo` | Acima dele sem sucesso, pendência 17 |
 | `roda_ao_subir` | Executa na partida do worker se perdeu o horário (DD-08) |
-| `manual_permitida` | O TI pode executar pela tela (§4.8) |
+| `manual_permitida` | O TI pode executar pela linha de comando do servidor (§4.8, DD-112) |
 | `executar(contexto_sistema) -> ResultadoJob` | Itens processados, e se parou por limite de horário com cursor salvo |
 
 ### 13.4 Registro de execução
 
 `job_execucao`: job, início, fim, resultado (sucesso, falha, sem trabalho), itens processados, resumo
-do erro sem dado pessoal (RNF-624). A pendência 17 compara, para cada job, o último sucesso com o
-intervalo máximo da §13.1.
+do erro sem dado pessoal (RNF-624) e, desde a migração 0008, o cursor da rotina que parou no limite de horário
+(DD-64). A pendência 17 compara, para cada job, o último sucesso com o intervalo máximo da §13.1: conta como sucesso
+a execução terminada com "sucesso" ou "sem trabalho" e sem cursor (uma passada parcial do acervo não basta); sem
+nenhum sucesso, o prazo conta da data de implantação. No job de ocupação de disco, `itens` guarda o percentual medido
+(DD-111). O backup e a cópia para o pen drive são registrados pelos scripts do servidor (`sar job registrar`, DD-62);
+o consumidor da fila, que é um laço e não um job, conta como parado quando há ingestão recebida esperando mais que
+5 minutos.
 
 ---
 

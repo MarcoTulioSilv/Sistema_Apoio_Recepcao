@@ -100,8 +100,15 @@ risco: a fundação primeiro; depois o que vira faturamento e o que guarda docum
 | 7 | Carga inicial | MOD-10 com planilhas sintéticas que reproduzem os defeitos reais | CT-MIG passando; contagem fecha em toda simulação |
 | 8 | Homologação e go-live | Servidor provisório ou dedicado; desempenho com base de volume; ensaios de recuperação; ZAP e ASVS; roteiros com as usuárias; carga real; conferência amostral; decisão do R-43 (scanner pela rede ou agente à prova de leigo, DAS §8); ata | Critérios da §9.2 do PT_recepcao |
 
-**Andamento (10/11/2026).** Incrementos 0 a 5 concluídos e na `main` (o 5 pelo PR #6). Próximo: **Incremento 6**.
+**Andamento (10/11/2026).** Incrementos 0 a 5 concluídos e na `main` (o 5 pelo PR #6). **Incremento 6** concluído na
+branch `incremento-6`, à espera do PR. Próximo: **Incremento 7** (carga inicial).
 
+- **Incremento 6:** CT-PEN-01 a 05 e CT-JOB-01 a 07 passando (PT §4.10). MOD-07 com a matriz única igual à da ERS
+  (DD-55), as 19 fontes ligadas, a tela de pendências, a contagem no início e as pendências de cada paciente nos
+  cartões do turno e na ficha. MOD-09 com o APScheduler no worker, trava no banco, registro de cada execução, cursor
+  das rotinas da madrugada (migração 0008) e a tela de jobs do TI, só leitura. Backup e cópia para o pen drive pelo
+  sistema operacional, registrados como job (`scripts/servidor/`, DD-62). Decisões do incremento: DD-111 (alarme de
+  disco por parâmetro, 85%) e DD-112 (execução manual de job só pela linha de comando do servidor).
 - **Incremento 5:** CT-EMI-01 a 03 e CT-REL-01 a 03 passando; modelos iniciais (DOC-02, DOC-03, DOC-04, DOC-07 e
   crachá) a partir dos formulários da clínica, embutidos como versão 0 (DD-103). Decisões do incremento: DD-103 a
   DD-110 e a emenda DEC-76.
@@ -109,7 +116,8 @@ risco: a fundação primeiro; depois o que vira faturamento e o que guarda docum
   de mediana por modelo .docx, 0,70 s no pior caso; PDF em leiaute fixo pelo WeasyPrint, 0,13 s. A medição que vale
   é a da homologação, com a base de volume e na rede da clínica (PT §6).
 - **Seguem para depois:** a medição dos 30 s da captura na estação (Incremento 4) e a decisão do R-43 sobre o agente
-  de captura, ambas na homologação (Incremento 8).
+  de captura, ambas na homologação (Incremento 8). O backup real (restic, systemd e Docker no Ubuntu) e o primeiro
+  ensaio de restauração também ficam para a homologação (PT §6.4).
 
 **Regra de cada incremento:** nenhum requisito sai do incremento sem teste marcado com
 `@pytest.mark.requisito(...)`. O relatório de rastreabilidade mostra o que falta e vai zerando.
@@ -192,8 +200,8 @@ confirmado (Brother DCP-1610NW); webcam disponível na estação (USB, 1280×720
 |---|---|---|---|
 | RF | RF-1011 (e RF-922; RF-303, RF-806 e RF-807 removidos) | DEC | DEC-76 |
 | RNF | RNF-628 | AD | AD-27 |
-| SEG | SEG-31 | DD | DD-110 |
+| SEG | SEG-31 | DD | DD-112 |
 | QAS | QAS-15 | P (pontos validados) | P-29 |
 | INV | INV-15 | R (riscos) | R-43 |
 | MOD | MOD-11 | DOC | DOC-07 |
-| CT (casos de teste) | por área: CT-FRQ-10, CT-AUD-06, CT-ACE-07, CT-CAD-07, CT-DOC-14, CT-EMI-03, CT-REL-03, CT-MIG-05 | PJ | PJ-08 |
+| CT (casos de teste) | por área: CT-FRQ-10, CT-AUD-06, CT-ACE-07, CT-CAD-07, CT-DOC-14, CT-EMI-03, CT-REL-03, CT-MIG-05, CT-PEN-05, CT-JOB-07 | PJ | PJ-08 |

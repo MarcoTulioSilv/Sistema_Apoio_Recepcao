@@ -17,18 +17,27 @@ def _banco(valor: datetime) -> datetime:
     return valor.astimezone(UTC).replace(tzinfo=None)
 
 
+def _gravado(r: RascunhoCadastro) -> RascunhoGravado:
+    return RascunhoGravado(
+        r.id, r.usuario_id, r.conteudo_cifrado, r.nonce, r.criado_em.replace(tzinfo=UTC),
+        r.atualizado_em.replace(tzinfo=UTC),
+    )  # fmt: skip
+
+
 class RepositorioRascunhoSQL:
     def __init__(self, sessao: Session) -> None:
         self._s = sessao
 
     def do_usuario(self, usuario_id: int) -> RascunhoGravado | None:
         r = self._s.scalars(select(RascunhoCadastro).where(RascunhoCadastro.usuario_id == usuario_id)).one_or_none()
-        if r is None:
-            return None
-        return RascunhoGravado(
-            r.id, r.usuario_id, r.conteudo_cifrado, r.nonce, r.criado_em.replace(tzinfo=UTC),
-            r.atualizado_em.replace(tzinfo=UTC),
-        )  # fmt: skip
+        return _gravado(r) if r is not None else None
+
+    def atualizados_antes(self, limite: datetime) -> list[RascunhoGravado]:
+        consulta = select(RascunhoCadastro).where(RascunhoCadastro.atualizado_em < _banco(limite))
+        return [_gravado(r) for r in self._s.scalars(consulta.order_by(RascunhoCadastro.id))]
+
+    def remover(self, id: int) -> None:
+        self._s.execute(delete(RascunhoCadastro).where(RascunhoCadastro.id == id))
 
     def criar(self, usuario_id: int, em: datetime) -> int:
         linha = RascunhoCadastro(

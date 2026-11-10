@@ -58,7 +58,9 @@ def test_quadros_com_arraste_clique_e_teclado(
     expect(presentes.locator("[data-paciente]")).to_have_count(3)
     sem_violacao(page)
 
-    # Arraste: o cartão vai para Faltantes e a exceção é gravada.
+    # Arraste: o cartão vai para Faltantes e a exceção é gravada. Com as etiquetas de pendência (DD-30), o terceiro
+    # cartão passa da janela padrão de 720 px, e o arraste do Playwright com rolagem fica instável: a janela cresce.
+    page.set_viewport_size({"width": 1280, "height": 1000})
     presentes.locator(f'[data-paciente="{a}"]').drag_to(faltantes)
     expect(faltantes.locator(f'[data-paciente="{a}"]')).to_be_visible()
     assert situacoes(engine_web) == {a: "ausente"}
@@ -96,7 +98,9 @@ def test_atualizacao_automatica_espera_quem_esta_digitando(
     definir_implantacao(engine_migracao, date(2026, 10, 19), operacao_zerada["ti"])
     pacientes_no_turno(engine_web, operacao_zerada, fabrica, 1, 1, INICIO)
     automaticas: list[str] = []
-    page.on("request", lambda r: automaticas.append(r.url) if r.headers.get("x-sar-automatica") == "1" else None)
+    # Só a atualização do painel; o bloco de pendências tem a sua, independente (RNF-408).
+    page.on("request", lambda r: automaticas.append(r.url)
+            if r.headers.get("x-sar-automatica") == "1" and "/turnos/painel" in r.url else None)  # fmt: skip
     page.clock.install()
     criar_usuario("sistturno_rec2")
     entrar_no_navegador(page, endereco, "sistturno_rec2")

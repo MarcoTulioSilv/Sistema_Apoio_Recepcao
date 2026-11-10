@@ -26,6 +26,7 @@ class Unidade(str, Enum):
     MEGABYTES = "MB"
     SEGUNDOS = "s"
     MILHOES = "mi"  # milhões de pixels
+    PERCENTUAL = "%"
 
 
 @dataclass(frozen=True, slots=True)
@@ -56,6 +57,7 @@ PARAMETROS: dict[str, Parametro] = {
         Parametro("quarentena_prazo", Unidade.HORAS, 24, 1, 72, Perfil.TI),
         Parametro("extracao_ligada", Unidade.BOOLEANO, True, None, None, Perfil.TI),
         Parametro("antimalware_idade_maxima", Unidade.HORAS, 48, 24, 168, Perfil.TI),
+        Parametro("disco_alarme_ocupacao", Unidade.PERCENTUAL, 85, 50, 95, Perfil.TI),  # DD-111, RNF-621
         # Captura e processamento (SEG-06, SEG-30), calibrados no teste do R-34 (§8.5)
         Parametro("pagina_tamanho_maximo", Unidade.MEGABYTES, 12, 4, 30, Perfil.TI),
         Parametro("paginas_por_ingestao", Unidade.QUANTIDADE, 30, 1, 100, Perfil.TI),

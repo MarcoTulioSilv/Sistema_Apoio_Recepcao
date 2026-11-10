@@ -1,0 +1,11 @@
+# Todo dia às 02:20 da clínica, depois da âncora das 02:00 (DDS §13.1). Perdeu o horário (servidor desligado): espera
+# o próximo, como manda a §13.1; o atraso aparece para o TI como pendência 17.
+[Unit]
+Description=Backup diário do SAR às 02:20
+
+[Timer]
+OnCalendar=*-*-* 02:20:00 America/Sao_Paulo
+Persistent=false
+
+[Install]
+WantedBy=timers.target

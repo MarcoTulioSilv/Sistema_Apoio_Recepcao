@@ -154,3 +154,23 @@ def test_permissoes_e_limites_do_rascunho(cadastro_zerado: dict[str, int], engin
         with pytest.raises(RegraViolada) as erro:
             cadastro.rascunhos.salvar(recepcao, invalido)
         assert erro.value.codigo == "rascunho.conteudo"
+
+
+@pytest.mark.requisito("RF-920", "DD-58")
+def test_job_descarta_so_os_vencidos_pelo_usuario_do_worker(
+    cadastro_zerado: dict[str, int], engine_web: Engine, engine_worker: Engine, fabrica: Fabrica
+) -> None:
+    """Salvo em 13/10, o rascunho é descartado em 16/10 (3 dias): ainda existe no dia 16 e some no dia 17. O de 15/10
+    fica. O job roda com o contexto de sistema e o usuário de banco do worker (§13.1)."""
+    cadastro = montar(engine_web)
+    recepcao, admin = pessoa(cadastro_zerado), pessoa(cadastro_zerado, "admin", Perfil.ADMINISTRACAO)
+    cadastro.rascunhos.salvar(recepcao, {"nome": fabrica.nome()})
+    cadastro.rascunhos.salvar(daqui(admin, 2), {"nome": fabrica.nome()})
+    do_worker = montar(engine_worker).rascunhos
+    with pytest.raises(AcessoNegado):
+        do_worker.descartar_expirados(recepcao)  # só o job
+    assert do_worker.descartar_expirados(Contexto.sistema("job.descarte_rascunhos", AGORA + timedelta(days=3))) == 0
+    assert do_worker.descartar_expirados(Contexto.sistema("job.descarte_rascunhos", AGORA + timedelta(days=4))) == 1
+    assert cadastro.rascunhos.retomar(recepcao) is None
+    assert cadastro.rascunhos.retomar(daqui(admin, 4)) is not None
+    assert ("cadastro.rascunho.descartar_expirados", None, None) in auditados(engine_web)

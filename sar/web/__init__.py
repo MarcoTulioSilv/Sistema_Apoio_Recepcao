@@ -53,6 +53,7 @@ class ItemMenu:
 # Cada item aparece só para quem pode a operação da tela (AD-20). As telas dos incrementos seguintes entram aqui.
 MENU: tuple[ItemMenu, ...] = (
     ItemMenu("Início", "acesso.inicio"),
+    ItemMenu("Pendências", "pendencias.lista", (("pendencia.ver", None),)),
     ItemMenu("Pacientes", "pacientes.busca", (("cadastro.paciente.buscar", None),)),
     ItemMenu("Novo cadastro", "cadastro.novo", (("cadastro.paciente.criar", None),)),
     ItemMenu("Escalas", "escalas.geral", (("operacao.escala.consultar", None),)),
@@ -67,6 +68,7 @@ MENU: tuple[ItemMenu, ...] = (
     ),
     ItemMenu("Pedidos do titular", "titular.lista", (("titular.requisicao.consultar", None),)),
     ItemMenu("Usuários", "usuarios.lista", (("acesso.usuario.consultar", None),)),
+    ItemMenu("Jobs", "agendamento.lista", (("agendamento.execucoes.ver", None),)),
     ItemMenu(
         "Parâmetros",
         "parametros.lista",
@@ -119,6 +121,7 @@ def criar_app(servicos: ServicosWeb | None = None, config: ConfigWeb | None = No
         app.wsgi_app = ProxyFix(app.wsgi_app, x_for=n, x_proto=n, x_host=n)  # type: ignore[method-assign]
 
     from sar.web.rotas_acesso import bp as acesso
+    from sar.web.rotas_agendamento import bp as agendamento
     from sar.web.rotas_cadastro import bp as cadastro
     from sar.web.rotas_captura import bp as captura
     from sar.web.rotas_convenios import bp as convenios
@@ -128,6 +131,7 @@ def criar_app(servicos: ServicosWeb | None = None, config: ConfigWeb | None = No
     from sar.web.rotas_instituicao import bp as instituicao
     from sar.web.rotas_pacientes import bp as pacientes
     from sar.web.rotas_parametros import bp as parametros
+    from sar.web.rotas_pendencias import bp as pendencias
     from sar.web.rotas_relatorios import bp as relatorios
     from sar.web.rotas_saude import bp as saude
     from sar.web.rotas_titular import bp as titular
@@ -155,6 +159,8 @@ def criar_app(servicos: ServicosWeb | None = None, config: ConfigWeb | None = No
             instituicao,
             relatorios,
             titular,
+            pendencias,
+            agendamento,
         ):
             app.register_blueprint(blueprint)
 

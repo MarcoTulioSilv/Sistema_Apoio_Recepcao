@@ -39,6 +39,7 @@ from sar.web.rotas_cadastro import (
     municipios_para_codigos,
     municipios_para_nomes,
 )
+from sar.web.rotas_pendencias import outras_da_ficha
 
 bp = Blueprint("pacientes", __name__, url_prefix="/pacientes")
 TELEFONES_VALORES = {t.value for t in TipoTelefone}
@@ -189,6 +190,7 @@ def _ficha(contexto: Contexto, paciente_id: int, **extra: Any) -> str:
         documentos=documentos,
         foto=_foto(contexto, documentos),
         trocas=_trocas(contexto, paciente_id, pode),
+        outras_pendencias=outras_da_ficha(contexto, paciente_id),
         **extra,
     )
 

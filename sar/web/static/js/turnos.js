@@ -88,7 +88,9 @@
   });
 
   // Depois de cada troca do painel: foco no cartão movido e a mensagem para o leitor de tela.
-  document.addEventListener("htmx:after:swap", () => {
+  // O bloco de pendências da tela inicial também se atualiza sozinho; a troca dele não mexe no painel.
+  document.addEventListener("htmx:after:swap", (e) => {
+    if (e.target && e.target.closest && e.target.closest("#pendencias-resumo")) return;
     const alvo = document.querySelector("[data-focar]");
     if (alvo) {
       const botao = document.getElementById(alvo.dataset.focar);

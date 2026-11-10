@@ -1,0 +1,12 @@
+# Backup diário do SAR (DD-62). Instalação: docs/comandos.md, seção do servidor.
+[Unit]
+Description=Backup do SAR (dump e restic)
+Wants=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/sar/backup.env
+ExecStart=/opt/sar/scripts/servidor/sar-backup.sh
+Nice=10
+IOSchedulingClass=idle

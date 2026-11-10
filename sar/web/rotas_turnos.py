@@ -18,6 +18,7 @@ from sar.nucleo.contexto import Contexto
 from sar.nucleo.erros import AcessoNegado, ConflitoDeVersao, NaoEncontrado, RegraViolada, RequerAutorizacao
 from sar.web import contexto_atual
 from sar.web.configuracao import ServicosWeb
+from sar.web.rotas_pendencias import contagens_da_tela, etiquetas_dos_pacientes
 
 bp = Blueprint("turnos", __name__)
 GUARDA = PermissionGuard()
@@ -112,7 +113,9 @@ def dados_do_painel(contexto: Contexto, mensagem: str | None = None, foco: str |
     com_quadro = anteriores[:MAXIMO_QUADROS_ANTERIORES] + [s for s in painel.sessoes if s.data >= hoje(contexto)]
     em_lista: list[ResumoSessao] = anteriores[MAXIMO_QUADROS_ANTERIORES:]
     telas = [servicos.turnos.tela_do_turno(contexto, s.data, s.escala.id) for s in com_quadro]
+    ids = sorted({p.paciente_id for tela in telas for p in tela.pacientes})
     return {
+        "pendencias_paciente": etiquetas_dos_pacientes(contexto, ids),
         "ve_turnos": True,
         "implantacao_definida": painel.implantacao_definida,
         "telas": telas,
@@ -131,7 +134,8 @@ def _resposta(contexto: Contexto, mensagem: str | None = None, foco: str | None 
     dados = dados_do_painel(contexto, mensagem, foco)
     if request.headers.get("HX-Request"):
         return render_template("_turnos.html", **dados)
-    return render_template("inicio.html", aniversariantes=aniversariantes(contexto), **dados)
+    contagens = contagens_da_tela(contexto)
+    return render_template("inicio.html", aniversariantes=aniversariantes(contexto), contagens=contagens, **dados)
 
 
 def aniversariantes(contexto: Contexto) -> list[str] | None:
@@ -176,6 +180,7 @@ def sessao(data: str, escala: int) -> str:
     return render_template(
         "sessao_turno.html", tela=tela, pode=Permissoes.de(contexto), estados=ESTADOS, origens=ORIGENS,
         hoje=hoje(contexto),
+        pendencias_paciente=etiquetas_dos_pacientes(contexto, [p.paciente_id for p in tela.pacientes]),
     )  # fmt: skip
 
 

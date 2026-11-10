@@ -63,6 +63,18 @@
   </section>
   {% endif %}
 
+  {% if outras_pendencias %}
+  <section class="cartao flex flex-col gap-3 p-5" aria-labelledby="outras-pend-t">
+    <h2 id="outras-pend-t" class="m-0 text-xl">Outras pendências</h2>
+    <ul class="m-0 flex list-none flex-col gap-2 p-0">
+      {% for etiqueta, prioridade, descricao, destino, acao in outras_pendencias %}
+      <li class="flex flex-wrap items-center gap-3" data-sobre="pendencia"><span class="{{ etiqueta }}">{{ prioridade }}</span><span>{{ descricao }}</span>
+        {%- if destino %} <a href="{{ destino }}">{{ acao }}<span class="sr-only">: {{ descricao }}</span></a>{% endif %}</li>
+      {% endfor %}
+    </ul>
+  </section>
+  {% endif %}
+
   {% if ficha.possiveis_duplicatas %}
   <section class="flex flex-col gap-3 rounded-xl border border-borda-forte bg-superficie p-4" aria-labelledby="dup-t">
     <h2 id="dup-t" class="m-0 text-lg">Possível duplicidade: mesmo nome, nascimento e nome da mãe</h2>

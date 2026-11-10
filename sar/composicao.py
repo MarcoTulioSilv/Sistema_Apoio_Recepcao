@@ -7,6 +7,7 @@ fontes de pendência e os jobs de cada módulo.
 from __future__ import annotations
 
 import os
+from collections.abc import Callable
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
@@ -21,6 +22,7 @@ from sar.modulo_01_acesso.contrato import (
     SessionManager,
     UsuarioService,
 )
+from sar.modulo_01_acesso.pendencias import fontes as fontes_acesso
 from sar.modulo_01_acesso.senhas import Hasher
 from sar.modulo_01_acesso.servicos import (
     GerenciadorSessao,
@@ -63,7 +65,7 @@ from sar.modulo_03_operacao.leitura import ServicoLeituraOperacao
 from sar.modulo_03_operacao.pendencias import fontes as fontes_operacao
 from sar.modulo_03_operacao.sessoes import ServicoSessoes
 from sar.modulo_03_operacao.termos import manipulador_revinculo_termos, manipulador_termos
-from sar.modulo_04_documentos.antimalware import Antimalware, Clamd
+from sar.modulo_04_documentos.antimalware import Antimalware, Clamd, conferir_assinaturas
 from sar.modulo_04_documentos.armazenamento import Cofre, Pastas, Quarentena
 from sar.modulo_04_documentos.contrato import DocumentoService, IngestaoService, LeituraDocumentos
 from sar.modulo_04_documentos.documentos import ServicoDocumentos
@@ -75,6 +77,7 @@ from sar.modulo_04_documentos.executores import (
 from sar.modulo_04_documentos.ingestao import ServicoIngestao
 from sar.modulo_04_documentos.leitura import ServicoLeituraDocumentos
 from sar.modulo_04_documentos.pendencias import fontes as fontes_documentos
+from sar.modulo_04_documentos.rotinas import Resultado as ResultadoAcervo
 from sar.modulo_04_documentos.rotinas import RotinasDocumentos
 from sar.modulo_04_documentos.worker import ProcessadorIngestoes
 from sar.modulo_05_emissao.contrato import EmissaoService, ModeloService, RelatorioService
@@ -84,8 +87,11 @@ from sar.modulo_05_emissao.modelos import ServicoModelos
 from sar.modulo_05_emissao.relatorios import ServicoRelatorios
 from sar.modulo_06_configuracao.contrato import ConfiguracaoService, Referencias
 from sar.modulo_06_configuracao.servicos import LeitorParametrosSQL, ServicoConfiguracao, ServicoReferencias
+from sar.modulo_07_pendencias.contrato import PendenciaService
+from sar.modulo_07_pendencias.servicos import ServicoPendencias
 from sar.modulo_08_dados.cadeia import gravar_encadeado
 from sar.modulo_08_dados.cifra import CifraAesGcm
+from sar.modulo_08_dados.interfaces.agendamento import RepositorioAgendamento
 from sar.modulo_08_dados.interfaces.autorizacoes import RepositorioAutorizacao
 from sar.modulo_08_dados.interfaces.documentos import RepositorioDocumentos
 from sar.modulo_08_dados.interfaces.emissao import RepositorioEmissao, RepositorioModelo
@@ -103,6 +109,7 @@ from sar.modulo_08_dados.interfaces.titular import RepositorioTitular
 from sar.modulo_08_dados.interfaces.trilha import RepositorioExpurgo, RepositorioTrilha
 from sar.modulo_08_dados.interfaces.usuarios import RepositorioUsuario
 from sar.modulo_08_dados.relogio import RelogioSistema
+from sar.modulo_08_dados.repositorios.agendamento import RepositorioAgendamentoSQL, TravaMySQL
 from sar.modulo_08_dados.repositorios.autorizacoes import RepositorioAutorizacaoSQL
 from sar.modulo_08_dados.repositorios.documentos import RepositorioDocumentosSQL
 from sar.modulo_08_dados.repositorios.emissao import RepositorioEmissaoSQL, RepositorioModeloSQL
@@ -120,9 +127,16 @@ from sar.modulo_08_dados.repositorios.titular import RepositorioTitularSQL
 from sar.modulo_08_dados.repositorios.trilha import RepositorioExpurgoSQL, RepositorioTrilhaSQL
 from sar.modulo_08_dados.repositorios.usuarios import RepositorioUsuarioSQL
 from sar.modulo_08_dados.uow import ExecutorSQL, FabricaRepositorio, GravadorAuditoria, UnidadeDeTrabalhoSQL
+from sar.modulo_09_agendamento.agendador import Agendador
+from sar.modulo_09_agendamento.catalogo import CATALOGO, com_rotinas
+from sar.modulo_09_agendamento.contrato import AgendamentoService, ResultadoJob, Rotina
+from sar.modulo_09_agendamento.disco import OcupacaoDisco, pastas_monitoradas
+from sar.modulo_09_agendamento.pendencias import fontes as fontes_agendamento
+from sar.modulo_09_agendamento.servicos import ServicoAgendamento
 from sar.modulo_11_titular.contrato import TitularService
 from sar.modulo_11_titular.pendencias import fontes as fontes_titular
 from sar.modulo_11_titular.servicos import ServicoTitular
+from sar.nucleo.contexto import Contexto
 from sar.nucleo.erros import ConfiguracaoInvalida
 from sar.nucleo.eventos import (
     Barramento,
@@ -201,6 +215,7 @@ REPOSITORIOS: dict[type, FabricaRepositorio] = {
     RepositorioRascunho: RepositorioRascunhoSQL,
     RepositorioOperacao: RepositorioOperacaoSQL,
     RepositorioDocumentos: RepositorioDocumentosSQL,
+    RepositorioAgendamento: RepositorioAgendamentoSQL,
 }
 
 
@@ -257,6 +272,8 @@ class Componentes:
     rascunhos: RascunhoService
     cep: CepService
     fontes_pendencia: tuple[FontePendencia, ...]
+    pendencias: PendenciaService
+    agendamento: AgendamentoService
     marco_retencao: FonteMarcoRetencao
     leitura_cadastro: LeituraCadastro
     escalas: EscalaService
@@ -340,6 +357,16 @@ def compor(
     emissao = ServicoEmissao(
         executar, auditoria, referencias, leitura_cadastro, pacientes, leitura_operacao, leitura_documentos, conversor
     )
+    # DD-54: o MOD-07 agrega as fontes de todos os módulos
+    fontes_pendencia: tuple[FontePendencia, ...] = (
+        *fontes_acesso(executores),
+        *FONTES_CADASTRO,
+        FonteRascunhoProximoDoDescarte(parametros),
+        *fontes_operacao(leitura_cadastro, parametros, EmissoesRegistradasSQL()),
+        *fontes_documentos(ServicoChecklist(), marco_retencao, antimalware or antimalware_do_ambiente(2.0), parametros),
+        *fontes_titular(leitura_cadastro, parametros),
+        *fontes_agendamento(CATALOGO, parametros),
+    )
     return Componentes(
         relogio=relogio,
         cifra=cifra,
@@ -360,16 +387,10 @@ def compor(
         anulacao=ServicoAnulacao(executar, autorizacoes, participantes),
         rascunhos=ServicoRascunhos(executar, auditoria, cifra, parametros),
         cep=ServicoCep(executar, referencias, cep),
-        # DD-54: o MOD-07 agrega as fontes de todos os módulos
-        fontes_pendencia=(
-            *FONTES_CADASTRO,
-            FonteRascunhoProximoDoDescarte(parametros),
-            *fontes_operacao(leitura_cadastro, parametros, EmissoesRegistradasSQL()),
-            *fontes_documentos(
-                ServicoChecklist(), marco_retencao, antimalware or antimalware_do_ambiente(2.0), parametros
-            ),
-            *fontes_titular(leitura_cadastro, parametros),
-        ),
+        fontes_pendencia=fontes_pendencia,
+        pendencias=ServicoPendencias(executar, fontes_pendencia),
+        # a web só consulta (DD-112): o catálogo sem as rotinas, que são do worker
+        agendamento=ServicoAgendamento(executar, auditoria, parametros, TravaMySQL(engine), CATALOGO, relogio),
         marco_retencao=marco_retencao,
         leitura_cadastro=leitura_cadastro,
         escalas=ServicoEscalas(executar, auditoria, leitura_cadastro, parametros, autorizacoes),
@@ -401,12 +422,86 @@ def compor_worker(
                                 Quarentena(pastas.quarentena, cifra), antimalware, cifra, relogio)  # fmt: skip
 
 
+def compor_registro(engine: Engine) -> ServicoAgendamento:
+    """Só o registro e a consulta dos jobs, sem rotinas nem chave mestra: o `sar job registrar` dos scripts do
+    servidor (DD-62) e o `sar job listar`."""
+    relogio = RelogioSistema()
+    executar = montar_executor(engine, montar_barramento(relogio))
+    return ServicoAgendamento(executar, ServicoAuditoria(executar), LeitorParametrosSQL(executar), TravaMySQL(engine),
+                              CATALOGO, relogio)  # fmt: skip
+
+
 def compor_rotinas(engine: Engine, chave_mestra: bytes, pastas: Pastas, antimalware: Antimalware) -> RotinasDocumentos:
     """Revarredura, conferência de hash e órfãos do acervo (DD-41, DD-37), pelo usuário de banco do worker."""
     relogio = RelogioSistema()
     executar = montar_executor(engine, montar_barramento(relogio))
     return RotinasDocumentos(executar, ServicoAuditoria(executar), Cofre(pastas.cofre, CifraAesGcm(chave_mestra)),
                              antimalware, relogio)  # fmt: skip
+
+
+@dataclass(frozen=True, slots=True)
+class Worker:
+    processador: ProcessadorIngestoes
+    agendamento: ServicoAgendamento
+    agendador: Agendador
+
+
+def _itens(quantidade: int) -> ResultadoJob:
+    return ResultadoJob(quantidade, sem_trabalho=quantidade == 0)
+
+
+def compor_agendamento(
+    engine: Engine,
+    engine_expurgo: Engine,
+    chave_mestra: bytes,
+    pastas: Pastas,
+    antimalware: Antimalware,
+    relogio: Relogio | None = None,
+) -> Worker:
+    """O consumidor da fila (DD-63) e os jobs do catálogo (§13.1), pelo usuário de banco do worker; o expurgo da
+    trilha, pelo dele (DD-58). Cada rotina é um serviço do módulo dono, chamado com o contexto de sistema."""
+    relogio = relogio or RelogioSistema()
+    barramento = montar_barramento(relogio)
+    executar = montar_executor(engine, barramento)
+    auditoria = ServicoAuditoria(executar, montar_executor(engine_expurgo, barramento))
+    parametros = LeitorParametrosSQL(executar)
+    cifra = CifraAesGcm(chave_mestra)
+    processador = ProcessadorIngestoes(executar, auditoria, parametros, Quarentena(pastas.quarentena, cifra),
+                                       antimalware, cifra, relogio)  # fmt: skip
+    acervo = RotinasDocumentos(executar, auditoria, Cofre(pastas.cofre, cifra), antimalware, relogio)
+    rascunhos = ServicoRascunhos(executar, auditoria, cifra, parametros)
+
+    def expiracao(_c: Contexto, _cursor: str | None, _s: float | None) -> ResultadoJob:
+        return _itens(processador.expirar() + processador.limpar_quarentena())
+
+    def cadeia(contexto: Contexto, _cursor: str | None, _s: float | None) -> ResultadoJob:
+        return ResultadoJob(auditoria.verificar_cadeia(contexto).verificados)
+
+    def assinaturas(contexto: Contexto, _cursor: str | None, _s: float | None) -> ResultadoJob:
+        idade = parametros.valor("antimalware_idade_maxima")
+        return ResultadoJob(int(conferir_assinaturas(antimalware, contexto.instante, idade if isinstance(idade, int)
+                                                     else 48)))  # fmt: skip
+
+    def percorrer(rodar: Callable[[str | None, float | None], ResultadoAcervo]) -> Rotina:
+        def rotina(_c: Contexto, cursor: str | None, segundos: float | None) -> ResultadoJob:
+            resultado = rodar(cursor, segundos)
+            return ResultadoJob(resultado.verificados, resultado.cursor, sem_trabalho=resultado.verificados == 0)
+
+        return rotina
+
+    rotinas: dict[str, Rotina] = {
+        "expiracao_ingestoes": expiracao,
+        "descarte_rascunhos": lambda c, _cursor, _s: _itens(rascunhos.descartar_expirados(c)),
+        "orfaos_repositorio": lambda _c, _cursor, _s: _itens(acervo.remover_orfaos()),
+        "verificacao_cadeia": cadeia,
+        "idade_assinaturas": assinaturas,
+        "ocupacao_disco": OcupacaoDisco(pastas_monitoradas([pastas.cofre, pastas.quarentena])),
+        "rescan_acervo": percorrer(acervo.revarrer),
+        "hash_acervo": percorrer(acervo.verificar_hashes),
+        "expurgo_trilha": lambda c, _cursor, _s: _itens(auditoria.expurgar(c)),
+    }
+    servico = ServicoAgendamento(executar, auditoria, parametros, TravaMySQL(engine), com_rotinas(rotinas), relogio)
+    return Worker(processador, servico, Agendador(servico, relogio))
 
 
 def ids_dos_logins(executar: ExecutorDeOperacao, logins: list[str]) -> dict[str, int]:

@@ -1,0 +1,36 @@
+{% extends "layout.html" %}
+{# A tela única de pendências do perfil (RF-1010, RNF-408; protótipo pendencias.html). Mais de cinco do mesmo tipo
+   numa prioridade: o resto fica num <details>, que abre sem script; a legenda vai sem a seta (guia de componentes). #}
+{% macro linha_item(l) %}
+<li class="flex flex-wrap items-center justify-between gap-4 border-t border-linha px-4 py-3" data-pendencia="{{ l.codigo }}">
+  <span class="flex min-w-0 flex-col gap-0.5"><strong>{{ l.titulo }}</strong><span class="text-sm text-suave">{{ l.detalhe }}</span></span>
+  {% if l.destino %}<a class="btn-secundario shrink-0" href="{{ l.destino }}">{{ l.acao }}<span class="sr-only">: {{ l.titulo }}</span></a>{% endif %}
+</li>
+{% endmacro %}
+{% block titulo_pagina %}Pendências{% endblock %}
+{% block subtitulo %}{{ perfil_rotulo }}, {{ total }} {{ 'pendência' if total == 1 else 'pendências' }}{% endblock %}
+{% block conteudo %}
+<div class="flex flex-col gap-4">
+  <p class="m-0 max-w-[70ch] text-[15px] text-suave">Dentro de cada prioridade, a mais antiga aparece primeiro. Uma pendência some sozinha quando a causa é resolvida.</p>
+  {% for g in grupos %}
+  <section id="g-{{ g.prioridade.value }}" aria-labelledby="g-{{ g.prioridade.value }}-t" class="cartao overflow-hidden" data-prioridade="{{ g.prioridade.value }}">
+    <div class="flex items-center gap-2.5 px-4 py-3">
+      <h2 id="g-{{ g.prioridade.value }}-t" class="m-0 text-lg {{ g.classe }}">{{ g.nome }}</h2>
+      <span class="{{ g.etiqueta }} numero">{{ g.total }}</span>
+    </div>
+    <ul class="m-0 list-none p-0">
+      {% for l in g.linhas %}{{ linha_item(l) }}{% endfor %}
+      {% for codigo, resto in g.mais.items() %}
+      <li class="border-t border-linha px-4 py-3">
+        <details><summary class="cursor-pointer list-none font-bold text-acao [&::-webkit-details-marker]:hidden">Mais {{ resto | length }} de {{ curtas[codigo] | lower }}</summary>
+          <ul class="m-0 mt-2 list-none p-0">{% for l in resto %}{{ linha_item(l) }}{% endfor %}</ul>
+        </details>
+      </li>
+      {% endfor %}
+    </ul>
+  </section>
+  {% else %}
+  <section class="cartao p-5"><p class="m-0">Nenhuma pendência.</p></section>
+  {% endfor %}
+</div>
+{% endblock %}

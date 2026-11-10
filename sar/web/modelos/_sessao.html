@@ -45,7 +45,10 @@
           <span class="numero text-sm text-suave">Prontuário {{ p.prontuario }}</span>
           {% if origens.get(p.origem) %}<span class="text-sm font-bold text-acao">{{ origens[p.origem] }}</span>
           {% elif not p.presente and tela.estado.value == 'em_preparacao' %}<span class="text-sm font-bold text-acao">Avisou que vai faltar</span>{% endif %}
-          {% if p.extras_no_mes %}<span class="flex flex-wrap gap-1"><span class="{{ 'etiqueta-a' if p.aviso_extra else 'etiqueta-n' }}">{{ p.extras_no_mes }} {{ 'extra' if p.extras_no_mes == 1 else 'extras' }} no mês</span></span>{% endif %}
+          {% set etiquetas = (pendencias_paciente | default({})).get(p.paciente_id, []) %}
+          {% if p.extras_no_mes or etiquetas %}<span class="flex flex-wrap gap-1" data-sobre="pendencias">
+            {%- if p.extras_no_mes %}<span class="{{ 'etiqueta-a' if p.aviso_extra else 'etiqueta-n' }}">{{ p.extras_no_mes }} {{ 'extra' if p.extras_no_mes == 1 else 'extras' }} no mês</span>{% endif %}
+            {%- for texto, classe in etiquetas %}<span class="{{ classe }}">{{ texto }}</span>{% endfor %}</span>{% endif %}
           {% if not travado %}
           <form class="mt-auto flex flex-wrap gap-2" method="post" action="{{ base }}/presenca" hx-post="{{ base }}/presenca" hx-target="#turnos" hx-swap="innerHTML">
             <input type="hidden" name="paciente_id" value="{{ p.paciente_id }}">
