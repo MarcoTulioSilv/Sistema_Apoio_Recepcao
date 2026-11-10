@@ -153,15 +153,30 @@ python -m sar.wsgi
 - O superusuário escolhe o perfil no seletor "Agir como (desenvolvimento)", no cabeçalho.
 
 Os documentos digitalizados só chegam à conferência com o worker rodando, num **segundo terminal** preparado
-como na seção 1 (DD-63):
+como na seção 1 (DD-63). O mesmo processo sobe o agendador dos jobs da §13.1 do DDS (expiração da quarentena, descarte
+de rascunhos, verificação da cadeia, ocupação de disco, rotinas da madrugada); o que perdeu o horário roda na partida:
 
 ```powershell
-sar worker                                   # consome a fila de ingestão a cada 2 s; Ctrl+C para parar
+sar worker                                   # fila de ingestão a cada 2 s e agendador; Ctrl+C para parar
 ```
+
+Jobs (DDS §13). A execução manual é do TI, no servidor (DD-112); só os jobs com "Sim" na coluna de execução manual:
+
+```powershell
+sar job listar                               # último sucesso e atraso de cada job; sai com 1 se algum atrasou
+sar job executar ocupacao_disco              # roda agora, com a trava e o registro do agendador (auditado)
+sar job executar hash_acervo --minutos 30    # rotinas do acervo: param no tempo e a próxima continua do cursor
+sar job registrar backup --resultado sucesso --inicio 2026-11-10T02:20:00-03:00 --fim 2026-11-10T02:41:00-03:00
+```
+
+O `sar job registrar` é o que os scripts do servidor chamam ao terminar (DD-62); à mão, só para testar a pendência 17.
+Em desenvolvimento, a ocupação de disco mede a pasta `armazenamento\`; para medir outras, liste-as em
+`$env:SAR_DISCOS_MONITORADOS` separadas por `;` (no Git Bash e no Linux, por `:`).
 
 Em desenvolvimento, o cofre e a quarentena ficam em `armazenamento\` no projeto, fora do Git.
 
-Rotinas do acervo de documentos, pelo usuário do worker (o agendamento noturno chega no Incremento 6):
+Rotinas do acervo de documentos à mão, com a lista dos documentos bloqueados na saída (para investigar). O agendador
+já roda as três de madrugada, com registro; estes comandos não entram no registro dos jobs:
 
 ```powershell
 sar documentos-revarrer                      # revarredura antimalware (SEG-22); detecção bloqueia o documento
@@ -175,6 +190,31 @@ Parar e voltar o banco:
 ```powershell
 docker compose stop mysql                    # para; os dados ficam no volume
 docker compose up -d --wait mysql            # sobe de novo
+```
+
+### Backup no servidor (DD-62, DAS §7.4)
+
+O backup roda pelo agendamento do sistema operacional (systemd), não pelo worker, e registra cada execução no SAR.
+Só no servidor Linux (Ubuntu Server, AD-24), como root, com o restic instalado (`apt install restic`):
+
+```bash
+install -d -m 700 /etc/sar
+install -m 600 scripts/servidor/backup.env.exemplo /etc/sar/backup.env   # depois, ajustar os caminhos
+install -m 600 /dev/null /etc/sar/restic.senha                           # colar a senha do restic (custódia dupla)
+restic -r /mnt/backup/sar-restic --password-file /etc/sar/restic.senha init   # uma vez
+install -m 644 scripts/servidor/sar-backup.service scripts/servidor/sar-backup.timer /etc/systemd/system/
+systemctl daemon-reload && systemctl enable --now sar-backup.timer
+systemctl start sar-backup.service           # um backup agora, para conferir
+journalctl -u sar-backup.service -n 50       # saída do último backup
+systemctl list-timers sar-backup.timer       # próximo horário
+```
+
+Cópia semanal para o pen drive da vez, à mão, com o pen drive montado; depois, desmontar e levar para fora da sala:
+
+```bash
+set -a; . /etc/sar/backup.env; set +a
+/opt/sar/scripts/servidor/sar-copia-pendrive.sh /media/pendrive-a
+umount /media/pendrive-a
 ```
 
 ---
