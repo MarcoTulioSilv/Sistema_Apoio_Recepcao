@@ -21,6 +21,7 @@ from sar.modulo_01_acesso.contrato import (
     SessionManager,
     UsuarioService,
 )
+from sar.modulo_01_acesso.pendencias import fontes as fontes_acesso
 from sar.modulo_01_acesso.senhas import Hasher
 from sar.modulo_01_acesso.servicos import (
     GerenciadorSessao,
@@ -84,6 +85,8 @@ from sar.modulo_05_emissao.modelos import ServicoModelos
 from sar.modulo_05_emissao.relatorios import ServicoRelatorios
 from sar.modulo_06_configuracao.contrato import ConfiguracaoService, Referencias
 from sar.modulo_06_configuracao.servicos import LeitorParametrosSQL, ServicoConfiguracao, ServicoReferencias
+from sar.modulo_07_pendencias.contrato import PendenciaService
+from sar.modulo_07_pendencias.servicos import ServicoPendencias
 from sar.modulo_08_dados.cadeia import gravar_encadeado
 from sar.modulo_08_dados.cifra import CifraAesGcm
 from sar.modulo_08_dados.interfaces.autorizacoes import RepositorioAutorizacao
@@ -257,6 +260,7 @@ class Componentes:
     rascunhos: RascunhoService
     cep: CepService
     fontes_pendencia: tuple[FontePendencia, ...]
+    pendencias: PendenciaService
     marco_retencao: FonteMarcoRetencao
     leitura_cadastro: LeituraCadastro
     escalas: EscalaService
@@ -340,6 +344,15 @@ def compor(
     emissao = ServicoEmissao(
         executar, auditoria, referencias, leitura_cadastro, pacientes, leitura_operacao, leitura_documentos, conversor
     )
+    # DD-54: o MOD-07 agrega as fontes de todos os módulos
+    fontes_pendencia: tuple[FontePendencia, ...] = (
+        *fontes_acesso(executores),
+        *FONTES_CADASTRO,
+        FonteRascunhoProximoDoDescarte(parametros),
+        *fontes_operacao(leitura_cadastro, parametros, EmissoesRegistradasSQL()),
+        *fontes_documentos(ServicoChecklist(), marco_retencao, antimalware or antimalware_do_ambiente(2.0), parametros),
+        *fontes_titular(leitura_cadastro, parametros),
+    )
     return Componentes(
         relogio=relogio,
         cifra=cifra,
@@ -360,16 +373,8 @@ def compor(
         anulacao=ServicoAnulacao(executar, autorizacoes, participantes),
         rascunhos=ServicoRascunhos(executar, auditoria, cifra, parametros),
         cep=ServicoCep(executar, referencias, cep),
-        # DD-54: o MOD-07 agrega as fontes de todos os módulos
-        fontes_pendencia=(
-            *FONTES_CADASTRO,
-            FonteRascunhoProximoDoDescarte(parametros),
-            *fontes_operacao(leitura_cadastro, parametros, EmissoesRegistradasSQL()),
-            *fontes_documentos(
-                ServicoChecklist(), marco_retencao, antimalware or antimalware_do_ambiente(2.0), parametros
-            ),
-            *fontes_titular(leitura_cadastro, parametros),
-        ),
+        fontes_pendencia=fontes_pendencia,
+        pendencias=ServicoPendencias(executar, fontes_pendencia),
         marco_retencao=marco_retencao,
         leitura_cadastro=leitura_cadastro,
         escalas=ServicoEscalas(executar, auditoria, leitura_cadastro, parametros, autorizacoes),
