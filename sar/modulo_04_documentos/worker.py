@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import logging
 import threading
-import time
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, replace
 from datetime import datetime, timedelta
@@ -35,7 +34,6 @@ EXPIRAR = "documento.ingestao.expirar"
 INTERVALO_FILA = 2.0  # DD-63
 RECARGA_ESPERA = timedelta(minutes=2)  # DD-99: tempo para o clamd terminar de ler a base nova
 RECARGA_INTERVALO = timedelta(hours=1)  # DD-99: nova tentativa de recarga, se a base continuar vencida
-INTERVALO_EXPIRACAO = 60.0
 
 Processar = Callable[[Sequence[bytes], str, Sequence[str], Limites, bool, float], Resultado]
 
@@ -257,16 +255,9 @@ class ProcessadorIngestoes:
 
     # ---------------------------------------------------------------- laço (DD-63)
     def rodar(self, parar: threading.Event, intervalo: float = INTERVALO_FILA) -> None:
+        """Só a fila. A expiração e a limpeza da quarentena são um job do agendador, com registro (DDS §13.1)."""
         self.retomar()
-        proxima_expiracao = 0.0
         while not parar.is_set():
-            if time.monotonic() >= proxima_expiracao:
-                try:
-                    self.expirar()
-                    self.limpar_quarentena()
-                except Exception as erro:
-                    log.error("ingestao.expiracao.falhou", extra=campos_do_erro(erro))
-                proxima_expiracao = time.monotonic() + INTERVALO_EXPIRACAO
             try:
                 trabalhou = self.processar_proxima()
             except Exception as erro:
