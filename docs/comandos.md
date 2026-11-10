@@ -84,8 +84,9 @@ docker compose up -d --wait clamav           # antimalware; na primeira vez baix
 docker compose up -d --wait conversor conversor-ponte   # conversor .docx → PDF da emissão, sem saída para fora
 ```
 
-Pango para o WeasyPrint (PDF dos relatórios e dos documentos de leiaute fixo), uma vez. No Linux ele vem com o
-sistema; no Windows, pelo MSYS2:
+Pango para o WeasyPrint (PDF dos relatórios e dos documentos de leiaute fixo), uma vez. No Linux (Debian e Ubuntu),
+pelos pacotes `libpango-1.0-0 libpangoft2-1.0-0 libharfbuzz-subset0`: sem a HarfBuzz-Subset, o WeasyPrint avisa ao
+ser importado, e os testes, que tratam aviso como erro, nem chegam a rodar. No Windows, pelo MSYS2, que já a traz:
 
 ```powershell
 winget install --id MSYS2.MSYS2 --exact      # instala em C:\msys64
