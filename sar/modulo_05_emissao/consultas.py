@@ -9,8 +9,8 @@ from collections.abc import Iterable, Mapping, Sequence
 from datetime import date
 
 from sar.modulo_02_cadastro.contrato import PacienteRelatorio, PeriodoRelatorio, Sexo, TipoCobertura, TipoEvento
-from sar.modulo_03_operacao.contrato import ContagemEscalas, Escala, PareamentoDoMes
-from sar.modulo_05_emissao.contrato import Coluna
+from sar.modulo_03_operacao.contrato import Escala, PacienteNaEscala, PareamentoDoMes
+from sar.modulo_05_emissao.contrato import Bloco, Coluna
 from sar.modulo_05_emissao.regras import data_curta
 from sar.modulo_06_configuracao.contrato import FaixaEtaria
 
@@ -157,12 +157,30 @@ def rotulo_escala(escala: Escala) -> str:
     return f"{escala.rotulo} — {', '.join(dias[:-1])} e {dias[-1]}"
 
 
-def ocupacao(escalas: Sequence[Escala], contagem: ContagemEscalas) -> Resultado:
-    """RF-908: pacientes alocados por escala na data, e os sem alocação (RF-403)."""
-    linhas: Linhas = [(rotulo_escala(e), contagem.por_escala.get(e.id, 0)) for e in escalas]
-    linhas.append(("Sem alocação", contagem.sem_alocacao))
-    linhas.append((TOTAL, sum(contagem.por_escala.values()) + contagem.sem_alocacao))
-    return (Coluna("Escala"), Coluna("Pacientes", numerica=True)), linhas
+def _ordem_da_escala(escala: Escala) -> tuple[int, int]:
+    """Os três turnos de segunda, quarta e sexta em sequência; depois os de terça, quinta e sábado."""
+    return min(escala.dias), escala.turno
+
+
+def _quantos(n: int) -> str:
+    return f"{n} paciente" if n == 1 else f"{n} pacientes"
+
+
+def ocupacao(
+    escalas: Sequence[Escala], distribuicao: Sequence[PacienteNaEscala]
+) -> tuple[tuple[Coluna, ...], list[Bloco], str]:
+    """RF-908: um bloco por escala, com os pacientes alocados na data e o total no rodapé; o total geral; e os sem
+    alocação (RF-403) num bloco à parte, só quando houver algum."""
+    blocos: list[Bloco] = []
+    for escala in sorted(escalas, key=_ordem_da_escala):
+        pacientes = [(p.nome, p.prontuario) for p in distribuicao if p.escala is not None and p.escala.id == escala.id]
+        blocos.append(Bloco(rotulo_escala(escala), tuple(pacientes), _quantos(len(pacientes))))
+    sem = [(p.nome, p.prontuario) for p in distribuicao if p.escala is None]
+    total = f"Total geral: {_quantos(len(distribuicao))}"
+    if sem:
+        blocos.append(Bloco("Sem alocação", tuple(sem), _quantos(len(sem)), separado=True))
+        total += f" ({len(distribuicao) - len(sem)} nas escalas e {len(sem)} sem alocação)"
+    return (PACIENTE, PRONTUARIO), blocos, total
 
 
 def _nomes(identificados: Mapping[int, tuple[str, str]], ids: Iterable[int]) -> list[tuple[str, str, int]]:
@@ -172,26 +190,16 @@ def _nomes(identificados: Mapping[int, tuple[str, str]], ids: Iterable[int]) -> 
 def frequencia_mensal(
     pareamentos: Mapping[int, PareamentoDoMes], identificados: Mapping[int, tuple[str, str]]
 ) -> Resultado:
-    """RF-906: previstas, realizadas, ausências (compensadas ou não) e extras de cada paciente no mês."""
+    """RF-906 e RF-916 num relatório só (DD-107), e a prévia (DD-47): previstas, realizadas e as ausências, separadas em
+    repostas e não compensadas; as extras só são definitivas com o mês fechado."""
     linhas: Linhas = []
     for nome, prontuario, pid in _nomes(identificados, pareamentos):
         b = pareamentos[pid].balanco
         linhas.append((nome, prontuario, b.previstas, b.realizadas, b.ausencias_nao_compensadas + b.reposicoes,
-                       b.extras))  # fmt: skip
+                       b.reposicoes, b.ausencias_nao_compensadas, b.extras))  # fmt: skip
     numeros = (Coluna("Previstas", True), Coluna("Realizadas", True), Coluna("Ausências", True),
+               Coluna("Reposições", True), Coluna("Ausências não compensadas", True),
                Coluna("Extras", True))  # fmt: skip
-    return (PACIENTE, PRONTUARIO, *numeros), linhas
-
-
-def balanco(pareamentos: Mapping[int, PareamentoDoMes], identificados: Mapping[int, tuple[str, str]]) -> Resultado:
-    """RF-916 e a prévia (DD-47): o mesmo cálculo; as extras só são definitivas com o mês fechado."""
-    linhas: Linhas = []
-    for nome, prontuario, pid in _nomes(identificados, pareamentos):
-        b = pareamentos[pid].balanco
-        linhas.append((nome, prontuario, b.previstas, b.realizadas, b.ausencias_nao_compensadas, b.reposicoes,
-                       b.extras))  # fmt: skip
-    numeros = (Coluna("Previstas", True), Coluna("Realizadas", True), Coluna("Ausências não compensadas", True),
-               Coluna("Reposições", True), Coluna("Extras", True))  # fmt: skip
     return (PACIENTE, PRONTUARIO, *numeros), linhas
 
 

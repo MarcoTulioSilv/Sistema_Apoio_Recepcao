@@ -194,3 +194,14 @@ def test_pedido_do_titular_da_ficha_ate_a_resposta(
     eliminacao = post(recepcao, f"/titular/novo/{pid}", {"tipo": "eliminacao", "canal": "carta", "recebida": hoje})
     outro = int(eliminacao.headers["Location"].split("/titular/")[1].split("?")[0])
     assert "art. 16, I" in get(admin, f"/titular/{outro}").get_data(as_text=True)  # o fundamento já vem preenchido
+
+
+@pytest.mark.requisito("RF-901", "DD-44")
+def test_relatorio_ja_sai_gerado_ao_abrir_pelo_card(ambiente: dict[str, int], engine_web: Engine) -> None:
+    """Sem tela intermediária: aberto pelo card, o relatório vem com os filtros padrão, que seguem na tela."""
+    admin = logado(montar(engine_web), "webe_admin")
+    for codigo in ("entradas", "eventos", "ocupacao", "sexo", "recorte_livre", "previa"):
+        tela = get(admin, f"/relatorios/{codigo}").get_data(as_text=True)
+        assert 'id="resultado-t"' in tela and "Gerar relatório" in tela, codigo
+    entradas = get(admin, "/relatorios/entradas").get_data(as_text=True)
+    assert "Período:</strong>" in entradas

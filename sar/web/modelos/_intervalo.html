@@ -1,0 +1,13 @@
+{# Recorte de datas (DD-108): os dois campos de sempre, que o calendario.js troca por um seletor só, com as duas datas
+   no mesmo calendário. Sem script, ficam os dois campos; os nomes enviados são os mesmos nos dois casos. #}
+{% macro intervalo(rotulo, nome_inicio, valor_inicio, nome_fim, valor_fim, rotulo_inicio="De", rotulo_fim="Até") %}
+<div class="intervalo-datas" data-intervalo data-rotulo="{{ rotulo }}">
+  <fieldset class="m-0 flex flex-wrap items-end gap-3 border-0 p-0" data-campos>
+    <legend class="sr-only">{{ rotulo }}</legend>
+    <label class="campo"><span class="rotulo">{{ rotulo_inicio }}</span>
+      <input class="entrada" type="date" name="{{ nome_inicio }}" value="{{ valor_inicio or '' }}" data-inicio></label>
+    <label class="campo"><span class="rotulo">{{ rotulo_fim }}</span>
+      <input class="entrada" type="date" name="{{ nome_fim }}" value="{{ valor_fim or '' }}" data-fim></label>
+  </fieldset>
+</div>
+{% endmacro %}

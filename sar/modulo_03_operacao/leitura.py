@@ -10,16 +10,16 @@ from sar.modulo_03_operacao import dados
 from sar.modulo_03_operacao.apuracao import apurar, mes_fechado
 from sar.modulo_03_operacao.calendario import DEVIDAS, estado, limites_da_competencia, sessoes_entre
 from sar.modulo_03_operacao.contrato import (
-    ContagemEscalas,
     Escala,
     EstadoSessao,
     MarcaAlteracao,
+    PacienteNaEscala,
     PareamentoDoMes,
     ResumoSessao,
     SituacaoDoMes,
     TrocaParaDocumento,
 )
-from sar.modulo_03_operacao.escalas import alocacao_vigente, contar_por_escala
+from sar.modulo_03_operacao.escalas import alocacao_vigente, distribuir
 from sar.modulo_03_operacao.frequencia import montar_pareamento
 from sar.modulo_08_dados.interfaces.operacao import RepositorioOperacao
 from sar.modulo_08_dados.relogio import FUSO_CLINICA
@@ -61,8 +61,8 @@ class ServicoLeituraOperacao:
     def escalas(self, uow: UnidadeDeTrabalho) -> list[Escala]:
         return sorted(dados.escalas(uow).values(), key=lambda e: (e.turno, min(e.dias)))
 
-    def contagem(self, uow: UnidadeDeTrabalho, data: date) -> ContagemEscalas:
-        return contar_por_escala(uow, self._leitura, data)
+    def distribuicao(self, uow: UnidadeDeTrabalho, data: date) -> list[PacienteNaEscala]:
+        return distribuir(uow, self._leitura, data)
 
     def realizadas(self, uow: UnidadeDeTrabalho, inicio: date, fim: date) -> dict[int, int]:
         contagem: dict[int, int] = {}

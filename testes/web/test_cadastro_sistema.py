@@ -56,7 +56,7 @@ def test_cadastro_completo_pelo_navegador(
     sem_violacao(page)
 
     page.get_by_label("Prontuário").fill(fabrica.prontuario())
-    page.get_by_label("Início do tratamento").fill("2026-10-01")
+    page.get_by_role("combobox", name="Início do tratamento").fill("01/10/2026")
     expect(salvar).to_be_enabled()
     salvar.click()
     expect(page.get_by_role("status").filter(has_text="Paciente cadastrado")).to_be_visible()
@@ -153,8 +153,8 @@ def test_salvar_o_cadastro_cancela_o_salvamento_pendente_do_rascunho(
     page.get_by_role("link", name="Novo cadastro").click()
     page.get_by_label("Nome completo").fill(fabrica.nome())
     page.get_by_label("Prontuário").fill(fabrica.prontuario())
-    page.get_by_label("Início do tratamento").fill("2026-01-05")
-    page.get_by_label("Início do tratamento").press("Tab")  # "change": o salvamento do rascunho fica agendado
+    page.get_by_role("combobox", name="Início do tratamento").fill("05/01/2026")
+    page.get_by_role("combobox", name="Início do tratamento").press("Tab")  # "change": rascunho agendado
     # Segura o envio aqui, para a página não navegar antes de o relógio passar dos 800 ms.
     page.evaluate("document.addEventListener('submit', (e) => e.preventDefault())")
     page.get_by_role("button", name="Salvar paciente").click()

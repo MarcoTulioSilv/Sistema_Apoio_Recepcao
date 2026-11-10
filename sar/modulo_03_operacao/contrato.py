@@ -458,8 +458,8 @@ class LeituraOperacao(Protocol):
         """As seis escalas, em ordem de turno e dias (RF-401)."""
         ...
 
-    def contagem(self, uow: UnidadeDeTrabalho, data: date) -> ContagemEscalas:
-        """Pacientes em tratamento na data por escala e os sem alocação (RF-908)."""
+    def distribuicao(self, uow: UnidadeDeTrabalho, data: date) -> list[PacienteNaEscala]:
+        """Os pacientes em tratamento na data com a escala de cada um, None sem alocação (RF-908), em ordem de nome."""
         ...
 
     def realizadas(self, uow: UnidadeDeTrabalho, inicio: date, fim: date) -> dict[int, int]:

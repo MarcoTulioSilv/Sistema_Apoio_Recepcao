@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import date, datetime
 from enum import StrEnum
@@ -153,8 +154,7 @@ class Relatorio(StrEnum):
     CIDADE = "cidade"
     EVENTOS = "eventos"
     CONVENIO = "convenio"
-    FREQUENCIA_MENSAL = "frequencia_mensal"
-    BALANCO_MENSAL = "balanco_mensal"
+    FREQUENCIA_MENSAL = "frequencia_mensal"  # com o balanço (RF-906 e RF-916 juntos, DD-107)
     PREVIA = "previa"
     OCUPACAO = "ocupacao"
     FAIXA_ETARIA = "faixa_etaria"
@@ -176,16 +176,19 @@ class Relatorio(StrEnum):
         return _FILTROS[self]
 
 
-_OPERACIONAIS = frozenset({Relatorio.FREQUENCIA_MENSAL, Relatorio.BALANCO_MENSAL, Relatorio.PREVIA,
+_OPERACIONAIS = frozenset({Relatorio.FREQUENCIA_MENSAL, Relatorio.PREVIA,
                            Relatorio.OCUPACAO, Relatorio.RECORTE_LIVRE})  # fmt: skip
+# Os dados de cadastro dos pacientes, escolhidos numa caixa de seleção e gerados num relatório só, na ordem desta
+# tupla (DD-109).
+CADASTRAIS = (Relatorio.CIDADE, Relatorio.CONVENIO, Relatorio.FAIXA_ETARIA, Relatorio.SEXO)
+TITULO_CADASTRAIS = "Pacientes e cadastro"
 _TITULOS_RELATORIO = {
     Relatorio.ENTRADAS: "Entradas de pacientes por período",
     Relatorio.CIDADE: "Pacientes por cidade",
     Relatorio.EVENTOS: "Eventos por período",
     Relatorio.CONVENIO: "Pacientes por convênio",
     Relatorio.FREQUENCIA_MENSAL: "Frequência mensal",
-    Relatorio.BALANCO_MENSAL: "Balanço mensal",
-    Relatorio.PREVIA: "PRÉVIA — mês em aberto",
+    Relatorio.PREVIA: "Prévia do mês corrente",
     Relatorio.OCUPACAO: "Ocupação por escala",
     Relatorio.FAIXA_ETARIA: "Pacientes por faixa etária",
     Relatorio.SEXO: "Pacientes por sexo",
@@ -196,8 +199,7 @@ _FILTROS = {
     Relatorio.CIDADE: frozenset({"data_referencia"}),
     Relatorio.EVENTOS: frozenset({"periodo", "tipo_evento"}),
     Relatorio.CONVENIO: frozenset({"modo_convenio", "data_referencia", "periodo"}),
-    Relatorio.FREQUENCIA_MENSAL: frozenset({"competencia"}),
-    Relatorio.BALANCO_MENSAL: frozenset({"competencia", "paciente_id"}),
+    Relatorio.FREQUENCIA_MENSAL: frozenset({"competencia", "paciente_id"}),
     Relatorio.PREVIA: frozenset({"paciente_id"}),
     Relatorio.OCUPACAO: frozenset({"data_referencia"}),
     Relatorio.FAIXA_ETARIA: frozenset({"data_referencia"}),
@@ -239,8 +241,20 @@ class Marca:
 
 
 @dataclass(frozen=True, slots=True)
+class Bloco:
+    """Um grupo de linhas com título e total próprios (a ocupação, uma escala por bloco). `separado` sai depois do
+    total geral, à parte dos demais (os sem alocação)."""
+
+    titulo: str
+    linhas: tuple[tuple[str | int, ...], ...]
+    total: str
+    separado: bool = False
+
+
+@dataclass(frozen=True, slots=True)
 class Tabela:
-    """O modelo tabular único (DD-44): tela, PDF e XLSX são renderizações dele, com as mesmas colunas e marcas."""
+    """O modelo tabular único (DD-44): tela, PDF e XLSX são renderizações dele, com as mesmas colunas e marcas. Com
+    `blocos`, as linhas vêm agrupadas neles (as mesmas colunas em cada um), e `total_geral` fecha o relatório."""
 
     relatorio: Relatorio
     titulo: str
@@ -248,6 +262,20 @@ class Tabela:
     colunas: tuple[Coluna, ...]
     linhas: tuple[tuple[str | int, ...], ...]
     marcas: tuple[Marca, ...]
+    gerado_em: datetime
+    codigo_integridade: str  # DD-86
+    blocos: tuple[Bloco, ...] = ()
+    total_geral: str = ""
+
+
+@dataclass(frozen=True, slots=True)
+class Composto:
+    """Vários relatórios num só (DD-109): as tabelas de cada um, como estão, em sequência, com os filtros comuns no
+    alto. Tela, PDF e XLSX trazem as mesmas tabelas, na mesma ordem."""
+
+    titulo: str
+    filtros: tuple[tuple[str, str], ...]
+    tabelas: tuple[Tabela, ...]
     gerado_em: datetime
     codigo_integridade: str  # DD-86
 
@@ -280,6 +308,18 @@ class RelatorioService(Protocol):
     ) -> ArquivoRelatorio:
         """Só a administração (§4.5). As mesmas colunas e marcas da tela (RF-912, DD-44); XLSX só com valores, texto
         como texto (DD-45). Auditada com o relatório, os filtros e o formato (RNF-607)."""
+        ...
+
+    def gerar_cadastrais(self, contexto: Contexto, relatorios: Sequence[Relatorio], filtros: Filtros) -> Composto:
+        """Os relatórios de cadastro escolhidos (DD-109), na ordem de CADASTRAIS, com os mesmos filtros.
+        RegraViolada("relatorio.selecao.vazia") sem nenhum; "relatorio.selecao.invalida" com um que não é de cadastro;
+        as demais como em `gerar`. Cada um auditado como em `gerar`."""
+        ...
+
+    def exportar_cadastrais(
+        self, contexto: Contexto, relatorios: Sequence[Relatorio], filtros: Filtros, formato: FormatoExportacao
+    ) -> ArquivoRelatorio:
+        """O mesmo, num arquivo só (PDF ou XLSX), só pela administração; cada um auditado como em `exportar`."""
         ...
 
     def aniversariantes(self, contexto: Contexto, data: date) -> list[str]:

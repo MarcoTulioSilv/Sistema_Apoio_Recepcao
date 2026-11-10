@@ -5,6 +5,7 @@ exportar, com os filtros e o formato (RNF-607). E os aniversariantes do dia da t
 from __future__ import annotations
 
 import re
+from collections.abc import Sequence
 from datetime import date, timedelta
 
 from sar.modulo_01_acesso.contrato import AuditService, PermissionGuard
@@ -12,7 +13,11 @@ from sar.modulo_02_cadastro.contrato import LeituraCadastro, PacienteRelatorio, 
 from sar.modulo_03_operacao.contrato import ROTULOS_TURNO, LeituraOperacao
 from sar.modulo_05_emissao import comum, consultas, exportacao, regras
 from sar.modulo_05_emissao.contrato import (
+    CADASTRAIS,
+    TITULO_CADASTRAIS,
     ArquivoRelatorio,
+    Bloco,
+    Composto,
     Filtros,
     FormatoExportacao,
     Marca,
@@ -29,10 +34,12 @@ from sar.nucleo.uow import ExecutorDeOperacao, UnidadeDeTrabalho
 GUARDA = PermissionGuard()
 COMPETENCIA = re.compile(r"^\d{4}-(0[1-9]|1[0-2])$")
 SERIES = frozenset({Relatorio.ENTRADAS, Relatorio.EVENTOS, Relatorio.RECORTE_LIVRE})  # RF-907
-DE_FREQUENCIA = frozenset({Relatorio.FREQUENCIA_MENSAL, Relatorio.BALANCO_MENSAL, Relatorio.PREVIA,
+DE_FREQUENCIA = frozenset({Relatorio.FREQUENCIA_MENSAL, Relatorio.PREVIA,
                            Relatorio.RECORTE_LIVRE})  # RF-915, P-21  # fmt: skip
-MENSAIS = frozenset({Relatorio.FREQUENCIA_MENSAL, Relatorio.BALANCO_MENSAL})  # RF-913
+MENSAIS = frozenset({Relatorio.FREQUENCIA_MENSAL})  # RF-913
 MODOS = {ModoConvenio.SITUACAO: "Situação na data", ModoConvenio.PERIODO: "Cobertura vigente no período"}
+CURTOS = {Relatorio.CIDADE: "cidade", Relatorio.CONVENIO: "convênio", Relatorio.FAIXA_ETARIA: "faixa etária",
+          Relatorio.SEXO: "sexo"}  # fmt: skip
 
 
 def operacao_de_ver(relatorio: Relatorio) -> str:
@@ -102,6 +109,50 @@ class ServicoRelatorios:
         self._executar(registrar)
         return arquivo
 
+    def gerar_cadastrais(self, contexto: Contexto, relatorios: Sequence[Relatorio], filtros: Filtros) -> Composto:
+        escolhidos = self._cadastrais(contexto, relatorios, filtros)
+
+        def operacao(uow: UnidadeDeTrabalho) -> Composto:
+            tabelas = []
+            for relatorio in escolhidos:
+                tabelas.append(self._montar(uow, contexto, relatorio, filtros))
+                self._servicos()[0].registrar(uow, contexto, operacao_de_ver(relatorio), "relatorio", relatorio.value,
+                                              {"filtros": (None, _filtros_auditados(relatorio, filtros))})  # fmt: skip
+            return _composto(tabelas, escolhidos, filtros)
+
+        return self._executar(operacao)
+
+    def exportar_cadastrais(
+        self, contexto: Contexto, relatorios: Sequence[Relatorio], filtros: Filtros, formato: FormatoExportacao
+    ) -> ArquivoRelatorio:
+        GUARDA.exigir(contexto, "relatorio.exportar")
+        escolhidos = self._cadastrais(contexto, relatorios, filtros)
+        tabelas = self._executar(lambda uow: [self._montar(uow, contexto, r, filtros) for r in escolhidos])
+        composto = _composto(tabelas, escolhidos, filtros)
+        pdf = formato is FormatoExportacao.PDF
+        arquivo = exportacao.para_pdf(composto) if pdf else exportacao.para_xlsx(composto)
+
+        def registrar(uow: UnidadeDeTrabalho) -> None:  # RNF-607: cada relatório, com os filtros e o formato
+            for relatorio in escolhidos:
+                self._servicos()[0].registrar(
+                    uow, contexto, "relatorio.exportar", "relatorio", relatorio.value,
+                    {"formato": (None, formato.value), "filtros": (None, _filtros_auditados(relatorio, filtros))},
+                )  # fmt: skip
+
+        self._executar(registrar)
+        return arquivo
+
+    def _cadastrais(self, contexto: Contexto, relatorios: Sequence[Relatorio], filtros: Filtros) -> list[Relatorio]:
+        if any(r not in CADASTRAIS for r in relatorios):
+            raise RegraViolada("relatorio.selecao.invalida")
+        escolhidos = [r for r in CADASTRAIS if r in relatorios]
+        if not escolhidos:
+            raise RegraViolada("relatorio.selecao.vazia")
+        for relatorio in escolhidos:
+            GUARDA.exigir(contexto, operacao_de_ver(relatorio))
+            self._validar(contexto, relatorio, filtros)
+        return escolhidos
+
     def aniversariantes(self, contexto: Contexto, data: date) -> list[str]:
         GUARDA.exigir(contexto, "relatorio.aniversariantes.ver")
         return [i.nome for i in self._executar(lambda uow: self._leitura.aniversariantes(uow, data))]
@@ -157,6 +208,8 @@ class ServicoRelatorios:
     def _montar(self, uow: UnidadeDeTrabalho, contexto: Contexto, relatorio: Relatorio, f: Filtros) -> Tabela:
         auditoria, operacao, referencias, parametros = self._servicos()
         hoje = regras.hoje(contexto.instante)
+        blocos: list[Bloco] = []
+        total_geral = ""
         marcas: list[Marca] = []
         competencias: list[str] = []
 
@@ -187,7 +240,9 @@ class ServicoRelatorios:
         elif relatorio is Relatorio.SEXO:
             colunas, linhas = consultas.por_sexo(base(), _d(f.data_referencia))
         elif relatorio is Relatorio.OCUPACAO:
-            colunas, linhas = consultas.ocupacao(operacao.escalas(uow), operacao.contagem(uow, _d(f.data_referencia)))
+            distribuicao = operacao.distribuicao(uow, _d(f.data_referencia))
+            colunas, blocos, total_geral = consultas.ocupacao(operacao.escalas(uow), distribuicao)
+            linhas = [linha for bloco in blocos for linha in bloco.linhas]
         elif relatorio is Relatorio.RECORTE_LIVRE:
             inicio, fim = _d(f.inicio), _d(f.fim)
             colunas, linhas = consultas.recorte_livre(base(), inicio, fim, operacao.realizadas(uow, inicio, fim))
@@ -196,7 +251,7 @@ class ServicoRelatorios:
                 marcas.append(Marca("nao_confirmadas", f"{len(pendentes)} sessão(ões) não confirmada(s) no intervalo: "
                                                        "os números podem mudar com a confirmação."))  # fmt: skip
             competencias = _competencias(inicio, fim)
-        else:  # mensais e prévia (RF-906, RF-916, DD-47)
+        else:  # frequência mensal (com o balanço) e prévia (RF-906, RF-916, DD-47, DD-107)
             competencia = regras.competencia(contexto.instante) if relatorio is Relatorio.PREVIA else str(f.competencia)
             if relatorio in MENSAIS:
                 situacao = operacao.mes_fechado(uow, competencia, hoje)
@@ -204,12 +259,11 @@ class ServicoRelatorios:
                     faltam = [(regras.data_curta(s.data), ROTULOS_TURNO[s.escala.turno]) for s in situacao.pendentes]
                     raise RegraViolada("relatorio.mes_incompleto", {"quantidade": len(faltam), "pendentes": faltam})
             pareamentos = operacao.frequencia_do_mes(uow, competencia, contexto.instante)
-            if f.paciente_id is not None and relatorio is not Relatorio.FREQUENCIA_MENSAL:
+            if f.paciente_id is not None:
                 pareamentos = {pid: p for pid, p in pareamentos.items() if pid == f.paciente_id}
             identificados = {pid: (i.nome, i.prontuario)
                              for pid, i in self._leitura.identificacoes(uow, sorted(pareamentos)).items()}  # fmt: skip
-            montar = consultas.frequencia_mensal if relatorio is Relatorio.FREQUENCIA_MENSAL else consultas.balanco
-            colunas, linhas = montar(pareamentos, identificados)
+            colunas, linhas = consultas.frequencia_mensal(pareamentos, identificados)
             if relatorio is Relatorio.PREVIA:
                 marcas.append(Marca("previa", "PRÉVIA — mês em aberto: os números mudam até o fechamento do mês."))
             competencias = [competencia]
@@ -224,7 +278,7 @@ class ServicoRelatorios:
         comuns_ = comum.ler(uow, referencias, auditoria, contexto.instante)
         return Tabela(relatorio, relatorio.titulo, tuple(self._rotulos(uow, contexto, relatorio, f)), colunas,
                       tuple(linhas), tuple(marcas), contexto.instante,
-                      comuns_.valores["codigo_integridade"])  # fmt: skip
+                      comuns_.valores["codigo_integridade"], tuple(blocos), total_geral)  # fmt: skip
 
     @staticmethod
     def _inicio_serie(parametros: LeitorParametros) -> Marca:
@@ -239,6 +293,22 @@ def _d(valor: date | None) -> date:
     if valor is None:  # _validar garante; aqui só para o tipo
         raise RegraViolada("relatorio.filtro.periodo")
     return valor
+
+
+def _composto(tabelas: Sequence[Tabela], escolhidos: Sequence[Relatorio], f: Filtros) -> Composto:
+    """Os filtros comuns no alto (DD-109); cada tabela segue com as suas marcas."""
+    rotulos: list[tuple[str, str]] = []
+    na_data = any(r is not Relatorio.CONVENIO or f.modo_convenio is ModoConvenio.SITUACAO for r in escolhidos)
+    if na_data and f.data_referencia:
+        rotulos.append(("Data de referência", regras.data_curta(f.data_referencia)))
+    if Relatorio.CONVENIO in escolhidos:
+        rotulos.append(("Convênio", MODOS[f.modo_convenio].lower()))
+        if f.modo_convenio is ModoConvenio.PERIODO and f.inicio and f.fim:
+            rotulos.append(("Período", f"{regras.data_curta(f.inicio)} a {regras.data_curta(f.fim)}"))
+    rotulos.append(("Incluídos", ", ".join(CURTOS[r] for r in escolhidos)))
+    primeira = tabelas[0]
+    return Composto(TITULO_CADASTRAIS, tuple(rotulos), tuple(tabelas), primeira.gerado_em,
+                    primeira.codigo_integridade)  # fmt: skip
 
 
 def _filtros_auditados(relatorio: Relatorio, f: Filtros) -> str:

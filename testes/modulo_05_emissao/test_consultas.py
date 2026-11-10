@@ -8,8 +8,9 @@ from datetime import date, time
 import pytest
 
 from sar.modulo_02_cadastro.contrato import PacienteRelatorio, PeriodoRelatorio, Sexo, TipoCobertura, TipoEvento
-from sar.modulo_03_operacao.contrato import BalancoMes, ContagemEscalas, Escala, PareamentoDoMes
+from sar.modulo_03_operacao.contrato import BalancoMes, Escala, PacienteNaEscala, PareamentoDoMes
 from sar.modulo_05_emissao import consultas
+from sar.modulo_05_emissao.contrato import Bloco
 from sar.modulo_06_configuracao.contrato import FaixaEtaria
 
 D = date
@@ -91,16 +92,32 @@ def test_sexo_com_nao_informado() -> None:
 
 
 @pytest.mark.requisito("RF-908", "DD-75")
-def test_ocupacao_por_escala_com_os_sem_alocacao() -> None:
-    escalas = [Escala.de_texto(1, "1-seg", 1, "seg,qua,sex", time(6), time(10)),
-               Escala.de_texto(2, "1-ter", 1, "ter,qui,sab", time(6), time(10))]  # fmt: skip
-    _, linhas = consultas.ocupacao(escalas, ContagemEscalas({1: 4, 2: 0}, 2))
-    assert linhas == [
-        ("Primeiro turno — segunda, quarta e sexta", 4),
-        ("Primeiro turno — terça, quinta e sábado", 0),
-        ("Sem alocação", 2),
-        ("Total", 6),
-    ]
+def test_ocupacao_turno_a_turno_com_os_pacientes_e_os_sem_alocacao() -> None:
+    """Os três turnos de segunda, quarta e sexta em sequência, depois os de terça, quinta e sábado."""
+    escalas = [Escala.de_texto(i, c, t, d, time(6), time(10)) for i, c, t, d in (
+        (1, "1-seg", 1, "seg,qua,sex"), (2, "1-ter", 1, "ter,qui,sab"), (3, "2-seg", 2, "seg,qua,sex"),
+        (4, "2-ter", 2, "ter,qui,sab"), (5, "3-seg", 3, "seg,qua,sex"), (6, "3-ter", 3, "ter,qui,sab"))]  # fmt: skip
+    por_id = {e.id: e for e in escalas}
+    distribuicao = [PacienteNaEscala(1, "Ana Exemplo", "P001", None, por_id[1]),
+                    PacienteNaEscala(2, "Bruno Exemplo", "P002", None, por_id[1]),
+                    PacienteNaEscala(3, "Caio Exemplo", "P003", None, por_id[4]),
+                    PacienteNaEscala(4, "Davi Exemplo", "P004", None, None)]  # fmt: skip
+    colunas, blocos, total = consultas.ocupacao(list(reversed(escalas)), distribuicao)
+    assert [c.titulo for c in colunas] == ["Paciente", "Prontuário"]
+    assert blocos == [
+        Bloco("Primeiro turno — segunda, quarta e sexta", (("Ana Exemplo", "P001"), ("Bruno Exemplo", "P002")),
+              "2 pacientes"),
+        Bloco("Segundo turno — segunda, quarta e sexta", (), "0 pacientes"),
+        Bloco("Terceiro turno — segunda, quarta e sexta", (), "0 pacientes"),
+        Bloco("Primeiro turno — terça, quinta e sábado", (), "0 pacientes"),
+        Bloco("Segundo turno — terça, quinta e sábado", (("Caio Exemplo", "P003"),), "1 paciente"),
+        Bloco("Terceiro turno — terça, quinta e sábado", (), "0 pacientes"),
+        Bloco("Sem alocação", (("Davi Exemplo", "P004"),), "1 paciente", separado=True),
+    ]  # fmt: skip
+    assert total == "Total geral: 4 pacientes (3 nas escalas e 1 sem alocação)"
+    # Sem ninguém fora das escalas, o bloco dos sem alocação não existe.
+    _, blocos, total = consultas.ocupacao(escalas, distribuicao[:3])
+    assert not any(b.separado for b in blocos) and total == "Total geral: 3 pacientes"
 
 
 def _pareamento(previstas: int, realizadas: int, nao_compensadas: int, reposicoes: int, extras: int) -> PareamentoDoMes:
@@ -108,15 +125,14 @@ def _pareamento(previstas: int, realizadas: int, nao_compensadas: int, reposicoe
     return PareamentoDoMes(balanco, (), (), (), 0, True)
 
 
-@pytest.mark.requisito("RF-906", "RF-916")
-def test_frequencia_e_balanco_por_paciente_em_ordem_de_nome() -> None:
+@pytest.mark.requisito("RF-906", "RF-916", "DD-107")
+def test_frequencia_e_balanco_num_relatorio_so_em_ordem_de_nome() -> None:
     pareamentos = {2: _pareamento(13, 12, 0, 1, 2), 1: _pareamento(13, 10, 3, 0, 0)}
     nomes = {1: ("Ana Exemplo", "P001"), 2: ("Bruno Exemplo", "P002")}
-    colunas, frequencia = consultas.frequencia_mensal(pareamentos, nomes)
-    assert [c.titulo for c in colunas] == ["Paciente", "Prontuário", "Previstas", "Realizadas", "Ausências", "Extras"]
-    assert frequencia == [("Ana Exemplo", "P001", 13, 10, 3, 0), ("Bruno Exemplo", "P002", 13, 12, 1, 2)]
-    _, balanco = consultas.balanco(pareamentos, nomes)
-    assert balanco[1] == ("Bruno Exemplo", "P002", 13, 12, 0, 1, 2)
+    colunas, linhas = consultas.frequencia_mensal(pareamentos, nomes)
+    assert [c.titulo for c in colunas] == ["Paciente", "Prontuário", "Previstas", "Realizadas", "Ausências",
+                                           "Reposições", "Ausências não compensadas", "Extras"]  # fmt: skip
+    assert linhas == [("Ana Exemplo", "P001", 13, 10, 3, 0, 3, 0), ("Bruno Exemplo", "P002", 13, 12, 1, 1, 0, 2)]
 
 
 @pytest.mark.requisito("RF-914")

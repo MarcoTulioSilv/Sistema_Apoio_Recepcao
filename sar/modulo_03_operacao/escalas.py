@@ -36,20 +36,35 @@ def alocacao_vigente(vigencias: Sequence[AlocacaoGravada], data: date) -> Alocac
     return max(anteriores, key=lambda v: v.vigencia_inicio) if anteriores else None
 
 
-def contar_por_escala(uow: UnidadeDeTrabalho, leitura: LeituraCadastro, data: date) -> ContagemEscalas:
-    """RF-404 e RF-908: pacientes em tratamento na data por escala, e os sem alocação (RF-403)."""
+def escala_por_paciente(uow: UnidadeDeTrabalho, leitura: LeituraCadastro, data: date) -> dict[int, Escala | None]:
+    """A escala de cada paciente em tratamento na data; None para os sem alocação (RF-403)."""
     por_id = dados.escalas(uow)
     ativos = leitura.pacientes_com_periodo_aberto_em(uow, data)
-    contagem = dict.fromkeys(por_id, 0)
-    sem = 0
-    for periodos, _ in dados.periodos_de(uow, leitura, ativos, por_id).values():
+    escalas: dict[int, Escala | None] = {}
+    for pid, (periodos, _) in dados.periodos_de(uow, leitura, ativos, por_id).items():
         periodo = next((p for p in periodos if p.contem(data)), None)
-        escala = periodo.escala_em(data) if periodo is not None else None
+        escalas[pid] = periodo.escala_em(data) if periodo is not None else None
+    return escalas
+
+
+def contar_por_escala(uow: UnidadeDeTrabalho, leitura: LeituraCadastro, data: date) -> ContagemEscalas:
+    """RF-404: pacientes em tratamento na data por escala, e os sem alocação (RF-403)."""
+    contagem = dict.fromkeys(dados.escalas(uow), 0)
+    sem = 0
+    for escala in escala_por_paciente(uow, leitura, data).values():
         if escala is None:
             sem += 1
         else:
             contagem[escala.id] += 1
     return ContagemEscalas(contagem, sem)
+
+
+def distribuir(uow: UnidadeDeTrabalho, leitura: LeituraCadastro, data: date) -> list[PacienteNaEscala]:
+    """Os pacientes em tratamento na data com a escala de cada um, em ordem de nome (RF-404, RF-908)."""
+    escalas = escala_por_paciente(uow, leitura, data)
+    nomes = leitura.identificacoes(uow, sorted(escalas))
+    itens = [PacienteNaEscala(pid, i.nome, i.prontuario, i.nome_mae, escalas[pid]) for pid, i in nomes.items()]
+    return sorted(itens, key=lambda i: (i.nome, i.paciente_id))
 
 
 @dataclass(frozen=True, slots=True)
@@ -204,20 +219,7 @@ class ServicoEscalas:
     def distribuicao(self, contexto: Contexto, data: date) -> list[PacienteNaEscala]:
         GUARDA.exigir(contexto, "operacao.escala.consultar")
 
-        def operacao(uow: UnidadeDeTrabalho) -> list[PacienteNaEscala]:
-            por_id = dados.escalas(uow)
-            ativos = self._leitura.pacientes_com_periodo_aberto_em(uow, data)
-            nomes = self._leitura.identificacoes(uow, ativos)
-            itens = []
-            for pid, (periodos, _) in dados.periodos_de(uow, self._leitura, ativos, por_id).items():
-                periodo = next((p for p in periodos if p.contem(data)), None)
-                if pid in nomes:
-                    escala = periodo.escala_em(data) if periodo is not None else None
-                    i = nomes[pid]
-                    itens.append(PacienteNaEscala(pid, i.nome, i.prontuario, i.nome_mae, escala))
-            return sorted(itens, key=lambda i: (i.nome, i.paciente_id))
-
-        return self._executar(operacao)
+        return self._executar(lambda uow: distribuir(uow, self._leitura, data))
 
     def do_paciente(self, contexto: Contexto, paciente_id: int, data: date) -> EscalaDoPaciente:
         GUARDA.exigir(contexto, "operacao.escala.consultar")

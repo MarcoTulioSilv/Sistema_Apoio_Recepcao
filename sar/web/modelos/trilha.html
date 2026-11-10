@@ -1,12 +1,12 @@
 {% extends "layout.html" %}
+{% from "_intervalo.html" import intervalo %}
 {% block titulo_pagina %}Trilha de auditoria{% endblock %}
 {% block subtitulo %}Quem fez o quê, e quando; a consulta também fica registrada{% endblock %}
 {% block conteudo %}
 <div class="flex flex-col gap-4">
   {% include "_avisos.html" %}
   <form class="cartao flex flex-wrap items-end gap-3 p-4" method="get" action="{{ url_for('trilha.consulta') }}" aria-label="Filtros da trilha">
-    <label class="campo"><span class="rotulo">De</span><input class="entrada" type="date" name="de" value="{{ filtros.get('de', '') }}"></label>
-    <label class="campo"><span class="rotulo">Até</span><input class="entrada" type="date" name="ate" value="{{ filtros.get('ate', '') }}"></label>
+    {{ intervalo("Período", "de", filtros.get("de", ""), "ate", filtros.get("ate", "")) }}
     <label class="campo"><span class="rotulo">Operação (início do código)</span><input class="entrada" name="operacao" value="{{ filtros.get('operacao', '') }}" placeholder="acesso.sessao"></label>
     <label class="campo"><span class="rotulo">Entidade</span><input class="entrada" name="entidade" value="{{ filtros.get('entidade', '') }}"></label>
     <label class="campo"><span class="rotulo">Identificador</span><input class="entrada" name="entidade_id" value="{{ filtros.get('entidade_id', '') }}"></label>

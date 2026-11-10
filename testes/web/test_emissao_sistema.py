@@ -5,6 +5,7 @@ nas larguras de referência (1900, 1100 e 700), para revisão do leiaute."""
 from __future__ import annotations
 
 import os
+import re
 from collections.abc import Iterator
 from datetime import date
 from pathlib import Path
@@ -93,12 +94,53 @@ def test_telas_do_incremento_5_pelo_teclado_sem_violacao(
 
     page.get_by_role("link", name="Relatórios").click()
     sem_violacao(page)
-    capturar(page, "relatorios")
-    page.get_by_role("link", name="Pacientes por sexo").click()
-    page.get_by_role("button", name="Gerar relatório").click()
-    expect(page.get_by_role("table", name="Pacientes por sexo")).to_contain_text("Total")
+    # O card abre os filtros ali mesmo, já preenchidos; o relatório só sai no botão. Um card aberto por vez.
+    page.get_by_text("Eventos por período", exact=True).click()
+    eventos = page.get_by_role("form", name="Filtros: Eventos por período")
+    expect(eventos.get_by_role("button", name="Período")).to_contain_text(" – ")
+    page.get_by_text("Ocupação por escala", exact=True).click()
+    expect(eventos).to_be_hidden()
+    ocupacao = page.get_by_role("form", name="Filtros: Ocupação por escala")
+    expect(ocupacao.get_by_role("combobox", name="Data de referência")).to_have_value(
+        re.compile(r"^\d{2}/\d{2}/\d{4}$")
+    )
     sem_violacao(page)
-    capturar(page, "relatorio-sexo")
+    capturar(page, "relatorios")
+    ocupacao.get_by_role("button", name="Gerar relatório").click()
+    expect(page.locator("[data-total-geral]")).to_contain_text("Total geral:")
+    page.get_by_role("link", name="Todos os relatórios").click()
+    # Dados de cadastro (DD-109): sem nenhum marcado, a lista pede um; com dois, as duas tabelas num relatório só.
+    page.get_by_role("button", name="Desmarcar todos").click()
+    page.get_by_role("button", name="Gerar relatório").click()
+    expect(page.get_by_role("alert")).to_contain_text("Marque pelo menos um")
+    page.get_by_role("checkbox", name="Pacientes por sexo").check()
+    page.get_by_role("checkbox", name="Pacientes por cidade").check()
+    page.get_by_role("button", name="Gerar relatório").click()
+    # Em quadros (DD-109): a lista rola por dentro e o total fica no rodapé de cada quadro.
+    expect(page.get_by_role("table", name="Pacientes por cidade")).to_be_visible()
+    expect(page.locator('[data-tabela="sexo"] [data-total]')).to_contain_text("Total")
+    expect(page.get_by_role("region", name="Lista: Pacientes por sexo")).to_be_visible()
+    expect(page.locator("[data-tabela]")).to_have_count(2)
+    sem_violacao(page)
+    capturar(page, "relatorio-cadastro")
+    page.get_by_role("link", name="Mudar o que entra no relatório").click()
+    expect(page.get_by_role("checkbox", name="Pacientes por sexo")).to_be_checked()
+    expect(page.get_by_role("checkbox", name="Pacientes por convênio")).not_to_be_checked()
+
+    # Pesquisa no rodapé dos quadros que rolam: a faixa etária tem sempre 12 linhas. Sem acento, acha "Não informado";
+    # o total continua o do quadro inteiro.
+    page.get_by_role("checkbox", name="Pacientes por faixa etária").check()
+    page.get_by_role("button", name="Gerar relatório").click()
+    faixa = page.locator('[data-tabela="faixa_etaria"]')
+    expect(faixa.locator("[data-contagem]")).to_have_text("12 faixas")
+    total = faixa.locator("[data-total]").text_content()
+    faixa.get_by_role("searchbox", name="Pesquisar em pacientes por faixa etária").fill("nao")
+    expect(faixa.locator("tbody tr:visible")).to_have_count(1)
+    expect(faixa.locator("tbody tr:visible")).to_contain_text("Não informado")
+    expect(faixa.locator("[data-contagem]")).to_have_text("1 de 12")
+    assert faixa.locator("[data-total]").text_content() == total
+    expect(page.locator('[data-tabela="sexo"]').get_by_role("searchbox")).to_have_count(0)  # quadro curto: só o total
+    sem_violacao(page)
 
 
 @pytest.mark.requisito("RF-801", "RNF-206", "DD-43", "DD-84")

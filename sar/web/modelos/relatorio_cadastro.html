@@ -1,0 +1,70 @@
+{% extends "layout.html" %}
+{% from "_rodape_quadro.html" import rodape %}
+{% block cabeca %}<script src="{{ url_for('static', filename='js/quadros.js') }}" defer></script>{% endblock %}
+{# Os dados de cadastro escolhidos, num relatório só (DD-109): as tabelas de sempre, uma embaixo da outra, cada uma
+   com o seu título e as suas marcas; os filtros comuns no alto. O PDF e a planilha trazem o mesmo (DD-44). #}
+{% block titulo_pagina %}{{ composto.titulo }}{% endblock %}
+{% block subtitulo %}Dados de cadastro dos pacientes em tratamento, num relatório só{% endblock %}
+{% block junto_do_titulo %}<a class="btn-pequeno" href="{{ url_for('relatorios.lista') }}">Todos os relatórios</a>{% endblock %}
+{% block conteudo %}
+{% set nomes = {"cidade": "municípios", "convenio": "coberturas", "faixa_etaria": "faixas", "sexo": "categorias"} %}
+<div class="flex flex-col gap-5">
+  <div class="flex flex-wrap gap-2">
+    <a class="btn-pequeno" href="{{ voltar }}#secao-2">Mudar o que entra no relatório</a>
+  </div>
+  <section class="cartao flex flex-col gap-5 p-5" aria-labelledby="resultado-t" data-relatorio="cadastro">
+    <div class="flex flex-wrap items-start justify-between gap-3">
+      <div class="flex flex-col gap-1">
+        <h2 id="resultado-t" class="m-0 text-xl">{{ composto.titulo }}</h2>
+        <p class="m-0 text-sm text-suave">{% for rotulo, valor in composto.filtros %}<span class="mr-4"><strong>{{ rotulo }}:</strong> {{ valor }}</span>{% endfor %}</p>
+      </div>
+      {% if pode_exportar %}
+      <div class="flex flex-wrap gap-2">
+        {% for formato, rotulo in [("pdf", "Baixar PDF"), ("xlsx", "Baixar planilha")] %}
+        <form method="post" action="{{ url_for('relatorios.exportar_cadastro') }}">
+          {% for codigo in a.getlist("incluir") %}<input type="hidden" name="incluir" value="{{ codigo }}">{% endfor %}
+          {% for chave in ["data", "modo", "inicio", "fim"] %}{% if a.get(chave) %}<input type="hidden" name="{{ chave }}" value="{{ a.get(chave) }}">{% endif %}{% endfor %}
+          <input type="hidden" name="formato" value="{{ formato }}">
+          <button class="btn-secundario" type="submit">{{ rotulo }}</button>
+        </form>
+        {% endfor %}
+      </div>
+      {% endif %}
+    </div>
+    {# Um quadro por tabela, numa matriz: quatro lado a lado na tela larga, dois na média, um na estreita. A lista rola
+       por dentro a partir de uns oito itens; o total fica no rodapé, sempre à vista. #}
+    <div class="grid items-start gap-4 lg:grid-cols-2 2xl:grid-cols-4">
+      {% for tabela in composto.tabelas %}
+      {% set total = tabela.linhas[-1] if tabela.linhas and tabela.linhas[-1][0] in ("Total", "Total de pacientes") else none %}
+      {% set linhas = tabela.linhas[:-1] if total else tabela.linhas %}
+      <section class="bloco-relatorio" aria-labelledby="tabela-{{ loop.index }}" data-tabela="{{ tabela.relatorio.value }}" data-quadro>
+        <h3 id="tabela-{{ loop.index }}" class="m-0 border-b border-borda bg-fundo px-3 py-2 text-base font-bold">{{ tabela.titulo }}</h3>
+        {% for marca in tabela.marcas %}
+        <p class="m-0 border-b border-borda bg-alta-fundo px-3 py-2 text-sm font-bold text-alta" data-marca="{{ marca.tipo }}">{{ marca.texto }}</p>
+        {% endfor %}
+        <div class="rolagem-bloco" tabindex="0" role="region" aria-label="Lista: {{ tabela.titulo }}">
+          <table class="w-full border-collapse text-left">
+            <caption class="sr-only">{{ tabela.titulo }}</caption>
+            <thead class="sticky top-0 bg-superficie"><tr class="text-sm text-suave">
+              {% for coluna in tabela.colunas %}<th scope="col" class="px-3 py-2 font-bold{% if coluna.numerica %} text-right{% endif %}">{{ coluna.titulo }}</th>{% endfor %}
+            </tr></thead>
+            <tbody>
+            {% for linha in linhas %}
+              <tr class="border-t border-linha" data-linha>
+                {% for valor in linha %}<td class="px-3 py-2{% if tabela.colunas[loop.index0].numerica %} numero text-right{% endif %}">{{ valor }}</td>{% endfor %}
+              </tr>
+            {% else %}
+              <tr class="border-t border-linha"><td class="px-3 py-2 text-suave" colspan="{{ tabela.colunas|length }}">Nenhum registro para os filtros escolhidos.</td></tr>
+            {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% if total %}{{ rodape(total[0], total[1], linhas | length, nomes[tabela.relatorio.value], tabela.titulo | lower,
+                               "Pesquisar " ~ (tabela.colunas[0].titulo | lower)) }}{% endif %}
+      </section>
+      {% endfor %}
+    </div>
+    <p class="m-0 text-xs text-suave">Gerado em {{ composto.gerado_em|data_hora }} · Código de integridade: {{ composto.codigo_integridade or "—" }}</p>
+  </section>
+</div>
+{% endblock %}

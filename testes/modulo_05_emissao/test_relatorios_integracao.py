@@ -89,23 +89,24 @@ def test_relatorio_mensal_bloqueado_com_a_lista_do_que_falta(cenario: Cenario) -
                                                    ("28/09/2026", "Terceiro turno")]  # fmt: skip
     cenario.fechar_setembro()
     tabela = cenario.relatorios.gerar(admin, Relatorio.FREQUENCIA_MENSAL, setembro)
+    assert tabela.titulo == "Frequência mensal"  # DD-107: frequência e balanço num relatório só
     assert [c.titulo for c in tabela.colunas] == ["Paciente", "Prontuário", "Previstas", "Realizadas", "Ausências",
-                                                  "Extras"]  # fmt: skip
+                                                  "Reposições", "Ausências não compensadas", "Extras"]  # fmt: skip
     por_nome = {linha[0]: linha[2:] for linha in tabela.linhas}
     primeiro, _, terca = cenario.pacientes
-    assert por_nome[primeiro[1]] == (2, 2, 0, 0) and por_nome[terca[1]] == (1, 1, 0, 0)  # 28 e 30; 29
-    balanco = cenario.relatorios.gerar(admin, Relatorio.BALANCO_MENSAL, Filtros(competencia="2026-09",
-                                                                               paciente_id=terca[0]))  # fmt: skip
-    assert [linha[0] for linha in balanco.linhas] == [terca[1]] and ("Paciente", terca[1]) in balanco.filtros
+    assert por_nome[primeiro[1]] == (2, 2, 0, 0, 0, 0) and por_nome[terca[1]] == (1, 1, 0, 0, 0, 0)  # 28 e 30; 29
+    um_so = cenario.relatorios.gerar(admin, Relatorio.FREQUENCIA_MENSAL, Filtros(competencia="2026-09",
+                                                                                paciente_id=terca[0]))  # fmt: skip
+    assert [linha[0] for linha in um_so.linhas] == [terca[1]] and ("Paciente", terca[1]) in um_so.filtros
     with pytest.raises(RegraViolada) as erro:  # outubro ainda está em aberto: só a prévia (DD-47)
-        cenario.relatorios.gerar(admin, Relatorio.BALANCO_MENSAL, Filtros(competencia="2026-10"))
+        cenario.relatorios.gerar(admin, Relatorio.FREQUENCIA_MENSAL, Filtros(competencia="2026-10"))
     assert erro.value.codigo == "relatorio.mes_incompleto"
 
 
 @pytest.mark.requisito("DD-47", "RF-916")
 def test_previa_do_mes_corrente_com_a_marca(cenario: Cenario) -> None:
     tabela = cenario.relatorios.gerar(cenario.de(Perfil.RECEPCAO), Relatorio.PREVIA, Filtros())
-    assert tabela.titulo == "PRÉVIA — mês em aberto" and ("Competência", "10/2026") in tabela.filtros
+    assert tabela.titulo == "Prévia do mês corrente" and ("Competência", "10/2026") in tabela.filtros
     assert [m.tipo for m in tabela.marcas] == ["previa"] and len(tabela.linhas) == 3
 
 
@@ -153,8 +154,13 @@ def test_relatorios_gerenciais_e_ocupacao(cenario: Cenario) -> None:
         modo_convenio=ModoConvenio.PERIODO, inicio=date(2026, 9, 1), fim=date(2026, 10, 13)))  # fmt: skip
     assert periodo.linhas[-1] == ("Total de pacientes", 3)
     ocupacao = cenario.relatorios.gerar(cenario.de(Perfil.ENFERMAGEM), Relatorio.OCUPACAO, na_data)
-    contagem = dict(ocupacao.linhas)
-    assert contagem["Primeiro turno — segunda, quarta e sexta"] == 2 and contagem["Total"] == 3
+    primeiro, segundo, terca = cenario.pacientes
+    blocos = {b.titulo: b for b in ocupacao.blocos}
+    assert next(iter(blocos)) == "Primeiro turno — segunda, quarta e sexta" and len(blocos) == 6  # ninguém sem alocação
+    assert {n for n, _ in blocos["Primeiro turno — segunda, quarta e sexta"].linhas} == {primeiro[1], segundo[1]}
+    assert blocos["Segundo turno — terça, quinta e sábado"].linhas[0][0] == terca[1]
+    assert blocos["Segundo turno — terça, quinta e sábado"].total == "1 paciente"
+    assert ocupacao.total_geral == "Total geral: 3 pacientes" and len(ocupacao.linhas) == 3
     eventos = cenario.relatorios.gerar(visualizador, Relatorio.EVENTOS, Filtros(inicio=date(2026, 9, 1),
                                                                                  fim=date(2026, 10, 13)))  # fmt: skip
     assert eventos.linhas == () and ("Tipo de evento", "Todos") in eventos.filtros
@@ -183,8 +189,7 @@ def test_filtro_faltante_ou_invalido_e_recusado(
 
 @pytest.mark.requisito("P-20", "DEC-55", "RF-1004")
 def test_cada_perfil_ve_os_relatorios_que_lhe_cabem(cenario: Cenario) -> None:
-    operacionais = [Relatorio.FREQUENCIA_MENSAL, Relatorio.BALANCO_MENSAL, Relatorio.PREVIA, Relatorio.OCUPACAO,
-                    Relatorio.RECORTE_LIVRE]  # fmt: skip
+    operacionais = [Relatorio.FREQUENCIA_MENSAL, Relatorio.PREVIA, Relatorio.OCUPACAO, Relatorio.RECORTE_LIVRE]
     assert cenario.relatorios.disponiveis(cenario.de(Perfil.RECEPCAO)) == operacionais
     assert cenario.relatorios.disponiveis(cenario.de(Perfil.ENFERMAGEM)) == operacionais
     assert cenario.relatorios.disponiveis(cenario.de(Perfil.VISUALIZADOR)) == list(Relatorio)
@@ -219,3 +224,51 @@ def test_ver_e_exportar_auditados_com_os_filtros_e_so_a_administracao_exporta(
         ("ocupacao", {"formato": [None, "xlsx"], "filtros": [None, "data_referencia=2026-10-13"]}),
         ("ocupacao", {"formato": [None, "pdf"], "filtros": [None, "data_referencia=2026-10-13"]}),
     ]
+
+
+# ------------------------------------------------------------------ dados de cadastro num relatório só (DD-109)
+@pytest.mark.requisito("DD-109", "RF-903", "RF-905", "RF-910", "RF-911", "RNF-607")
+def test_dados_de_cadastro_escolhidos_num_relatorio_so(cenario: Cenario, engine_web: Engine) -> None:
+    visualizador = cenario.de(Perfil.VISUALIZADOR)
+    na_data = Filtros(data_referencia=date(2026, 10, 13))
+    # Fora de ordem e com repetição: saem na ordem do catálogo, uma vez cada, as tabelas iguais às de cada relatório.
+    composto = cenario.relatorios.gerar_cadastrais(
+        visualizador, [Relatorio.SEXO, Relatorio.CIDADE, Relatorio.SEXO], na_data
+    )
+    assert [t.relatorio for t in composto.tabelas] == [Relatorio.CIDADE, Relatorio.SEXO]
+    sozinho = cenario.relatorios.gerar(visualizador, Relatorio.SEXO, na_data)
+    assert composto.tabelas[1].linhas == sozinho.linhas and composto.tabelas[1].colunas == sozinho.colunas
+    assert composto.filtros == (("Data de referência", "13/10/2026"), ("Incluídos", "cidade, sexo"))
+    assert [e for e, _ in auditorias(engine_web, "relatorio.gerencial.ver")] == ["cidade", "sexo", "sexo"]
+
+    # Convênio no período: o período entra nos filtros comuns, e a marca do início da série fica na tabela dele.
+    periodo = Filtros(data_referencia=date(2026, 10, 13), modo_convenio=ModoConvenio.PERIODO,
+                      inicio=date(2026, 9, 28), fim=date(2026, 10, 13))  # fmt: skip
+    com_convenio = cenario.relatorios.gerar_cadastrais(visualizador, [Relatorio.CONVENIO, Relatorio.SEXO], periodo)
+    assert ("Período", "28/09/2026 a 13/10/2026") in com_convenio.filtros
+    assert com_convenio.tabelas[0].marcas[0].tipo == "inicio_serie" and com_convenio.tabelas[1].marcas == ()
+
+    with pytest.raises(RegraViolada) as vazia:
+        cenario.relatorios.gerar_cadastrais(visualizador, [], na_data)
+    assert vazia.value.codigo == "relatorio.selecao.vazia"
+    with pytest.raises(RegraViolada) as invalida:
+        cenario.relatorios.gerar_cadastrais(visualizador, [Relatorio.SEXO, Relatorio.OCUPACAO], na_data)
+    assert invalida.value.codigo == "relatorio.selecao.invalida"
+    with pytest.raises(AcessoNegado):  # P-20: a recepção não vê os gerenciais
+        cenario.relatorios.gerar_cadastrais(cenario.de(Perfil.RECEPCAO), [Relatorio.SEXO], na_data)
+
+
+@pytest.mark.requisito("DD-109", "RF-912", "RNF-607")
+def test_dados_de_cadastro_exportados_num_arquivo_so_pela_administracao(cenario: Cenario, engine_web: Engine) -> None:
+    na_data = Filtros(data_referencia=date(2026, 10, 13))
+    escolhidos = [Relatorio.CIDADE, Relatorio.FAIXA_ETARIA]
+    with pytest.raises(AcessoNegado):
+        cenario.relatorios.exportar_cadastrais(cenario.de(Perfil.VISUALIZADOR), escolhidos, na_data,
+                                               FormatoExportacao.PDF)  # fmt: skip
+    admin = cenario.de(Perfil.ADMINISTRACAO)
+    pdf = cenario.relatorios.exportar_cadastrais(admin, escolhidos, na_data, FormatoExportacao.PDF)
+    xlsx = cenario.relatorios.exportar_cadastrais(admin, escolhidos, na_data, FormatoExportacao.XLSX)
+    assert pdf.nome_arquivo == "cadastro-2026-10-13.pdf" and xlsx.nome_arquivo == "cadastro-2026-10-13.xlsx"
+    assert [(e, a["formato"][1]) for e, a in auditorias(engine_web, "relatorio.exportar")] == [
+        ("cidade", "pdf"), ("faixa_etaria", "pdf"), ("cidade", "xlsx"), ("faixa_etaria", "xlsx")
+    ]  # fmt: skip
