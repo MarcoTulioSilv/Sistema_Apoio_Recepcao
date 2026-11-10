@@ -1,4 +1,5 @@
 {% extends "layout.html" %}
+{% block cabeca %}<script src="{{ url_for('static', filename='js/emissao.js') }}" defer></script>{% endblock %}
 {% macro fone(t) %}({{ t.ddd }}) {{ t.numero|telefone }}{% endmacro %}
 {% macro data(d) %}{{ d.strftime('%d/%m/%Y') if d else '' }}{% endmacro %}
 {% macro campo_cobertura(convenios, sufixo) %}

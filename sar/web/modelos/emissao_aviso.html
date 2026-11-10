@@ -1,4 +1,5 @@
 {% extends "layout.html" %}
+{% block cabeca %}<script src="{{ url_for('static', filename='js/emissao.js') }}" defer></script>{% endblock %}
 {# Aviso ou recusa da emissão, na aba que o formulário da ficha abriu (DDS §9.1). #}
 {% block titulo_pagina %}Documento não emitido{% endblock %}
 {% block subtitulo %}Leia o aviso antes de continuar{% endblock %}
@@ -8,7 +9,7 @@
   <p class="m-0 rounded-lg border border-borda-forte bg-alta-fundo p-3 font-bold text-alta" role="alert">{{ mensagem }}</p>
   <p class="m-0">Emita de novo só se o anterior se perdeu ou saiu com problema: cada emissão fica registrada.</p>
   <div class="flex flex-wrap gap-3">
-    <form method="post" action="{{ url_for('emissao.emitir', paciente_id=paciente_id, documento=confirmar) }}">
+    <form method="post" action="{{ url_for('emissao.emitir', paciente_id=paciente_id, documento=confirmar) }}" data-emitir>
       <input type="hidden" name="confirmar" value="1">
       <button class="btn-primario" type="submit">Emitir mesmo assim</button>
     </form>

@@ -10,13 +10,13 @@
   <div class="flex flex-wrap gap-3">
     {% if pode.emitir %}
     {% for codigo, rotulo in [("DOC-01", "Ficha de cadastro"), ("DOC-02", "Termo do cateter"), ("DOC-04", "Termo de alimentos"), ("DOC-07", "Termo de diálise extra")] %}
-    <form method="post" action="{{ url_emitir.replace('DOCUMENTO', codigo) }}" target="_blank">
+    <form method="post" action="{{ url_emitir.replace('DOCUMENTO', codigo) }}" target="_blank" data-emitir>
       <button class="btn-secundario" type="submit" data-documento="{{ codigo }}">{{ rotulo }}</button>
     </form>
     {% endfor %}
     {% endif %}
     {% if pode.cracha %}
-    <form method="post" action="{{ url_emitir.replace('DOCUMENTO', 'cracha') }}" target="_blank">
+    <form method="post" action="{{ url_emitir.replace('DOCUMENTO', 'cracha') }}" target="_blank" data-emitir>
       <button class="btn-secundario" type="submit" data-documento="cracha">Crachá</button>
     </form>
     {% endif %}
@@ -30,7 +30,7 @@
       <li class="flex flex-wrap items-center gap-3" data-troca="{{ t.id }}">
         <span>De {{ t.origem.strftime('%d/%m/%Y') }} para {{ t.destino.strftime('%d/%m/%Y') }}, {{ t.escala_destino.rotulo | lower }}</span>
         {% if t.termo_assinado %}<span class="etiqueta-n">Assinada e digitalizada</span>{% endif %}
-        <form method="post" action="{{ url_emitir.replace('DOCUMENTO', 'DOC-03') }}" target="_blank">
+        <form method="post" action="{{ url_emitir.replace('DOCUMENTO', 'DOC-03') }}" target="_blank" data-emitir>
           <input type="hidden" name="troca" value="{{ t.id }}">
           <button class="btn-secundario" type="submit">Emitir declaração<span class="sr-only"> da troca de {{ t.origem.strftime('%d/%m/%Y') }}</span></button>
         </form>
