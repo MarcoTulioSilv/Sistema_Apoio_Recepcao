@@ -53,6 +53,7 @@
               <li><a href="#intervalo">Datas e calendário</a></li>
               <li><a href="#bloco-relatorio">Bloco de relatório</a></li>
               <li><a href="#cartao-filtros">Card de relatório com filtros</a></li>
+              <li><a href="#fundo">Fundo de vidro fosco</a></li>
               <li><a href="#regras">Regras</a></li>
             </ul>
           </nav>
@@ -676,6 +677,10 @@
                 <form class="mt-3 flex flex-wrap items-end gap-3 border-t border-borda pt-3" aria-label="Filtros: ocupação por escala (exemplo)"><label class="campo"><span class="rotulo">Data de referência</span><input class="entrada" type="text" value="09/11/2026" inputmode="numeric"></label><button class="btn-primario" type="button">Gerar relatório</button></form>
               </details>
             </div></div>
+          </section>
+          <section id="fundo" aria-labelledby="fundo-t" class="cartao flex flex-col gap-3 p-5">
+            <h2 id="fundo-t" class="m-0 text-xl">Fundo de vidro fosco</h2>
+            <p class="m-0 max-w-[75ch] text-[15px] text-suave">O fundo desta página é o mesmo de todas as telas (DD-110): vidro fosco canelado, com duas luzes desfocadas nos cantos, uma faixa de luz na diagonal e a marca da clínica a 22%. Fica na camada base do CSS (<code>body::before</code> e <code>body::after</code>), sem script. A marca é <code>static/img/fundo-marca.png</code>, já esmaecida, independente do logotipo cadastrado. Cartões, cabeçalho e menu continuam opacos: nada de texto direto sobre o vidro além de títulos de seção. No alto contraste, nas cores forçadas e na impressão, o fundo é liso.</p>
           </section>
           <section id="regras" aria-labelledby="regras-t" class="cartao flex flex-col gap-3 p-5">
             <h2 id="regras-t" class="m-0 text-xl">Regras para quem constrói</h2>

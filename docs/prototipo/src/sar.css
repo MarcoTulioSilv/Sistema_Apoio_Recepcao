@@ -70,6 +70,36 @@
 
 @layer base {
   body { @apply bg-fundo text-tinta font-sans antialiased; }
+  /* Fundo de vidro fosco com a marca da clínica (DD-110), em todas as telas, inclusive a de entrar. Atrás do vidro,
+     duas luzes desfocadas nos cantos (azul-acinzentado e cinza-fumê); no vidro, os frisos do vidro canelado, uma faixa
+     de luz na diagonal e a marca a 22% (o arquivo já vem esmaecido). Os cartões continuam opacos: o texto não muda
+     de contraste. Ao lado do menu aberto, o fundo começa depois dele. Sem o efeito no alto contraste e na impressão. */
+  html { background-color: #e6e9ec; }
+  body { background-color: transparent; }
+  body::before, body::after { content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none; }
+  body::before {
+    background:
+      radial-gradient(52rem 36rem at 86% 6%, rgb(118 134 150 / .58), transparent 64%),
+      radial-gradient(46rem 34rem at 6% 96%, rgb(120 124 130 / .55), transparent 64%),
+      radial-gradient(30rem 22rem at 30% 20%, rgb(255 255 255 / .9), transparent 70%);
+  }
+  body::after {
+    backdrop-filter: blur(30px) saturate(140%);
+    background:
+      url("../img/fundo-marca.png") 50% 50% / min(88vmin, 58rem) no-repeat,
+      linear-gradient(118deg, transparent 26%, rgb(255 255 255 / .8) 43%, rgb(255 255 255 / .27) 52%, transparent 66%),
+      repeating-linear-gradient(90deg, rgb(255 255 255 / .16) 0 1px, transparent 1px 5px, rgb(40 40 40 / .035) 5px 7px,
+                                transparent 7px 11px),
+      rgb(255 255 255 / .18);
+  }
+  @media (min-width: 64rem) {
+    body:has(#menu-principal):not(:has(#layout[data-recolhido]))::before,
+    body:has(#menu-principal):not(:has(#layout[data-recolhido]))::after { left: 13rem; }
+  }
+  @media (prefers-contrast: more), (forced-colors: active), print {
+    html { background-color: var(--color-fundo); }
+    body::before, body::after { display: none; }
+  }
   :focus-visible { @apply outline-3 outline-offset-2 outline-acao; }
   a { @apply text-acao; }
   .numero { font-variant-numeric: tabular-nums; }
