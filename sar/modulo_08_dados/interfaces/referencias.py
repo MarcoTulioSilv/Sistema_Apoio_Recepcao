@@ -46,3 +46,40 @@ class RepositorioMunicipio(Protocol):
     def buscar(self, termo: str, uf: str | None, limite: int) -> list[DadosMunicipio]:
         """Nomes que começam pelo termo, sem distinção de caixa nem de acento, em ordem de nome."""
         ...
+
+
+@dataclass(frozen=True, slots=True)
+class DadosInstituicao:
+    nome: str
+    endereco: str
+    cep: str
+    municipio: str
+    uf: str
+    telefone: str | None
+    cnpj: str | None
+    tem_logotipo: bool
+
+
+@dataclass(frozen=True, slots=True)
+class DadosFaixaEtaria:
+    inicio: int
+    fim: int | None
+    rotulo: str
+
+
+class RepositorioInstituicao(Protocol):
+    """A linha única da instituição (§10.4)."""
+
+    def obter(self, travar: bool = False) -> DadosInstituicao | None: ...
+
+    def gravar(self, dados: DadosInstituicao) -> None:
+        """Cria a linha na primeira vez; depois altera. O logotipo não muda por aqui."""
+        ...
+
+    def gravar_logotipo(self, png: bytes) -> None: ...
+
+    def logotipo(self) -> bytes | None: ...
+
+    def faixas_etarias(self) -> list[DadosFaixaEtaria]:
+        """Em ordem de início."""
+        ...

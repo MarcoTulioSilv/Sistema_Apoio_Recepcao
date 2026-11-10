@@ -1,0 +1,31 @@
+{% from "_intervalo.html" import intervalo %}
+{# Os filtros de um relatório, com os valores já enviados (a) ou os padrões (o mês corrente até hoje no período, a
+   data de hoje, o mês anterior na competência). Usados no card da lista, antes de gerar, e na tela do relatório. #}
+{% macro campos_filtro(relatorio, a, padrao, eventos) %}
+  {% set f = relatorio.filtros %}
+  {% if relatorio.value == "convenio" %}
+  <label class="campo"><span class="rotulo">Contar</span>
+    <select class="entrada" name="modo">
+      <option value="situacao"{% if a.get('modo', 'situacao') == 'situacao' %} selected{% endif %}>A cobertura numa data</option>
+      <option value="periodo"{% if a.get('modo') == 'periodo' %} selected{% endif %}>A cobertura vigente no período</option>
+    </select></label>
+  {% endif %}
+  {% if "data_referencia" in f %}
+  <label class="campo"><span class="rotulo">Data de referência{% if relatorio.value == "convenio" %} (cobertura numa data){% endif %}</span>
+    <input class="entrada" type="date" name="data" value="{{ a.get('data', padrao.data) }}"></label>
+  {% endif %}
+  {% if "periodo" in f %}
+  {{ intervalo("Período" ~ (" (cobertura no período)" if relatorio.value == "convenio" else ""), "inicio",
+               a.get("inicio", padrao.inicio), "fim", a.get("fim", padrao.fim)) }}
+  {% endif %}
+  {% if "competencia" in f %}
+  <label class="campo"><span class="rotulo">Mês</span>
+    <input class="entrada" type="month" name="competencia" value="{{ a.get('competencia', padrao.competencia) }}" required></label>
+  {% endif %}
+  {% if "tipo_evento" in f %}
+  <label class="campo"><span class="rotulo">Tipo de evento</span>
+    <select class="entrada" name="tipo_evento"><option value="">Todos</option>
+      {% for tipo, rotulo in eventos.items() %}<option value="{{ tipo.value }}"{% if a.get('tipo_evento') == tipo.value %} selected{% endif %}>{{ rotulo }}</option>{% endfor %}
+    </select></label>
+  {% endif %}
+{% endmacro %}

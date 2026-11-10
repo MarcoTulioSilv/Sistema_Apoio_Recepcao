@@ -1,0 +1,47 @@
+{% extends "layout.html" %}
+{# Dados da clínica (RF-1201, RF-1202): o cabeçalho de todo documento (RF-802) e o logotipo do crachá. #}
+{% block titulo_pagina %}Dados da clínica{% endblock %}
+{% block subtitulo %}Cabeçalho dos documentos impressos e logotipo{% endblock %}
+{% block conteudo %}
+<div class="flex max-w-4xl flex-col gap-5">
+  {% include "_avisos.html" %}
+  {% if not cadastrada %}<p class="m-0 rounded-lg bg-alta-fundo p-3 font-bold text-alta" role="status">Enquanto os dados não forem salvos, nenhum documento é emitido.</p>{% endif %}
+  <section class="cartao flex flex-col gap-4 p-5" aria-labelledby="dados-t">
+    <h2 id="dados-t" class="m-0 text-xl">Cabeçalho</h2>
+    <form class="flex flex-wrap items-end gap-3" method="get" action="{{ url_for('instituicao.ver') }}">
+      <label class="campo"><span class="rotulo">UF do município</span>
+        <select class="entrada" name="uf">{% for u in ufs %}<option{% if u == uf %} selected{% endif %}>{{ u }}</option>{% endfor %}</select></label>
+      <button class="btn-neutro" type="submit">Mostrar os municípios</button>
+    </form>
+    <form class="grid gap-4 sm:grid-cols-2" method="post" action="{{ url_for('instituicao.salvar') }}">
+      <input type="hidden" name="uf" value="{{ uf }}">
+      <label class="campo sm:col-span-2"><span class="rotulo">Nome da clínica</span>
+        <input class="entrada" type="text" name="nome" value="{{ v.nome or '' }}" maxlength="150" required autocomplete="organization"></label>
+      <label class="campo sm:col-span-2"><span class="rotulo">Endereço (rua, número e bairro)</span>
+        <input class="entrada" type="text" name="endereco" value="{{ v.endereco or '' }}" maxlength="200" required autocomplete="street-address"></label>
+      <label class="campo"><span class="rotulo">CEP</span>
+        <input class="entrada" type="text" inputmode="numeric" data-mascara="cep" name="cep" value="{{ (v.cep or '')|cep }}" maxlength="9" required></label>
+      <label class="campo"><span class="rotulo">Município ({{ uf }})</span>
+        <select class="entrada" name="municipio" required><option value="">Selecione…</option>
+          {% for m in municipios %}<option value="{{ m.codigo }}"{% if m.codigo == v.municipio %} selected{% endif %}>{{ m.nome }}</option>{% endfor %}
+        </select></label>
+      <label class="campo"><span class="rotulo">Telefone com DDD</span>
+        <input class="entrada" type="tel" inputmode="numeric" name="telefone" value="{{ v.telefone or '' }}" maxlength="15"></label>
+      <label class="campo"><span class="rotulo">CNPJ (opcional)</span>
+        <input class="entrada" type="text" inputmode="numeric" name="cnpj" value="{{ v.cnpj or '' }}" maxlength="18"></label>
+      <div class="sm:col-span-2"><button class="btn-primario" type="submit">Salvar os dados</button></div>
+    </form>
+  </section>
+  <section class="cartao flex flex-col gap-4 p-5" aria-labelledby="logo-t">
+    <h2 id="logo-t" class="m-0 text-xl">Logotipo</h2>
+    {% if tem_logotipo %}
+    <img class="h-24 w-auto self-start rounded border border-borda bg-white p-2" src="{{ url_for('instituicao.logotipo') }}" alt="Logotipo atual da clínica">
+    {% else %}<p class="m-0 text-suave">Nenhum logotipo enviado: o crachá e o termo de diálise extra saem sem ele.</p>{% endif %}
+    <form class="flex flex-wrap items-end gap-3" method="post" enctype="multipart/form-data" action="{{ url_for('instituicao.enviar_logotipo') }}">
+      <label class="campo"><span class="rotulo">Imagem PNG ou JPEG, até 2 MB</span>
+        <input class="entrada" type="file" name="logotipo" accept="image/png,image/jpeg" required></label>
+      <button class="btn-secundario" type="submit"{% if not cadastrada %} disabled{% endif %}>Enviar logotipo</button>
+    </form>
+  </section>
+</div>
+{% endblock %}

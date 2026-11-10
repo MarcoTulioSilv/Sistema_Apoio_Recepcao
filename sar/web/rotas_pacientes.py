@@ -14,7 +14,7 @@ from werkzeug.wrappers import Response
 
 from sar.modulo_01_acesso.contrato import PermissionGuard
 from sar.modulo_02_cadastro.contrato import PARENTESCOS, DadosCobertura, Ficha, TipoCobertura, TipoEvento, TipoTelefone
-from sar.modulo_03_operacao.contrato import OrigemPar
+from sar.modulo_03_operacao.contrato import OrigemPar, TrocaRegistrada
 from sar.modulo_04_documentos.contrato import DocumentoDoTipo
 from sar.nucleo.contexto import Contexto
 from sar.nucleo.erros import ConflitoDeVersao, IndisponivelExterno, RegraViolada, RequerAutorizacao
@@ -92,6 +92,9 @@ def _permissoes(contexto: Contexto) -> dict[str, bool]:
         "anular": GUARDA.solicitavel(contexto, "cadastro.paciente.anular"),
         "documentos": pode("documento.listar"),
         "capturar": pode("documento.ingestao.abrir"),
+        "emitir": pode("emissao.documento.emitir"),
+        "cracha": pode("emissao.cracha.emitir"),
+        "titular": pode("titular.requisicao.registrar"),
     }
 
 
@@ -154,6 +157,14 @@ def _foto(contexto: Contexto, documentos: list[DocumentoDoTipo] | None) -> str |
     return max(fotos, key=lambda v: v.capturado_em).id if fotos else None
 
 
+def _trocas(contexto: Contexto, paciente_id: int, pode: dict[str, bool]) -> list[TrocaRegistrada]:
+    """As trocas do paciente do mês em diante, para a declaração de troca de turno (DOC-03, RF-804)."""
+    if not pode["emitir"] or not GUARDA.pode(contexto, "operacao.escala.consultar"):
+        return []
+    hoje = contexto.instante.astimezone(FUSO).date()
+    return list(_servicos().escalas.do_paciente(contexto, paciente_id, hoje).trocas)
+
+
 def _ficha(contexto: Contexto, paciente_id: int, **extra: Any) -> str:
     ficha = _servicos().pacientes.ver_ficha(contexto, paciente_id)
     pode = _permissoes(contexto)
@@ -177,6 +188,7 @@ def _ficha(contexto: Contexto, paciente_id: int, **extra: Any) -> str:
         frequencia=_frequencia(contexto, paciente_id),
         documentos=documentos,
         foto=_foto(contexto, documentos),
+        trocas=_trocas(contexto, paciente_id, pode),
         **extra,
     )
 

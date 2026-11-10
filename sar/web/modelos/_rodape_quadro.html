@@ -1,0 +1,17 @@
+{# Rodapé dos quadros de relatório (a ocupação e os dados de cadastro): o total à direita. Nos quadros que rolam (mais
+   de oito linhas), a pesquisa e a contagem do que está à vista vêm na mesma barra; o quadros.js as mostra e filtra as
+   linhas enquanto se digita. Sem script, fica só o total. O total é sempre o do quadro inteiro. #}
+{% set LINHAS_SEM_ROLAGEM = 8 %}
+{% macro rodape(rotulo_total, valor_total, quantidade, nome, titulo, placeholder) %}
+{% if quantidade > LINHAS_SEM_ROLAGEM %}
+<div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-t border-borda-forte px-3 py-2 font-bold">
+  <div class="flex min-w-0 grow items-center gap-2" data-pesquisa data-nome="{{ nome }}" hidden>
+    <input class="entrada min-h-9 min-w-0 grow text-sm font-normal" type="search" placeholder="{{ placeholder }}" aria-label="Pesquisar em {{ titulo }}">
+    <span class="shrink-0 text-xs font-normal text-suave" aria-live="polite" data-contagem>{{ quantidade }} {{ nome }}</span>
+  </div>
+  <p class="m-0 ml-auto flex shrink-0 gap-3" data-total><span>{{ rotulo_total }}</span><span class="numero">{{ valor_total }}</span></p>
+</div>
+{% else %}
+<p class="m-0 flex justify-between gap-3 border-t border-borda-forte px-3 py-2 font-bold" data-total><span>{{ rotulo_total }}</span><span class="numero">{{ valor_total }}</span></p>
+{% endif %}
+{% endmacro %}

@@ -1,0 +1,48 @@
+{# Documentos para imprimir (DDS §9.1): cada um sai do cadastro atual, em PDF numa aba nova, para imprimir e colher
+   as assinaturas (RNF-903). O assinado volta pela digitalização. O pedido do titular começa daqui (RF-1009). #}
+{% set url_emitir = url_for('emissao.emitir', paciente_id=ficha.paciente_id, documento='DOCUMENTO') %}
+<section class="cartao flex flex-col gap-4 p-5" id="imprimir" aria-labelledby="imprimir-t">
+  <div class="flex flex-col gap-1">
+    <h2 id="imprimir-t" class="m-0 text-xl">Documentos para imprimir</h2>
+    <p class="m-0 text-sm text-suave">Saem preenchidos com os dados de agora e abrem numa aba nova para imprimir.</p>
+  </div>
+  {% if pode.emitir or pode.cracha %}
+  <div class="flex flex-wrap gap-3">
+    {% if pode.emitir %}
+    {% for codigo, rotulo in [("DOC-01", "Ficha de cadastro"), ("DOC-02", "Termo do cateter"), ("DOC-04", "Termo de alimentos"), ("DOC-07", "Termo de diálise extra")] %}
+    <form method="post" action="{{ url_emitir.replace('DOCUMENTO', codigo) }}" target="_blank" data-emitir>
+      <button class="btn-secundario" type="submit" data-documento="{{ codigo }}">{{ rotulo }}</button>
+    </form>
+    {% endfor %}
+    {% endif %}
+    {% if pode.cracha %}
+    <form method="post" action="{{ url_emitir.replace('DOCUMENTO', 'cracha') }}" target="_blank" data-emitir>
+      <button class="btn-secundario" type="submit" data-documento="cracha">Crachá</button>
+    </form>
+    {% endif %}
+  </div>
+  {% endif %}
+  {% if pode.emitir and trocas %}
+  <div class="flex flex-col gap-2">
+    <h3 class="m-0 text-base">Declaração de troca de turno</h3>
+    <ul class="m-0 flex list-none flex-col gap-2 p-0">
+      {% for t in trocas %}
+      <li class="flex flex-wrap items-center gap-3" data-troca="{{ t.id }}">
+        <span>De {{ t.origem.strftime('%d/%m/%Y') }} para {{ t.destino.strftime('%d/%m/%Y') }}, {{ t.escala_destino.rotulo | lower }}</span>
+        {% if t.termo_assinado %}<span class="etiqueta-n">Assinada e digitalizada</span>{% endif %}
+        <form method="post" action="{{ url_emitir.replace('DOCUMENTO', 'DOC-03') }}" target="_blank" data-emitir>
+          <input type="hidden" name="troca" value="{{ t.id }}">
+          <button class="btn-secundario" type="submit">Emitir declaração<span class="sr-only"> da troca de {{ t.origem.strftime('%d/%m/%Y') }}</span></button>
+        </form>
+      </li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% endif %}
+  {% if pode.titular %}
+  <div class="flex flex-wrap items-center gap-3 border-t border-linha pt-3">
+    <span class="text-sm text-suave">O paciente pediu acesso, correção ou informação sobre os próprios dados?</span>
+    <a class="btn-neutro" href="{{ url_for('titular.novo', paciente_id=ficha.paciente_id) }}">Registrar pedido do titular</a>
+  </div>
+  {% endif %}
+</section>

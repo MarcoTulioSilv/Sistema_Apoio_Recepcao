@@ -114,7 +114,7 @@ da Macroentrega III.
 | DD-44 | **Relatório como tabela única com três saídas.** Cada relatório é uma consulta que produz um modelo tabular — colunas, linhas, filtros aplicados e marcas (início da série, sessões não confirmadas, mês alterado, prévia). Tela, PDF e XLSX são renderizadores do mesmo modelo (Strategy) | RF-912: o arquivo tem exatamente as colunas da tela, por construção. As marcas aparecem nas três saídas |
 | DD-45 | **Exportação segura e auditada.** XLSX escrito só com valores (texto como texto, sem fórmulas), o que impede injeção de fórmula; PDF pelo mesmo leiaute da tela. Toda exportação registra relatório, filtros e formato (RNF-607). Arquivo gerado em memória, entregue com `Cache-Control: no-store` | Relatório agregado é dado pessoal (DEC-44) |
 | DD-46 | **Geradores de PDF sem acesso externo.** Nos relatórios, o WeasyPrint recebe um buscador de recursos que só aceita dados embutidos — logotipo, foto e fontes locais. Qualquer URL é recusada Nos documentos, o conversor roda sem rede, e o modelo .docx com referência externa é recusado no envio | Nenhum dado sai por gerador de PDF (RNF-611, RNF-627); impede que configuração ou modelo faça o servidor buscar endereço externo |
-| DD-47 | **Prévia do mês corrente separada do relatório mensal.** A prévia usa o mesmo cálculo, mas carrega a marca "PRÉVIA — mês em aberto" no título e em cada página, e nunca é oferecida como relatório mensal | Modelo §7.12: o relatório mensal só existe com o mês completo (RF-913) |
+| DD-47 | **Prévia do mês corrente separada do relatório mensal.** A prévia usa o mesmo cálculo, mas carrega a marca "PRÉVIA — mês em aberto" logo abaixo do título (que é "Prévia do mês corrente") e no alto de cada página, e nunca é oferecida como relatório mensal | Modelo §7.12: o relatório mensal só existe com o mês completo (RF-913) |
 | DD-48 | **Parâmetros tipados, declarados no código.** Cada parâmetro é declarado num registro em código: nome, tipo, unidade, mínimo, máximo, padrão e perfil que pode alterá-lo. O banco guarda só o valor alterado. Valor fora dos limites é recusado; parâmetro não declarado não existe. Leitura por operação, sem cache entre processos | Configuração errada é causa comum de falha; limites no código impedem, por exemplo, inatividade de zero minuto. Web e worker sempre leem o mesmo valor |
 | DD-49 | **Dados de referência são inativados, nunca excluídos.** Convênio em uso por cobertura fica no histórico; inativado, deixa de ser oferecido em novo registro | O histórico de cobertura e os relatórios de períodos passados continuam corretos (RF-302, RF-905) |
 | DD-50 | **Logotipo tratado como arquivo não confiável.** Só PNG ou JPEG, conferidos por assinatura binária, com limite de tamanho e de pixels, reencodados em subprocesso com limites antes de gravar | Mesmo princípio do SEG-10, aplicado ao único arquivo de configuração |
@@ -170,6 +170,14 @@ da Macroentrega III.
 | DD-100 | **Agente com servidor HTTP só na homologação, por chave explícita.** Complementa a DD-80 e o §8.5. A configuração do agente exige servidor `https://` e o certificado raiz da clínica; com `"desenvolvimento": true`, e só com esse valor, aceita `http://` sem certificado e registra o aviso no log da estação. A configuração de produção não tem a chave, e o arquivo só é editável pelo TI (DD-39) | O "pronto" do Incremento 4 inclui medir a captura real na estação (RNF-208), e o HTTPS com a autoridade interna só chega com a implantação (Incremento 8). Sem a chave, a medição exigiria montar a autoridade antes da hora. Exigir o valor `true`, e não qualquer texto, evita ligar o modo por engano |
 | DD-101 | **Uma cobertura por período.** Revisa a DD-70 e a DD-14, pela DEC-75 (emenda à RF-302 e à INV-09). A cobertura vale do início ao fim do período de tratamento e não tem data própria: a coluna `vigencia_inicio` sai e a unicidade passa a ser do período (`uq_cobertura__periodo`, migração 0006). Registrar cobertura só é aceito no período aberto que ainda não tem (`INV-09`; período encerrado: `cobertura.periodo_encerrado`); a cobertura informada no cadastro ou no retorno já entra assim. Trocar de cobertura é registrar o evento que encerra o período e abrir outro com a cobertura nova; o histórico de cobertura é o histórico dos períodos. A migração recusa rodar com período que ainda tenha mais de uma cobertura | Visto no uso: o "Registrar nova cobertura" deixava acumular vigências no mesmo período (inclusive repetidas e com início futuro), lidas na ficha como dois tratamentos abertos ao mesmo tempo. Com a cobertura presa ao período, a regra fica no banco, e não há vigência para conferir |
 | DD-102 | **Parentesco do contato em lista fechada.** Detalha a RF-201. O parentesco, opcional, só aceita um destes valores: Cônjuge, Filho ou filha, Pai ou mãe, Irmão ou irmã, Outro parente, Vizinho ou amigo (`PARENTESCOS`, no contrato do MOD-02). A regra fica no serviço (`contato.parentesco`), para o novo cadastro e a ficha, que passam a oferecer a mesma lista. A migração 0007 converte o que estava gravado fora da lista em "Outro parente", sem guardar o texto antigo e sem registro de auditoria, por ser ajuste de dado de desenvolvimento antes da implantação | Visto no uso: o novo cadastro oferecia a lista, mas a ficha aceitava texto livre ao incluir e ao editar o contato, e o dado ficava diferente para a mesma relação |
+| DD-103 | **Modelos iniciais embutidos como versão 0.** Os cinco modelos .docx iniciais (DOC-02, DOC-03, DOC-04, DOC-07 e crachá), feitos a partir dos formulários em branco da clínica (DEC-76), vêm no pacote do sistema. Sem versão enviada pela administração, ou depois de reverter a ela, a emissão usa o arquivo do pacote e registra `versao_modelo = 0`. A versão 0 passa pela mesma validação da §9.2, num teste da integração contínua, e pode ser baixada como qualquer versão | A emissão funciona desde a implantação sem um envio manual por documento; `modelo_documento` exige quem enviou, e a versão de fábrica não tem autor no sistema |
+| DD-104 | **Conversor em rede interna sem saída.** O conversor (Gotenberg, só com o LibreOffice) fica numa rede Docker `internal`, sem rota para fora; em produção só o web o alcança. Download, webhook, rotas de PDF e métricas desligados, e o LibreOffice recusa endereços públicos e privados. No desenvolvimento e no CI, em que a aplicação roda fora do Docker, uma ponte (socat) ligada às duas redes publica a porta só no loopback, sem dar saída ao conversor. A aplicação o chama por `SAR_CONVERSOR` | Concretiza o contêiner "isolado, sem saída" da DAS §7.2 e a DD-46 com uma imagem mantida, em vez de um servidor de conversão escrito no projeto |
+| DD-105 | **Declaração de atendimento ao titular em leiaute fixo.** A declaração que acompanha a cópia ao titular (§15, RF-1009) é HTML convertido pelo WeasyPrint, com o cabeçalho institucional e o rodapé da DD-86; não é um modelo .docx | Documento do sistema, não um formulário da clínica; mantém os modelos .docx nos documentos que a clínica já usa (DEC-76) |
+| DD-106 | **Ficha de cadastro (DOC-01) em leiaute fixo, só com o preenchido.** Revisa a linha do DOC-01 da §9.1. Cabeçalho institucional e uma lista rótulo–valor só dos campos preenchidos, na ordem da ficha, com contatos, telefones e períodos em qualquer quantidade; campo vazio não aparece. Gerada pelo WeasyPrint, com o rodapé da DD-86, e fora dos modelos .docx | DEC-76. A lista fechada sem laços nem condições (DD-42) não comporta lista de tamanho variável nem omitir o campo vazio; o conteúdo é só dado do cadastro, sem texto da clínica a editar (RNF-703) |
+| DD-107 | **Frequência e balanço mensal num relatório só, chamado "Frequência mensal".** Revisa o catálogo da §9.3 (decidido em 05/11/2026, no uso das telas): a frequência mensal (RF-906) e o balanço mensal (RF-916) mostravam quase o mesmo. Um relatório, por competência e paciente opcional, com previstas, realizadas, ausências, reposições, ausências não compensadas e extras; a prévia do mês corrente (DD-47) usa as mesmas colunas. O bloqueio do mês incompleto (RF-913) e a marca de mês alterado (RF-915) continuam | As duas RF ficam atendidas sem repetir colunas; menos um relatório a escolher |
+| DD-108 | **Recorte de datas num seletor só, e calendário próprio em português.** Onde a tela pede um intervalo (início e fim), as duas datas são escolhidas no mesmo calendário: o primeiro clique marca o início, o segundo o fim, com atalhos de mês e o teclado (setas, Page Up e Page Down, Enter e Esc). Os campos enviados continuam dois; sem script, a tela mostra os dois campos de data como antes. Vale para o período dos relatórios e para a trilha de auditoria. **Os demais campos de data usam o mesmo calendário, em português**, e não o do navegador, que segue o idioma dele: a data avulsa (relatórios, escalas, ficha, cadastro, parâmetros, titular) é digitada como dd/mm/aaaa ou escolhida no calendário (atalho "Hoje"; "Limpar" se não for obrigatória; dias fora do mínimo e do máximo indisponíveis); o mês (competência) sai de um quadro com os doze meses, com as setas trocando o ano e os atalhos "Mês passado" e "Este mês". O valor enviado continua no formato ISO (`aaaa-mm-dd`, `aaaa-mm`); sem script, voltam os campos do navegador | Pedido do uso (05/11/2026): escolher o recorte sem abrir dois calendários, e calendário em português em qualquer navegador. O servidor continua conferindo as datas e o intervalo |
+| DD-109 | **Dados de cadastro escolhidos e gerados num relatório só.** Revisa a apresentação da §9.3 (decidido em 09/11/2026, no uso das telas): cidade (RF-903), convênio (RF-905), faixa etária (RF-910) e sexo (RF-911) deixam de ser escolhidos um a um. Na lista de relatórios, a seção "Pacientes e cadastro" é um formulário com uma caixa de seleção por dado, a data de referência comum e o modo do convênio (com o período quando é a cobertura no período); o resultado traz as tabelas escolhidas, como são, na ordem do catálogo, com os filtros comuns no alto e as marcas de cada uma junto dela. Na tela, cada tabela é um quadro numa matriz (quatro lado a lado na tela larga, dois na média, um na estreita), com a lista rolando por dentro e o total no rodapé; nos quadros que rolam (mais de oito linhas), o rodapé traz também uma pesquisa, que filtra as linhas enquanto se digita, sem diferenciar maiúsculas nem acentos, e mostra quantas estão à vista, sem mudar o total. Vale também para os blocos da ocupação por escala (paciente ou prontuário). Só na tela; sem script, fica só o total. O PDF e o XLSX são um arquivo só, com as mesmas tabelas na mesma ordem (na planilha, na mesma aba). Entradas (RF-902) e eventos (RF-904) passam para a seção "Frequência e escalas" só na tela. As permissões não mudam (§4.5, P-20): cada dado continua gerencial, e cada um é auditado ao ver e ao exportar como antes (RNF-607) | Os quatro são contagens dos mesmos pacientes na mesma data: escolher juntos evita gerar e baixar quatro vezes. As tabelas e os números são os mesmos de cada relatório |
+| DD-110 | **Fundo de vidro fosco com a marca da clínica.** Em todas as telas, inclusive a de entrar, o fundo é um vidro fosco no estilo dos vidros canelados dos anos 80 e 90: atrás dele, duas luzes desfocadas nos cantos (azul-acinzentado e cinza-fumê); nele, frisos verticais finos, uma faixa de luz na diagonal e a marca da clínica a 22%. A marca é um arquivo próprio do sistema (`static/img/fundo-marca.png`, já esmaecido, sem metadados), independente do logotipo cadastrado (RF-1202), por isso aparece antes do login sem expor endereço novo. Só CSS, sem script e dentro da CSP (DD-09); os cartões, o cabeçalho e o menu continuam opacos, e o contraste do texto não muda. No alto contraste, nas cores forçadas e na impressão, o fundo volta a ser liso | Pedido do uso (09/11/2026), validado em maquete: dar identidade às telas sem prejudicar a leitura |
 
 ### 2.2 Alterações incorporadas ao DAS
 
@@ -1092,14 +1100,15 @@ Publica `DocumentoIncorporado` e `DocumentoRevinculado` (§3.11). A anulação c
 
 | **Documento** | **Fonte dos dados** | **Regra específica** |
 |---|---|---|
-| DOC-01 Ficha de cadastro | MOD-02, na ordem da ficha (RNF-401) | Campo faltante sai em branco, nunca com valor padrão |
+| DOC-01 Ficha de cadastro | MOD-02, na ordem da ficha (RNF-401) | Leiaute fixo, só com os campos preenchidos (DD-106) |
 | DOC-02 Termo de cateter | MOD-02 e MOD-06 | — |
 | DOC-03 Declaração de troca de turno | MOD-03, a partir da troca pontual (RF-804) | Só para troca registrada e não cancelada |
 | DOC-04 Termo de alimentos | MOD-02 e MOD-06 (endereço da clínica) | — |
-| DOC-05 Carta de recusa | MOD-02 e texto livre digitado (RF-807) | Texto livre não é gravado (DD-43) |
-| DOC-06 Termo de interrupção | MOD-02 e profissional digitado (RF-806) | Profissional não é gravado (DD-43) |
 | DOC-07 Termo de diálise extra | MOD-02 e turno vigente do MOD-03 (RF-805) | Aviso, sem bloqueio, se já houve emissão no mês (`ConfirmacaoNecessaria`) |
-| Crachá | MOD-02, foto do MOD-04, logotipo do MOD-06 (RF-808) | Sem foto, recusa com orientação de capturar a foto |
+| Crachá | MOD-02 (nome, nascimento e mãe), foto do MOD-04, logotipo do MOD-06 (RF-808) | Sem foto, recusa com orientação de capturar a foto |
+
+DOC-05 e DOC-06 não são emitidos (DEC-76): a clínica usa os formulários próprios, e a versão assinada volta pela
+digitalização, nos tipos da §8.2.
 
 Todos: cabeçalho institucional único (RF-802), disponível como variáveis em todo modelo, e data por
 extenso com o município (RF-803), por função própria, sem depender da localidade do sistema
@@ -1128,16 +1137,15 @@ operacional. Geração em memória, entrega do PDF com `Content-Disposition: inl
 | Variável partida pelo Word em trechos com formatação diferente é apontada | Problema comum ao editar `{{ nome }}` no Word; o aviso diz qual variável redigitar |
 | Fontes usadas disponíveis no conversor, ou substituta métrica conhecida | Evita que o PDF saia com leiaute diferente do Word |
 
-**Variáveis.** Cada documento tem a sua lista, exibida na tela de envio. Exemplos: DOC-01 recebe todos
-os campos do cadastro; DOC-03, `{{ data_origem }}`, `{{ turno_origem }}`, `{{ data_destino }}`,
-`{{ turno_destino }}`; DOC-05, `{{ texto_recusa }}`; DOC-06, `{{ profissional_nome }}` e
-`{{ profissional_registro }}`; crachá, `{{ foto }}` e `{{ logotipo }}` como imagens. Campo vazio sai
-em branco.
+**Variáveis.** Cada documento tem a sua lista, exibida na tela de envio. Exemplos: DOC-03, `{{ data_origem }}`,
+`{{ turno_origem }}`, `{{ data_destino }}`, `{{ turno_destino }}`; crachá, `{{ foto }}` e `{{ logotipo }}` como
+imagens. Campo vazio sai em branco.
 
 **Emissão.** Modelo ativo → preenchimento no ambiente isolado → .docx em memória → conversor → PDF em
 memória → navegador. Nada é gravado em disco no servidor nem entregue em .docx à estação.
 
-**Ponto de partida.** A construção entrega os oito modelos iniciais, criados do zero (RNF-903, DC-09).
+**Ponto de partida.** A construção entrega os cinco modelos iniciais (DOC-02, DOC-03, DOC-04, DOC-07 e crachá),
+a partir dos formulários em branco da clínica, como versão 0 embutida (DD-103, DEC-76, RNF-903, DC-09).
 
 ### 9.3 Catálogo de relatórios
 
@@ -1147,17 +1155,30 @@ memória → navegador. Nada é gravado em disco no servidor nem entregue em .do
 | Pacientes por cidade (RF-903) | Data de referência | Município, quantidade | — |
 | Eventos por período (RF-904) | Período, tipo de evento | Paciente, evento, data, comprovante anexado | Início da série |
 | Pacientes por convênio (RF-905) | Modo: situação na data, ou cobertura vigente no período | Convênio ou SUS, quantidade | — |
-| Frequência mensal (RF-906) | Competência | Paciente, previstas, realizadas, ausências, extras | Bloqueio se mês incompleto (RF-913); mês alterado (RF-915) |
-| Balanço mensal (RF-916) | Competência, paciente opcional | Previstas, realizadas, ausências não compensadas, reposições, extras definitivas | Idem |
-| Prévia do mês corrente (DD-47) | — | As do balanço | "PRÉVIA — mês em aberto" |
-| Ocupação por escala (RF-908) | Data de referência | Escala, pacientes alocados | — |
+| Frequência mensal (RF-906 e RF-916, DD-107) | Competência, paciente opcional | Paciente, previstas, realizadas, ausências, reposições, ausências não compensadas, extras (definitivas com o mês fechado) | Bloqueio se mês incompleto (RF-913); mês alterado (RF-915) |
+| Prévia do mês corrente (DD-47) | Paciente opcional | As da frequência mensal | "PRÉVIA — mês em aberto" |
+| Ocupação por escala (RF-908) | Data de referência | Um bloco por escala, com os pacientes (nome e prontuário) e o total no rodapé; os três turnos de segunda, quarta e sexta em sequência, depois os de terça, quinta e sábado; o total geral; e, só se houver, o bloco dos sem alocação. Na tela, a lista de cada bloco rola por dentro; no PDF e no XLSX, os blocos um embaixo do outro | — |
 | Pacientes por faixa etária (RF-910) | Data de referência | Faixa (RF-1206), quantidade | — |
 | Pacientes por sexo (RF-911) | Data de referência | Sexo, quantidade, não informado | — |
 | Frequência em recorte livre | Período | Paciente, sessões | Sessões não confirmadas no intervalo (RF-914) |
 | Aniversariantes do dia (RF-909) | — | Nome | Só na tela inicial; não exportável |
 
+Cidade, convênio, faixa etária e sexo são escolhidos juntos, numa caixa de seleção, e saem num relatório só, com as tabelas acima em sequência (DD-109).
+
+Sem tela intermediária (decidido em 09/11/2026, no uso das telas): o card de um relatório com filtros abre os filtros ali mesmo, na lista, já preenchidos com os padrões (o mês corrente até hoje no período, a data de hoje, o mês anterior na competência), e o relatório só é gerado no botão; um card aberto por vez. O relatório sem filtros (a prévia) abre direto. Gerado, o relatório traz os filtros no alto para gerar de novo.
+
 Agregados não suprimem células (DEC-44) e seguem a mesma permissão e auditoria dos relatórios
 nominais. Toda contagem de pacientes considera apenas cadastros não anulados.
+
+**Detalhes da construção.** "Em tratamento na data" é ter um período que cobre a data, contando o dia do evento
+(P-09). Toda contagem lista as categorias com "não informado" e fecha com o total; na faixa etária e no sexo, todas
+as categorias aparecem, mesmo com zero. Na cobertura vigente no período (RF-905), o paciente conta uma vez por
+cobertura que teve no intervalo, e o total é de pacientes distintos. Na frequência mensal, "ausências" soma as não
+compensadas e as reposições; o balanço as separa. O recorte livre lista quem esteve em tratamento em algum dia do
+intervalo, com as sessões realizadas (presenças da confirmação, DD-24). O início da série (RF-907) sai na entrada,
+nos eventos, no recorte livre e na cobertura no período; a marca de mês alterado (RF-915) traz a data e o motivo.
+A ocupação nomeia a escala pelo turno e pelos dias (DD-75). A trilha guarda os filtros em texto, com o id do
+paciente, nunca o nome. No PDF, a marca da prévia se repete no alto de cada página (DD-47).
 
 ### 9.4 Regras
 
@@ -1186,15 +1207,18 @@ Exportações não têm tabela própria: ficam na trilha de auditoria, com relat
 |---|---|---|---|
 | `EmissaoService.emitir` | Contexto, modelo, paciente, parâmetros (troca, texto livre, profissional), confirmar_reemissao | PDF em memória | `AcessoNegado`, `RegraViolada`, `ConfirmacaoNecessaria` (DOC-07 no mês) |
 | `EmissaoService.emitir_cracha` | Contexto, paciente | PDF em memória | `AcessoNegado`, `RegraViolada` (sem foto) |
+| `EmissaoService.emitir_declaracao_titular` | Contexto (A), paciente, data de recebimento, páginas da cópia, referência da requisição | PDF em memória (DD-105) | `AcessoNegado`, `NaoEncontrado` |
 | `ModeloService.enviar` | Contexto (A), código, arquivo | relatório de validação e prévia | `AcessoNegado`, `RegraViolada` (com a lista de problemas) |
 | `ModeloService.ativar` / `reverter` | Contexto (A), código, versão | — | `AcessoNegado` |
+| `RelatorioService.disponiveis` | Contexto | relatórios que o perfil vê (§4.5) | — |
 | `RelatorioService.gerar` | Contexto, relatório, filtros | modelo tabular com marcas | `AcessoNegado`, `RegraViolada` (mês incompleto, com a lista) |
 | `RelatorioService.exportar` | Contexto, relatório, filtros, formato | arquivo em memória | `AcessoNegado`, `RegraViolada` |
 | `RelatorioService.aniversariantes` | Contexto, data | nomes | `AcessoNegado` |
 
-**Para outros módulos:** `emissoes_do_mes(paciente_id, competencia, modelo)`, usado pelo MOD-07 na
-pendência de termo (RF-809) e pelo aviso do DOC-07. O MOD-11 usa `EmissaoService` para a declaração
-de atendimento ao titular.
+**Para outros módulos:** a porta `EmissoesRegistradas` do núcleo (DD-02), implementada aqui, diz à
+pendência de termo do MOD-03 (linha 5 da §11.1, RF-809) se a declaração de troca ou o termo de extra do mês
+já foi emitido e espera o documento assinado. O aviso do DOC-07 é do próprio `EmissaoService`. O MOD-11 usa
+`EmissaoService` para a declaração de atendimento ao titular e para a ficha (DOC-01).
 
 ---
 
@@ -1539,8 +1563,18 @@ declaração pelo MOD-05; registro da entrega. Tudo auditado.
 | `TitularService.consultar` | Contexto (R, A ou V), situação | requisições com prazo derivado (DD-18) | `AcessoNegado` |
 | `TitularService.atender_acesso` | Contexto (A), requisição | pacote em memória: ficha, cópia dos documentos e declaração | `AcessoNegado`, `RegraViolada` |
 | `TitularService.concluir` / `negar` | Contexto (A), requisição, desfecho | — | `AcessoNegado`, `RegraViolada` (negativa sem fundamento) |
+| `TitularService.ver` | Contexto (R, A ou V), requisição | requisição com prazo derivado | `AcessoNegado`, `NaoEncontrado` |
 
-Implementa `FontePendencia` para a pendência 10, que vira urgência a 3 dias do prazo.
+Implementa `FontePendencia` para a pendência 10 (`pedido_titular`), alta e urgência a 3 dias do prazo.
+
+**Detalhes da construção.** Canal de recebimento em lista fechada (presencial, telefone, e-mail, carta, outro) e
+forma de entrega da cópia também (em mãos ao titular, a representante, por e-mail, pelo correio), sem nome de
+quem recebeu: a entrega vai à trilha com a forma e o número de páginas (`titular.copia.gerar`). O atendimento de
+acesso só vale para pedido aberto de confirmação e acesso e não encerra o pedido; concluir ou negar é à parte,
+com o desfecho (de 10 a 2.000 caracteres) gravado e auditado. A negativa de eliminação de dado sob guarda tem o
+fundamento pronto na tela (art. 16, I, e Lei nº 13.787/2018). A data de recebimento é gravada ao meio-dia local
+dessa data, para a data local nunca mudar; data no futuro é recusada. A consulta da lista registra na trilha só
+a quantidade, como a busca de pacientes (DD-10).
 
 ---
 

@@ -385,6 +385,30 @@ class ContatoService(Protocol):
     def remover_telefone(self, contexto: Contexto, telefone_id: int) -> None: ...
 
 
+@dataclass(frozen=True, slots=True)
+class PeriodoRelatorio:
+    id: int
+    inicio: date
+    evento_tipo: TipoEvento | None
+    evento_data: date | None
+    comprovante: bool  # documento comprobatório do evento ligado (RF-904)
+    cobertura: TipoCobertura | None
+    convenio_id: int | None
+
+
+@dataclass(frozen=True, slots=True)
+class PacienteRelatorio:
+    """O que os relatórios agregados e nominais do MOD-05 precisam (§9.3), sem endereço nem documentos."""
+
+    paciente_id: int
+    nome: str
+    prontuario: str
+    sexo: Sexo | None
+    data_nascimento: date | None
+    municipio: str | None  # código IBGE da residência
+    periodos: tuple[PeriodoRelatorio, ...]  # em ordem de início
+
+
 class LeituraCadastro(Protocol):
     """Para os outros módulos, na unidade de trabalho deles (DDS §6.7). Paciente anulado não existe aqui."""
 
@@ -405,6 +429,11 @@ class LeituraCadastro(Protocol):
     def aniversariantes(self, uow: UnidadeDeTrabalho, data: date) -> list[Identificacao]:
         """Em tratamento na data e nascidos nesse dia e mês, em ordem de nome (RF-909). Quem nasceu em 29/02 aparece
         em 28/02 nos anos que não são bissextos."""
+        ...
+
+    def base_relatorios(self, uow: UnidadeDeTrabalho) -> list[PacienteRelatorio]:
+        """Todos os pacientes não anulados (§9.3: contagens só com cadastros não anulados), em ordem de nome, com os
+        períodos, eventos e coberturas, em poucas consultas."""
         ...
 
     def periodos_de(self, uow: UnidadeDeTrabalho, paciente_ids: Sequence[int] | None) -> dict[int, list[PeriodoRef]]:

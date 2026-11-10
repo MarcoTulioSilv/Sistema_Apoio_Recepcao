@@ -1,0 +1,108 @@
+{% extends "layout.html" %}
+{% from "_filtros_relatorio.html" import campos_filtro %}
+{% from "_rodape_quadro.html" import rodape %}
+{% block cabeca %}<script src="{{ url_for('static', filename='js/quadros.js') }}" defer></script>{% endblock %}
+{# Um relatório (DDS §9.3): os filtros, as marcas e a tabela, que é a mesma do PDF e do XLSX (DD-44). Mês incompleto
+   mostra quantas e quais sessões faltam (RF-913). A exportação é só da administração (§4.5). #}
+{% block titulo_pagina %}{{ relatorio.titulo }}{% endblock %}
+{% block subtitulo %}{{ descricao }}{% endblock %}
+{% block junto_do_titulo %}<a class="btn-pequeno" href="{{ url_for('relatorios.lista') }}">Todos os relatórios</a>{% endblock %}
+{% macro bloco_relatorio(bloco, colunas) %}
+{% set id = "bloco-" ~ (bloco.titulo | lower | replace(" ", "-") | replace(",", "") | replace("—", "") ) %}
+<section class="bloco-relatorio" aria-labelledby="{{ id }}" data-bloco data-quadro>
+  <h3 id="{{ id }}" class="m-0 border-b border-borda bg-fundo px-3 py-2 text-base font-bold">{{ bloco.titulo }}</h3>
+  <div class="rolagem-bloco" tabindex="0" role="region" aria-label="Pacientes: {{ bloco.titulo }}">
+    <table class="w-full border-collapse text-left">
+      <caption class="sr-only">{{ bloco.titulo }}</caption>
+      <thead class="sticky top-0 bg-superficie"><tr class="text-sm text-suave">
+        {% for coluna in colunas %}<th scope="col" class="px-3 py-2 font-bold">{{ coluna.titulo }}</th>{% endfor %}
+      </tr></thead>
+      <tbody>
+      {% for linha in bloco.linhas %}
+        <tr class="border-t border-linha" data-linha>{% for valor in linha %}<td class="px-3 py-2">{{ valor }}</td>{% endfor %}</tr>
+      {% else %}
+        <tr class="border-t border-linha"><td class="px-3 py-2 text-suave" colspan="{{ colunas|length }}">Nenhum paciente nesta escala.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {{ rodape("Total", bloco.total, bloco.linhas | length, "pacientes", bloco.titulo, "Pesquisar paciente ou prontuário") }}
+</section>
+{% endmacro %}
+{% block conteudo %}
+<div class="flex flex-col gap-5">
+  <form class="cartao flex flex-wrap items-end gap-3 p-5" method="get" action="{{ url_for('relatorios.ver', codigo=relatorio.value) }}" aria-label="Filtros do relatório">
+    <input type="hidden" name="gerar" value="1">
+    {{ campos_filtro(relatorio, a, padrao, eventos) }}
+    <button class="btn-primario" type="submit">Gerar relatório</button>
+  </form>
+
+  {% if erro %}<p class="m-0 rounded-lg border border-urgencia-borda bg-urgencia-fundo p-3 font-bold text-urgencia" role="alert">{{ erro }}</p>{% endif %}
+
+  {% if pendentes %}
+  <section class="rounded-xl border border-urgencia-borda bg-urgencia-fundo p-4" aria-labelledby="pendentes-t" role="alert">
+    <h2 id="pendentes-t" class="m-0 text-lg text-urgencia">O mês ainda não fechou: {{ pendentes|length }} sessão(ões) sem confirmação</h2>
+    <p class="m-0 mt-1">O relatório mensal só sai com todas as sessões confirmadas ou registradas como não realizadas. Para acompanhar o mês em andamento, use a prévia.</p>
+    <ul class="m-0 mt-2 flex flex-col gap-0.5 pl-5">{% for data, turno in pendentes %}<li>{{ data }}, {{ turno | lower }}</li>{% endfor %}</ul>
+  </section>
+  {% endif %}
+
+  {% if tabela %}
+  <section class="cartao flex flex-col gap-3 p-5" aria-labelledby="resultado-t" data-relatorio="{{ tabela.relatorio.value }}">
+    <div class="flex flex-wrap items-start justify-between gap-3">
+      <div class="flex flex-col gap-1">
+        <h2 id="resultado-t" class="m-0 text-xl">{{ tabela.titulo }}</h2>
+        <p class="m-0 text-sm text-suave">{% for rotulo, valor in tabela.filtros %}<span class="mr-4"><strong>{{ rotulo }}:</strong> {{ valor }}</span>{% endfor %}</p>
+      </div>
+      {% if pode_exportar %}
+      <div class="flex flex-wrap gap-2">
+        {% for formato, rotulo in [("pdf", "Baixar PDF"), ("xlsx", "Baixar planilha")] %}
+        <form method="post" action="{{ url_for('relatorios.exportar', codigo=relatorio.value) }}">
+          {% for chave in ["inicio", "fim", "data", "competencia", "tipo_evento", "modo"] %}{% if a.get(chave) %}<input type="hidden" name="{{ chave }}" value="{{ a.get(chave) }}">{% endif %}{% endfor %}
+          <input type="hidden" name="formato" value="{{ formato }}">
+          <button class="btn-secundario" type="submit">{{ rotulo }}</button>
+        </form>
+        {% endfor %}
+      </div>
+      {% endif %}
+    </div>
+    {% for marca in tabela.marcas %}
+    <p class="m-0 rounded-lg border-l-4 border-borda-forte bg-alta-fundo px-3 py-2 font-bold text-alta" data-marca="{{ marca.tipo }}">{{ marca.texto }}</p>
+    {% endfor %}
+    {% if tabela.blocos %}
+    {# Ocupação: um bloco por escala, com rolagem própria para não esticar a tela e o total no rodapé; depois o total
+       geral e, só se houver, os sem alocação. #}
+    <div class="grid items-start gap-4 lg:grid-cols-2 2xl:grid-cols-3">
+      {% for bloco in tabela.blocos if not bloco.separado %}{{ bloco_relatorio(bloco, tabela.colunas) }}{% endfor %}
+    </div>
+    <p class="m-0 border-t border-borda-forte pt-3 text-lg font-bold" data-total-geral>{{ tabela.total_geral }}</p>
+    {% set separados = tabela.blocos | selectattr("separado") | list %}
+    {% if separados %}
+    <div class="grid items-start gap-4 lg:grid-cols-2 2xl:grid-cols-3">
+      {% for bloco in separados %}{{ bloco_relatorio(bloco, tabela.colunas) }}{% endfor %}
+    </div>
+    {% endif %}
+    {% else %}
+    <div class="overflow-x-auto">
+      <table class="w-full border-collapse text-left">
+        <caption class="sr-only">{{ tabela.titulo }}</caption>
+        <thead><tr class="text-sm text-suave">
+          {% for coluna in tabela.colunas %}<th scope="col" class="px-3 py-2 font-bold{% if coluna.numerica %} text-right{% endif %}">{{ coluna.titulo }}</th>{% endfor %}
+        </tr></thead>
+        <tbody>
+        {% for linha in tabela.linhas %}
+          <tr class="border-t border-linha{% if linha[0] in ('Total', 'Total de pacientes') %} font-bold{% endif %}">
+            {% for valor in linha %}<td class="px-3 py-2{% if tabela.colunas[loop.index0].numerica %} numero text-right{% endif %}">{{ valor }}</td>{% endfor %}
+          </tr>
+        {% else %}
+          <tr class="border-t border-linha"><td class="px-3 py-2 text-suave" colspan="{{ tabela.colunas|length }}">Nenhum registro para os filtros escolhidos.</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% endif %}
+    <p class="m-0 text-xs text-suave">Gerado em {{ tabela.gerado_em|data_hora }} · Código de integridade: {{ tabela.codigo_integridade or "—" }}</p>
+  </section>
+  {% endif %}
+</div>
+{% endblock %}

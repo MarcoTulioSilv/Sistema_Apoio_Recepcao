@@ -32,7 +32,7 @@ def test_da_busca_a_ficha_e_aos_pedidos(
     page.get_by_role("link", name="Novo cadastro").click()
     page.get_by_label("Nome completo").fill(nome)
     page.get_by_label("Prontuário").fill(prontuario)
-    page.get_by_label("Início do tratamento").fill("2026-01-05")
+    page.get_by_role("combobox", name="Início do tratamento").fill("05/01/2026")
     page.get_by_role("button", name="Salvar paciente").click()
     expect(page.get_by_role("heading", name=nome, level=1)).to_be_visible()  # vai direto para a ficha
     expect(page.get_by_role("status")).to_contain_text("Paciente cadastrado.")
@@ -48,7 +48,7 @@ def test_da_busca_a_ficha_e_aos_pedidos(
 
     page.locator("summary", has_text="Encerrar tratamento").click()  # <details> com cara de botão: abre sem script
     page.get_by_label("Evento").select_option("alta")
-    page.get_by_label("Data", exact=True).fill("2026-03-01")
+    page.get_by_label("Data", exact=True).fill("01/03/2026")
     sem_violacao(page)
     page.get_by_role("button", name="Confirmar evento").click()
     expect(page.get_by_role("status")).to_contain_text("Evento registrado.")

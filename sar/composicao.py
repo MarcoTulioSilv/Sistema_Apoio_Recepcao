@@ -77,7 +77,10 @@ from sar.modulo_04_documentos.leitura import ServicoLeituraDocumentos
 from sar.modulo_04_documentos.pendencias import fontes as fontes_documentos
 from sar.modulo_04_documentos.rotinas import RotinasDocumentos
 from sar.modulo_04_documentos.worker import ProcessadorIngestoes
-from sar.modulo_05_emissao.contrato import RelatorioService
+from sar.modulo_05_emissao.contrato import EmissaoService, ModeloService, RelatorioService
+from sar.modulo_05_emissao.conversor import ConversorDocumentos, ConversorGotenberg
+from sar.modulo_05_emissao.emissao import EmissoesRegistradasSQL, ServicoEmissao
+from sar.modulo_05_emissao.modelos import ServicoModelos
 from sar.modulo_05_emissao.relatorios import ServicoRelatorios
 from sar.modulo_06_configuracao.contrato import ConfiguracaoService, Referencias
 from sar.modulo_06_configuracao.servicos import LeitorParametrosSQL, ServicoConfiguracao, ServicoReferencias
@@ -85,26 +88,41 @@ from sar.modulo_08_dados.cadeia import gravar_encadeado
 from sar.modulo_08_dados.cifra import CifraAesGcm
 from sar.modulo_08_dados.interfaces.autorizacoes import RepositorioAutorizacao
 from sar.modulo_08_dados.interfaces.documentos import RepositorioDocumentos
+from sar.modulo_08_dados.interfaces.emissao import RepositorioEmissao, RepositorioModelo
 from sar.modulo_08_dados.interfaces.operacao import RepositorioOperacao
 from sar.modulo_08_dados.interfaces.pacientes import RepositorioPaciente
 from sar.modulo_08_dados.interfaces.parametros import RepositorioParametro
 from sar.modulo_08_dados.interfaces.rascunhos import RepositorioRascunho
-from sar.modulo_08_dados.interfaces.referencias import RepositorioConvenio, RepositorioMunicipio
+from sar.modulo_08_dados.interfaces.referencias import (
+    RepositorioConvenio,
+    RepositorioInstituicao,
+    RepositorioMunicipio,
+)
 from sar.modulo_08_dados.interfaces.sessoes import RepositorioSessao
+from sar.modulo_08_dados.interfaces.titular import RepositorioTitular
 from sar.modulo_08_dados.interfaces.trilha import RepositorioExpurgo, RepositorioTrilha
 from sar.modulo_08_dados.interfaces.usuarios import RepositorioUsuario
 from sar.modulo_08_dados.relogio import RelogioSistema
 from sar.modulo_08_dados.repositorios.autorizacoes import RepositorioAutorizacaoSQL
 from sar.modulo_08_dados.repositorios.documentos import RepositorioDocumentosSQL
+from sar.modulo_08_dados.repositorios.emissao import RepositorioEmissaoSQL, RepositorioModeloSQL
 from sar.modulo_08_dados.repositorios.operacao import RepositorioOperacaoSQL
 from sar.modulo_08_dados.repositorios.pacientes import RepositorioPacienteSQL
 from sar.modulo_08_dados.repositorios.parametros import RepositorioParametroSQL
 from sar.modulo_08_dados.repositorios.rascunhos import RepositorioRascunhoSQL
-from sar.modulo_08_dados.repositorios.referencias import RepositorioConvenioSQL, RepositorioMunicipioSQL
+from sar.modulo_08_dados.repositorios.referencias import (
+    RepositorioConvenioSQL,
+    RepositorioInstituicaoSQL,
+    RepositorioMunicipioSQL,
+)
 from sar.modulo_08_dados.repositorios.sessoes import RepositorioSessaoSQL
+from sar.modulo_08_dados.repositorios.titular import RepositorioTitularSQL
 from sar.modulo_08_dados.repositorios.trilha import RepositorioExpurgoSQL, RepositorioTrilhaSQL
 from sar.modulo_08_dados.repositorios.usuarios import RepositorioUsuarioSQL
 from sar.modulo_08_dados.uow import ExecutorSQL, FabricaRepositorio, GravadorAuditoria, UnidadeDeTrabalhoSQL
+from sar.modulo_11_titular.contrato import TitularService
+from sar.modulo_11_titular.pendencias import fontes as fontes_titular
+from sar.modulo_11_titular.servicos import ServicoTitular
 from sar.nucleo.erros import ConfiguracaoInvalida
 from sar.nucleo.eventos import (
     Barramento,
@@ -172,6 +190,10 @@ REPOSITORIOS: dict[type, FabricaRepositorio] = {
     RepositorioParametro: RepositorioParametroSQL,
     RepositorioConvenio: RepositorioConvenioSQL,
     RepositorioMunicipio: RepositorioMunicipioSQL,
+    RepositorioInstituicao: RepositorioInstituicaoSQL,
+    RepositorioModelo: RepositorioModeloSQL,
+    RepositorioEmissao: RepositorioEmissaoSQL,
+    RepositorioTitular: RepositorioTitularSQL,
     RepositorioUsuario: RepositorioUsuarioSQL,
     RepositorioSessao: RepositorioSessaoSQL,
     RepositorioAutorizacao: RepositorioAutorizacaoSQL,
@@ -242,6 +264,9 @@ class Componentes:
     frequencia: FrequenciaService
     leitura_operacao: LeituraOperacao
     relatorios: RelatorioService
+    modelos: ModeloService
+    emissao: EmissaoService
+    titular: TitularService
     ingestao: IngestaoService
     documentos: DocumentoService
     leitura_documentos: LeituraDocumentos
@@ -270,12 +295,13 @@ def compor(
     relogio: Relogio | None = None,
     pastas: Pastas | None = None,
     antimalware: Antimalware | None = None,
+    conversor: ConversorDocumentos | None = None,
 ) -> Componentes:
     """O hasher só muda nos testes, que usam um custo menor; em produção é bcrypt com custo 12 (DD-83). O provedor
     de CEP também, para os testes nunca acessarem a internet; em produção é ViaCEP com BrasilAPI (DD-88). O relógio
     também: a tela inicial depende da hora, e o teste a fixa. As pastas do cofre e da quarentena vêm do ambiente
     (pastas_do_ambiente), e os testes passam as suas. O antimalware da web só responde à pendência 18 (DD-97), com
-    tempo curto; os testes passam um falso."""
+    tempo curto; os testes passam um falso. O conversor de documentos vem de SAR_CONVERSOR (DD-104)."""
     relogio = relogio or RelogioSistema()
     barramento = montar_barramento(relogio)
     executar = montar_executor(engine, barramento, gravar_auditoria)
@@ -307,6 +333,13 @@ def compor(
     for executor in dos_modulos:
         executores.setdefault(executor.tipo, executor)
     autorizacoes = ServicoAutorizacoes(executar, auditoria, executores)
+    pacientes = ServicoPacientes(executar, auditoria, referencias, cep, AlocacaoDaFicha(leitura_cadastro))
+    leitura_operacao = ServicoLeituraOperacao(leitura_cadastro, parametros)
+    leitura_documentos = ServicoLeituraDocumentos(executar, auditoria, cofre, marco_retencao)
+    conversor = conversor or ConversorGotenberg()
+    emissao = ServicoEmissao(
+        executar, auditoria, referencias, leitura_cadastro, pacientes, leitura_operacao, leitura_documentos, conversor
+    )
     return Componentes(
         relogio=relogio,
         cifra=cifra,
@@ -321,7 +354,7 @@ def compor(
         sessoes=GerenciadorSessao(executar, auditoria, parametros, relogio),
         usuarios=ServicoUsuarios(executar, auditoria, hasher),
         autorizacoes=autorizacoes,
-        pacientes=ServicoPacientes(executar, auditoria, referencias, cep, AlocacaoDaFicha(leitura_cadastro)),
+        pacientes=pacientes,
         contatos=ServicoContatos(executar, auditoria),
         eventos=ServicoEventos(executar, auditoria, autorizacoes, verificadores),
         anulacao=ServicoAnulacao(executar, autorizacoes, participantes),
@@ -331,21 +364,25 @@ def compor(
         fontes_pendencia=(
             *FONTES_CADASTRO,
             FonteRascunhoProximoDoDescarte(parametros),
-            *fontes_operacao(leitura_cadastro, parametros),
+            *fontes_operacao(leitura_cadastro, parametros, EmissoesRegistradasSQL()),
             *fontes_documentos(
                 ServicoChecklist(), marco_retencao, antimalware or antimalware_do_ambiente(2.0), parametros
             ),
+            *fontes_titular(leitura_cadastro, parametros),
         ),
         marco_retencao=marco_retencao,
         leitura_cadastro=leitura_cadastro,
         escalas=ServicoEscalas(executar, auditoria, leitura_cadastro, parametros, autorizacoes),
         turnos=ServicoSessoes(executar, auditoria, leitura_cadastro, parametros, autorizacoes),
         frequencia=ServicoFrequencia(executar, auditoria, leitura_cadastro, parametros, autorizacoes),
-        leitura_operacao=ServicoLeituraOperacao(leitura_cadastro, parametros),
-        relatorios=ServicoRelatorios(executar, leitura_cadastro),
+        leitura_operacao=leitura_operacao,
+        relatorios=ServicoRelatorios(executar, leitura_cadastro, auditoria, leitura_operacao, referencias, parametros),
+        modelos=ServicoModelos(executar, auditoria, referencias, conversor),
+        emissao=emissao,
+        titular=ServicoTitular(executar, auditoria, leitura_cadastro, parametros, leitura_documentos, emissao),
         ingestao=ServicoIngestao(executar, auditoria, parametros, quarentena, cofre, cifra, relogio),
         documentos=ServicoDocumentos(executar, auditoria, cofre),
-        leitura_documentos=ServicoLeituraDocumentos(executar, auditoria, cofre, marco_retencao),
+        leitura_documentos=leitura_documentos,
     )
 
 

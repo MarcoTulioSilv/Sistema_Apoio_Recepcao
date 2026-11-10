@@ -1,4 +1,5 @@
 {% extends "layout.html" %}
+{% block cabeca %}<script src="{{ url_for('static', filename='js/emissao.js') }}" defer></script>{% endblock %}
 {% macro fone(t) %}({{ t.ddd }}) {{ t.numero|telefone }}{% endmacro %}
 {% macro data(d) %}{{ d.strftime('%d/%m/%Y') if d else '' }}{% endmacro %}
 {% macro campo_cobertura(convenios, sufixo) %}
@@ -193,6 +194,8 @@
   {% if frequencia %}{% include "_frequencia_ficha.html" %}{% endif %}
 
   {% if documentos is not none %}{% include "_documentos_ficha.html" %}{% endif %}
+
+  {% if pode.emitir or pode.cracha or pode.titular %}{% include "_emissao_ficha.html" %}{% endif %}
 
   <section class="cartao flex flex-col gap-3 p-5" aria-labelledby="tel-t">
     <h2 id="tel-t" class="m-0 text-xl">Telefones do paciente</h2>

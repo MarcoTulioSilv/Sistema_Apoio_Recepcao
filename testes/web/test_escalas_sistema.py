@@ -86,7 +86,7 @@ def test_distribuicao_por_arraste_seletor_e_autocompletar(
     assert escalas(engine_web) == {alocado: 1}  # nada gravado ainda
     sem_violacao(page)
 
-    page.get_by_label("A partir de").fill("2026-10-20")
+    page.get_by_role("combobox", name="A partir de").fill("20/10/2026")
     page.get_by_role("button", name="Salvar alocações").click()
     expect(page.get_by_role("status")).to_contain_text("3 alocações registradas")
     assert escalas(engine_web) == {alocado: 4, sem[0]: 1, sem[1]: 4}

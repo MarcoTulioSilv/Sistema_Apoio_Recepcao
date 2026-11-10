@@ -196,3 +196,17 @@ class FontePendencia(Protocol):
     ) -> list[ItemPendencia]:
         """Uma consulta para o conjunto, nunca uma por paciente (§11.3). Fontes sem paciente devolvem []."""
         ...
+
+
+# ------------------------------------------------------------------ MOD-05: emissões registradas (DD-02)
+class EmissoesRegistradas(Protocol):
+    """Para a pendência de termo do MOD-03 (linha 5 da §11.1, RF-809): o que já foi emitido e espera o documento
+    assinado. Implementada pelo MOD-05, que depende do MOD-03."""
+
+    def trocas_emitidas(self, uow: UnidadeDeTrabalho, troca_ids: Sequence[int]) -> set[int]:
+        """As trocas cuja declaração (DOC-03) já foi emitida."""
+        ...
+
+    def extras_emitidas(self, uow: UnidadeDeTrabalho, paciente_ids: Sequence[int]) -> set[tuple[int, str]]:
+        """(paciente, competência AAAA-MM) com termo de diálise extra (DOC-07) já emitido."""
+        ...

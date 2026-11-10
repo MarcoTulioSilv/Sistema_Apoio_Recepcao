@@ -3,9 +3,10 @@ referência (DDS §10.2)."""
 
 from __future__ import annotations
 
+import re
 from datetime import date
 
-from sar.modulo_06_configuracao.contrato import Valor
+from sar.modulo_06_configuracao.contrato import DadosInstitucionais, Valor
 from sar.nucleo.erros import RegraViolada
 from sar.nucleo.parametros import Parametro, Unidade
 
@@ -78,3 +79,40 @@ def termo_de_busca(termo: str) -> str | None:
     """O termo sem espaços repetidos; None se curto demais para buscar."""
     limpo = " ".join(termo.split())
     return limpo if len(limpo) >= MINIMO_BUSCA_MUNICIPIO else None
+
+
+# ------------------------------------------------------------------ dados institucionais (RF-1201)
+def _digitos(texto: str | None) -> str:
+    return re.sub(r"\D", "", texto or "")
+
+
+def cnpj_valido(cnpj: str) -> bool:
+    """14 dígitos, não todos iguais, com os dois dígitos verificadores da Receita."""
+    if not re.fullmatch(r"\d{14}", cnpj) or len(set(cnpj)) == 1:
+        return False
+    for tamanho in (12, 13):
+        pesos = list(range(tamanho - 7, 1, -1)) + list(range(9, 1, -1))
+        resto = sum(int(d) * p for d, p in zip(cnpj[:tamanho], pesos, strict=True)) % 11
+        if int(cnpj[tamanho]) != (0 if resto < 2 else 11 - resto):
+            return False
+    return True
+
+
+def validar_institucional(dados: DadosInstitucionais) -> DadosInstitucionais:
+    """Os dados limpos (espaços repetidos fora, CEP, telefone e CNPJ só com dígitos); RegraViolada com o primeiro
+    campo inválido. Os tamanhos são os das colunas da 0001."""
+    nome, endereco = " ".join(dados.nome.split()), " ".join(dados.endereco.split())
+    cep, telefone, cnpj = _digitos(dados.cep), _digitos(dados.telefone), _digitos(dados.cnpj)
+    if not 2 <= len(nome) <= 150:
+        raise RegraViolada("instituicao.nome")
+    if not 5 <= len(endereco) <= 200:
+        raise RegraViolada("instituicao.endereco")
+    if len(cep) != 8:
+        raise RegraViolada("instituicao.cep")
+    if not re.fullmatch(r"\d{7}", dados.municipio.strip()):
+        raise RegraViolada("instituicao.municipio")
+    if telefone and len(telefone) not in (10, 11):
+        raise RegraViolada("instituicao.telefone")
+    if cnpj and not cnpj_valido(cnpj):
+        raise RegraViolada("instituicao.cnpj")
+    return DadosInstitucionais(nome, endereco, cep, dados.municipio.strip(), telefone or None, cnpj or None)

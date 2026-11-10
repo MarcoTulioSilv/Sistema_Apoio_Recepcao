@@ -59,6 +59,9 @@ def servicos_web(
         componentes.relatorios,
         componentes.ingestao,
         componentes.documentos,
+        componentes.modelos,
+        componentes.emissao,
+        componentes.titular,
     )
 
 

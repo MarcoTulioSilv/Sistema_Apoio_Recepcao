@@ -42,6 +42,38 @@ class Municipio:
     uf: str
 
 
+@dataclass(frozen=True, slots=True)
+class DadosInstitucionais:
+    """O que a administração informa (RF-1201); a UF vem do município."""
+
+    nome: str
+    endereco: str
+    cep: str
+    municipio: str  # código IBGE
+    telefone: str | None
+    cnpj: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class Institucional:
+    """O cabeçalho dos documentos (RF-802): uma linha só (§10.4)."""
+
+    nome: str
+    endereco: str
+    cep: str  # 8 dígitos
+    municipio: Municipio
+    telefone: str | None  # só dígitos, com DDD
+    cnpj: str | None  # 14 dígitos
+    tem_logotipo: bool
+
+
+@dataclass(frozen=True, slots=True)
+class FaixaEtaria:
+    inicio: int
+    fim: int | None  # None: "100 ou mais"
+    rotulo: str
+
+
 class Referencias(Protocol):
     """Para os outros módulos (MOD-02, MOD-05), dentro da unidade de trabalho deles. Sem verificação de
     permissão: quem chama já verificou a da sua operação."""
@@ -57,6 +89,18 @@ class Referencias(Protocol):
     def buscar_municipios(self, uow: UnidadeDeTrabalho, termo: str, uf: str | None = None) -> list[Municipio]:
         """Nomes que começam pelo termo, sem distinção de caixa e de acento; no máximo 20. Termo com menos de
         2 caracteres não busca. RegraViolada se a UF não existir."""
+        ...
+
+    def institucional(self, uow: UnidadeDeTrabalho) -> Institucional | None:
+        """Os dados institucionais (RF-1201, RF-802); None antes de a administração informar."""
+        ...
+
+    def logotipo(self, uow: UnidadeDeTrabalho) -> bytes | None:
+        """O logotipo em PNG, já reencodado no envio (RF-1202, DD-50); None sem logotipo."""
+        ...
+
+    def faixas_etarias(self, uow: UnidadeDeTrabalho) -> list[FaixaEtaria]:
+        """As onze faixas da RF-1206 (DEC-49), em ordem."""
         ...
 
 
@@ -97,3 +141,22 @@ class ConfiguracaoService(Protocol):
         ...
 
     def reativar_convenio(self, contexto: Contexto, convenio_id: int) -> None: ...
+
+    def ver_institucional(self, contexto: Contexto) -> Institucional | None:
+        """config.consultar; None antes de a administração informar."""
+        ...
+
+    def alterar_institucional(self, contexto: Contexto, dados: DadosInstitucionais) -> None:
+        """Administração (RF-1201). RegraViolada("instituicao.<campo>") com o primeiro campo inválido, inclusive
+        município inexistente e CNPJ com dígito errado. Auditada só com os campos alterados (DD-10)."""
+        ...
+
+    def enviar_logotipo(self, contexto: Contexto, arquivo: bytes) -> None:
+        """Administração (RF-1202). Só PNG ou JPEG, pela assinatura, com limite de tamanho e de pixels, reencodado
+        em PNG num processo filho (DD-50). RegraViolada("logotipo.<motivo>"); "instituicao.ausente" antes dos dados
+        institucionais. Auditada com o hash do arquivo gravado, nunca a imagem."""
+        ...
+
+    def logotipo(self, contexto: Contexto) -> bytes | None:
+        """O logotipo gravado, em PNG, para a tela (config.consultar)."""
+        ...

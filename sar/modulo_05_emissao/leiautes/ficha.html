@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{# DOC-01 (DD-106): só os campos preenchidos, na ordem da ficha. #}
+{% block corpo %}
+{% for secao in secoes %}
+<h2>{{ secao.titulo }}</h2>
+<dl>
+  {% for rotulo, valor in secao.itens %}<dt>{{ rotulo }}</dt><dd>{{ valor }}</dd>{% endfor %}
+</dl>
+{% endfor %}
+<p class="local-data">{{ data_extenso }}.</p>
+{% endblock %}

@@ -70,6 +70,36 @@
 
 @layer base {
   body { @apply bg-fundo text-tinta font-sans antialiased; }
+  /* Fundo de vidro fosco com a marca da clínica (DD-110), em todas as telas, inclusive a de entrar. Atrás do vidro,
+     duas luzes desfocadas nos cantos (azul-acinzentado e cinza-fumê); no vidro, os frisos do vidro canelado, uma faixa
+     de luz na diagonal e a marca a 22% (o arquivo já vem esmaecido). Os cartões continuam opacos: o texto não muda
+     de contraste. Ao lado do menu aberto, o fundo começa depois dele. Sem o efeito no alto contraste e na impressão. */
+  html { background-color: #e6e9ec; }
+  body { background-color: transparent; }
+  body::before, body::after { content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none; }
+  body::before {
+    background:
+      radial-gradient(52rem 36rem at 86% 6%, rgb(118 134 150 / .58), transparent 64%),
+      radial-gradient(46rem 34rem at 6% 96%, rgb(120 124 130 / .55), transparent 64%),
+      radial-gradient(30rem 22rem at 30% 20%, rgb(255 255 255 / .9), transparent 70%);
+  }
+  body::after {
+    backdrop-filter: blur(30px) saturate(140%);
+    background:
+      url("../img/fundo-marca.png") 50% 50% / min(88vmin, 58rem) no-repeat,
+      linear-gradient(118deg, transparent 26%, rgb(255 255 255 / .8) 43%, rgb(255 255 255 / .27) 52%, transparent 66%),
+      repeating-linear-gradient(90deg, rgb(255 255 255 / .16) 0 1px, transparent 1px 5px, rgb(40 40 40 / .035) 5px 7px,
+                                transparent 7px 11px),
+      rgb(255 255 255 / .18);
+  }
+  @media (min-width: 64rem) {
+    body:has(#menu-principal):not(:has(#layout[data-recolhido]))::before,
+    body:has(#menu-principal):not(:has(#layout[data-recolhido]))::after { left: 13rem; }
+  }
+  @media (prefers-contrast: more), (forced-colors: active), print {
+    html { background-color: var(--color-fundo); }
+    body::before, body::after { display: none; }
+  }
   :focus-visible { @apply outline-3 outline-offset-2 outline-acao; }
   a { @apply text-acao; }
   .numero { font-variant-numeric: tabular-nums; }
@@ -205,6 +235,42 @@
 @utility altura-resumo { @apply md:h-[26rem]; }
 @utility rolagem { @apply flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto pr-1; }
 @utility botao-detalhes { @apply btn-secundario list-none; &::-webkit-details-marker { display: none; } }
+
+/* Recorte de datas (DD-108): o botão com o período e o calendário das duas datas. Estado só por atributo: as pontas
+   com aria-pressed, o trecho com data-no-intervalo, hoje com aria-current, os dias de outro mês com data-fora, os fora
+   do mínimo e do máximo com aria-disabled. A data avulsa (seletor-data) e o mês (grade-meses) usam as mesmas peças. */
+@utility intervalo-datas { @apply relative flex flex-col; }
+@utility seletor-data { @apply relative flex flex-col; }
+@utility seletor-intervalo { @apply entrada min-w-64 cursor-pointer text-left font-bold text-acao; }
+@utility calendario { @apply absolute top-full left-0 z-30 mt-2 flex w-[22.5rem] max-w-[calc(100vw-2rem)] flex-col gap-3 rounded-xl border border-borda-forte bg-superficie p-4 shadow-lg; }
+@utility tabela-calendario { @apply w-full border-collapse text-center; & th { @apply pb-1 text-sm font-bold text-suave; } & td { @apply p-0; } }
+@utility dia-calendario {
+  @apply inline-flex size-11 cursor-pointer items-center justify-center rounded-lg border border-transparent bg-transparent text-[15px] text-tinta hover:border-acao;
+  &[data-fora] { @apply text-suave; }
+  &[aria-current="date"] { @apply border-borda-forte; }
+  &[data-no-intervalo] { @apply rounded-none bg-acao-clara; }
+  &[aria-disabled="true"] { @apply cursor-not-allowed text-suave line-through opacity-60 hover:border-transparent; }
+  &[aria-pressed="true"] { @apply bg-acao font-bold text-white; }
+}
+@utility grade-meses { @apply m-0 grid list-none grid-cols-4 gap-2 p-0; }
+@utility mes-calendario {
+  @apply inline-flex h-11 w-full cursor-pointer items-center justify-center rounded-lg border border-borda bg-transparent text-[15px] text-tinta hover:border-acao;
+  &[aria-current="date"] { @apply border-borda-forte; }
+  &[aria-pressed="true"] { @apply bg-acao font-bold text-white; }
+}
+
+/* Bloco de relatório (a ocupação, uma escala por bloco): o título, a lista com rolagem própria a partir de uns oito
+   pacientes, para a tela não esticar, e o total no rodapé, sempre à vista. */
+@utility bloco-relatorio { @apply flex flex-col overflow-hidden rounded-lg border border-borda bg-superficie; }
+@utility rolagem-bloco { @apply max-h-[23rem] overflow-y-auto focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-acao; }
+
+/* Campo que só vale com a opção "período" escolhida no mesmo formulário (o convênio no relatório de cadastro):
+   some sem a opção, sem script. */
+@utility so-no-periodo { @apply hidden; form:has(option[value="periodo"]:checked) & { @apply flex; } }
+
+/* Card de relatório com filtros: um <details> com cara de card; aberto, ganha a borda de ação e mostra os filtros.
+   Sem a seta do navegador. */
+@utility cartao-filtros { @apply cartao p-4 open:border-acao; & > summary { @apply cursor-pointer list-none rounded-lg focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-acao; } & > summary::-webkit-details-marker { display: none; } }
 
 /* Guia de componentes (só na página do guia) */
 @utility codigo { @apply m-0 overflow-x-auto rounded-lg bg-menu p-3 text-[13px] leading-relaxed text-menu-texto; }

@@ -9,7 +9,17 @@ from sar.modulo_02_cadastro.contrato import LeituraCadastro
 from sar.modulo_03_operacao import dados
 from sar.modulo_03_operacao.apuracao import apurar, mes_fechado
 from sar.modulo_03_operacao.calendario import DEVIDAS, estado, limites_da_competencia, sessoes_entre
-from sar.modulo_03_operacao.contrato import EstadoSessao, MarcaAlteracao, PareamentoDoMes, ResumoSessao, SituacaoDoMes
+from sar.modulo_03_operacao.contrato import (
+    Escala,
+    EstadoSessao,
+    MarcaAlteracao,
+    PacienteNaEscala,
+    PareamentoDoMes,
+    ResumoSessao,
+    SituacaoDoMes,
+    TrocaParaDocumento,
+)
+from sar.modulo_03_operacao.escalas import alocacao_vigente, distribuir
 from sar.modulo_03_operacao.frequencia import montar_pareamento
 from sar.modulo_08_dados.interfaces.operacao import RepositorioOperacao
 from sar.modulo_08_dados.relogio import FUSO_CLINICA
@@ -23,6 +33,44 @@ class ServicoLeituraOperacao:
     def __init__(self, leitura: LeituraCadastro, parametros: LeitorParametros) -> None:
         self._leitura = leitura
         self._parametros = parametros
+
+    def troca(self, uow: UnidadeDeTrabalho, troca_id: int) -> TrocaParaDocumento | None:
+        gravada = uow.repositorio(RepositorioOperacao).troca_por_id(troca_id)
+        if gravada is None or gravada.cancelada_em is not None:
+            return None
+        if self._leitura.identificacao(uow, gravada.paciente_id) is None:  # anulado
+            return None
+        escalas = dados.escalas(uow)
+        return TrocaParaDocumento(
+            gravada.paciente_id,
+            gravada.data_origem,
+            self.turno_em(uow, gravada.paciente_id, gravada.data_origem),
+            gravada.data_destino,
+            escalas[gravada.escala_destino_id].turno,
+        )
+
+    def turno_em(self, uow: UnidadeDeTrabalho, paciente_id: int, data: date) -> int | None:
+        periodo = self._leitura.periodo_aberto_em(uow, paciente_id, data)
+        if periodo is None:
+            return None
+        vigente = alocacao_vigente(uow.repositorio(RepositorioOperacao).alocacoes([periodo.id]), data)
+        if vigente is None or vigente.escala_id is None:
+            return None
+        return dados.escalas(uow)[vigente.escala_id].turno
+
+    def escalas(self, uow: UnidadeDeTrabalho) -> list[Escala]:
+        return sorted(dados.escalas(uow).values(), key=lambda e: (e.turno, min(e.dias)))
+
+    def distribuicao(self, uow: UnidadeDeTrabalho, data: date) -> list[PacienteNaEscala]:
+        return distribuir(uow, self._leitura, data)
+
+    def realizadas(self, uow: UnidadeDeTrabalho, inicio: date, fim: date) -> dict[int, int]:
+        contagem: dict[int, int] = {}
+        for presenca in uow.repositorio(RepositorioOperacao).presencas(None, inicio, fim):
+            if presenca.situacao == "presente":
+                contagem[presenca.paciente_id] = contagem.get(presenca.paciente_id, 0) + 1
+        vivos = self._leitura.identificacoes(uow, sorted(contagem))
+        return {pid: n for pid, n in contagem.items() if pid in vivos}
 
     def mes_fechado(self, uow: UnidadeDeTrabalho, competencia: str, hoje: date) -> SituacaoDoMes:
         fechado, pendentes = mes_fechado(uow, dados.implantacao(self._parametros), competencia, hoje)

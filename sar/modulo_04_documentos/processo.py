@@ -1,16 +1,16 @@
 """O processo filho do processamento (DD-35): `python -m sar.modulo_04_documentos.processo`.
 
-Lê o pedido da entrada padrão e escreve a resposta na saída padrão, no enquadramento de `isolamento`; não abre
-banco, rede nem arquivo de documento. Qualquer falha inesperada vira a recusa `processamento.falhou`, sem detalhe:
-a mensagem de uma biblioteca poderia trazer conteúdo do arquivo (SEG-12).
+Lê o pedido da entrada padrão e escreve a resposta na saída padrão, no enquadramento de `sar.nucleo.subprocesso`;
+não abre banco, rede nem arquivo de documento. Qualquer falha inesperada vira a recusa `processamento.falhou`, sem
+detalhe: a mensagem de uma biblioteca poderia trazer conteúdo do arquivo (SEG-12).
 """
 
 from __future__ import annotations
 
 import sys
 
-from sar.modulo_04_documentos.isolamento import escrever_quadro, ler_quadro
 from sar.modulo_04_documentos.processamento import Limites, Recusa, processar
+from sar.nucleo.subprocesso import escrever_quadro, ler_quadro
 
 
 def principal() -> int:

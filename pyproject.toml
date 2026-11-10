@@ -11,15 +11,20 @@ dependencies = [
     "alembic==1.20.0",
     "bcrypt==5.0.0",
     "cryptography==50.0.2",
+    "docxtpl==0.20.2",  # modelos .docx da emissão (AD-21, DD-42)
     "flask==3.1.3",
     "httpx==0.28.1",
+    "lxml==6.1.3",  # leitura do XML dos modelos sem entidades nem rede (§9.2)
     "pikepdf==10.16.0",
     "pillow==13.0.0",  # exceção às duas semanas (22/10/2026): corrige 35 vulnerabilidades da 12.3.0
     "pymysql==1.2.3",
     "pypdfium2==5.14.0",
+    "python-docx==1.2.0",
     "sqlalchemy==2.0.54",
     "tzdata==2026.5",
     "waitress==3.0.2",
+    "weasyprint==70.0",  # PDF dos relatórios e dos leiautes fixos (AD-21, DD-46); no Windows, Pango do MSYS2
+    "xlsxwriter==3.2.9",  # exportação XLSX (AD-22, DD-45)
 ]
 
 [project.optional-dependencies]
@@ -48,6 +53,7 @@ include = ["sar*"]
 "sar.modulo_08_dados" = ["usuarios_banco.sql", "migracoes/*.py", "migracoes/versions/*.py"]
 "sar.web" = ["modelos/**/*", "static/**/*"]
 "sar.modulo_01_acesso" = ["senhas_fracas.txt"]
+"sar.modulo_05_emissao" = ["modelos_iniciais/*.docx", "leiautes/*.html"]
 
 # ------------------------------------------------------------------ qualidade
 [tool.ruff]
@@ -64,7 +70,7 @@ ignore = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"testes/**" = ["S101", "S105", "S106"]  # assert e senhas fictícias nos testes
+"testes/**" = ["S101", "S105", "S106", "S607"]  # assert, senhas fictícias e o docker dos testes
 
 [tool.mypy]
 python_version = "3.14"
@@ -76,7 +82,7 @@ exclude = ["sar/modulo_08_dados/migracoes/"]
 disable_error_code = ["type-abstract"]
 
 [[tool.mypy.overrides]]
-module = ["waitress", "pypdfium2", "win32com.*", "pythoncom"]
+module = ["waitress", "pypdfium2", "win32com.*", "pythoncom", "docxtpl", "lxml", "lxml.*", "weasyprint", "weasyprint.*", "xlsxwriter"]
 ignore_missing_imports = true
 
 [tool.bandit]

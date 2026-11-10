@@ -53,6 +53,50 @@ services:
       retries: 60
       start_period: 120s
 
+  # Conversor .docx → PDF da emissão (DD-42, DD-104): Gotenberg só com o LibreOffice, numa rede interna sem saída;
+  # download, webhook, rotas de PDF e métricas desligados, e o LibreOffice recusa qualquer endereço (DD-46).
+  conversor:
+    image: gotenberg/gotenberg:8.38.1-libreoffice
+    command:
+      - gotenberg
+      - --gotenberg-hide-banner
+      - --api-timeout=30s
+      - --api-body-limit=12MB
+      - --api-disable-download-from
+      - --webhook-disable
+      - --pdfengines-disable-routes
+      - --prometheus-disable-collect
+      - --libreoffice-auto-start
+      - --libreoffice-deny-public-ips
+      - --libreoffice-deny-private-ips
+      - --log-level=warn
+    networks: [isolada]
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://127.0.0.1:3000/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  # Só no desenvolvimento e no CI: a aplicação roda fora do Docker e não alcança a rede interna; a ponte publica a
+  # porta do conversor no loopback sem dar ao conversor rota para fora (DD-104). Em produção, o web está na rede
+  # isolada e esta ponte não existe.
+  conversor-ponte:
+    image: alpine/socat:1.8.1.1
+    command: ["TCP-LISTEN:3000,fork,reuseaddr", "TCP:conversor:3000"]
+    networks: [isolada, default]
+    ports:
+      - "127.0.0.1:3000:3000"
+    depends_on: [conversor]
+
+networks:
+  isolada:
+    internal: true
+
 secrets:
   mysql_root:
     file: ./segredos/mysql_root

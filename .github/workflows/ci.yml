@@ -22,6 +22,7 @@ env:
   MYSQL_TCP_PORT: "3306"
   SAR_EXIGIR_CLAMAV: "1"  # os testes do antimalware falham, em vez de pular, sem o clamd (CT-DOC-02)
   SAR_EXIGIR_FERRAMENTAS: "1"  # idem para o Tesseract (DD-40) e o veraPDF (CT-DOC-03)
+  SAR_EXIGIR_CONVERSOR: "1"  # idem para o conversor de documentos (CT-EMI-02, CT-EMI-03)
   SAR_VERAPDF: /opt/verapdf/verapdf
 
 jobs:
@@ -41,6 +42,20 @@ jobs:
       - name: Antimalware (SEG-09)
         run: docker run -d --name clamav -p 127.0.0.1:3310:3310 clamav/clamav:1.5.4
 
+      # Mesma montagem do compose.yaml (DD-104): o conversor numa rede interna sem saída e a ponte no loopback.
+      - name: Conversor de documentos (DD-42, DD-104)
+        run: |
+          docker network create --internal isolada
+          docker run -d --name conversor --network isolada --network-alias conversor \
+            gotenberg/gotenberg:8.38.1-libreoffice gotenberg --gotenberg-hide-banner --api-timeout=30s \
+            --api-body-limit=12MB --api-disable-download-from --webhook-disable --pdfengines-disable-routes \
+            --prometheus-disable-collect --libreoffice-auto-start --libreoffice-deny-public-ips \
+            --libreoffice-deny-private-ips --log-level=warn
+          docker network create ponte
+          docker run -d --name conversor-ponte --network ponte -p 127.0.0.1:3000:3000 alpine/socat:1.8.1.1 \
+            TCP-LISTEN:3000,fork,reuseaddr TCP:conversor:3000
+          docker network connect isolada conversor-ponte
+
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0  # o gitleaks varre o histórico inteiro
@@ -53,11 +68,14 @@ jobs:
       - name: Dependências
         run: python -m pip install -e ".[dev]"
 
-      # Ferramentas externas do MOD-04: o Tesseract em português e o validador de PDF/A (Java já vem no runner).
-      - name: Tesseract e veraPDF
+      # Ferramentas externas: o Tesseract em português e o validador de PDF/A do MOD-04 (Java já vem no runner);
+      # o Pango do WeasyPrint, do MOD-05, com a HarfBuzz-Subset: sem ela, o WeasyPrint avisa ao ser importado, e o
+      # aviso vira erro na coleta dos testes (filterwarnings = error).
+      - name: Tesseract, veraPDF e Pango
         run: |
           sudo apt-get update -q
-          sudo apt-get install -y -q tesseract-ocr tesseract-ocr-por
+          sudo apt-get install -y -q tesseract-ocr tesseract-ocr-por libpango-1.0-0 libpangoft2-1.0-0 \
+            libharfbuzz-subset0
           curl -sSfL -o /tmp/verapdf.zip \
             "https://software.verapdf.org/releases/1.30/verapdf-greenfield-${VERAPDF_VERSAO}-installer.zip"
           unzip -q /tmp/verapdf.zip -d /tmp/verapdf
@@ -89,6 +107,7 @@ jobs:
       - name: 6. Unidade
         run: |
           until docker exec clamav clamdcheck.sh > /dev/null 2>&1; do sleep 5; done
+          until curl -sf http://127.0.0.1:3000/health > /dev/null; do sleep 2; done
           pytest testes -m "not integracao and not sistema" --cov --cov-report=
 
       - name: 7. Migração e esquema

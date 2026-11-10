@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>{{ doc.titulo }}</title>
+<style>
+  /* O PDF do modelo tabular (DD-44): as mesmas colunas, filtros e marcas da tela; a prévia leva a marca em cada página
+     (DD-47); nada é buscado fora (DD-46). Vários relatórios num só (DD-109): as tabelas em sequência, cada uma com o
+     seu título. */
+  @page {
+    size: A4 {% if doc.tabelas | map(attribute='colunas') | map('length') | max > 4 %}landscape{% endif %};
+    margin: 16mm 14mm 18mm 14mm;
+    @top-center { content: element(faixa); }
+    @bottom-left { content: "Página " counter(page) " de " counter(pages); font: 7pt "Liberation Sans", Arial, sans-serif; color: #555; }
+    @bottom-right { content: element(rodape); }
+  }
+  .faixa { position: running(faixa); font: bold 9pt "Liberation Sans", Arial, sans-serif; letter-spacing: 0.04em; }
+  .rodape { position: running(rodape); font: 7pt "Liberation Sans", Arial, sans-serif; color: #555; }
+  body { font: 9pt/1.35 "Liberation Sans", Arial, sans-serif; color: #000; }
+  h1 { font-size: 13pt; margin: 0 0 2mm; }
+  .filtros { margin: 0 0 2mm; }
+  .filtros span { margin-right: 6mm; }
+  .marca { border-left: 1mm solid #000; padding: 1mm 2mm; margin: 1mm 0; font-weight: bold; }
+  table { width: 100%; border-collapse: collapse; margin-top: 3mm; }
+  thead { display: table-header-group; }
+  th { text-align: left; border-bottom: 0.8pt solid #000; padding: 1mm 1.5mm; }
+  td { border-bottom: 0.3pt solid #bbb; padding: 0.8mm 1.5mm; }
+  .num { text-align: right; }
+  .bloco { break-inside: avoid; margin-top: 4mm; }
+  .bloco h2 { font-size: 10pt; margin: 0; }
+  .bloco table { margin-top: 1mm; }
+  .bloco tfoot td { font-weight: bold; border-bottom: 0.8pt solid #000; border-top: 0.8pt solid #000; }
+  .secao { margin-top: 6mm; }
+  .secao > h2 { font-size: 11pt; margin: 0 0 1mm; }
+  .total-geral { font-size: 10pt; font-weight: bold; margin: 5mm 0 0; padding-top: 2mm; border-top: 0.8pt solid #000; }
+  tr:last-child td { border-bottom: 0.8pt solid #000; }
+</style>
+</head>
+<body>
+<div class="faixa">{% for tabela in doc.tabelas %}{% for marca in tabela.marcas if marca.tipo == "previa" %}{{ marca.texto }}{% endfor %}{% endfor %}</div>
+<div class="rodape">Gerado em {{ gerado_em }} · Código de integridade: {{ doc.codigo_integridade }}</div>
+<h1>{{ doc.titulo }}</h1>
+<p class="filtros">{% for rotulo, valor in doc.filtros %}<span><strong>{{ rotulo }}:</strong> {{ valor }}</span>{% endfor %}</p>
+{% macro bloco_pdf(tabela, bloco) %}
+<section class="bloco">
+  <h2>{{ bloco.titulo }}</h2>
+  <table>
+    <thead><tr>{% for coluna in tabela.colunas %}<th>{{ coluna.titulo }}</th>{% endfor %}</tr></thead>
+    <tbody>
+    {% for linha in bloco.linhas %}<tr>{% for valor in linha %}<td>{{ valor }}</td>{% endfor %}</tr>
+    {% else %}<tr><td colspan="{{ tabela.colunas | length }}">Nenhum paciente nesta escala.</td></tr>{% endfor %}
+    </tbody>
+    <tfoot><tr><td>Total</td><td colspan="{{ tabela.colunas | length - 1 }}">{{ bloco.total }}</td></tr></tfoot>
+  </table>
+</section>
+{% endmacro %}
+{% macro conteudo(tabela) %}
+{% for marca in tabela.marcas %}<p class="marca">{{ marca.texto }}</p>{% endfor %}
+{% if tabela.blocos %}
+{% for bloco in tabela.blocos if not bloco.separado %}{{ bloco_pdf(tabela, bloco) }}{% endfor %}
+<p class="total-geral">{{ tabela.total_geral }}</p>
+{% for bloco in tabela.blocos if bloco.separado %}{{ bloco_pdf(tabela, bloco) }}{% endfor %}
+{% else %}
+<table>
+  <thead><tr>{% for coluna in tabela.colunas %}<th{% if coluna.numerica %} class="num"{% endif %}>{{ coluna.titulo }}</th>{% endfor %}</tr></thead>
+  <tbody>
+  {% for linha in tabela.linhas %}
+    <tr>{% for valor in linha %}<td class="{% if tabela.colunas[loop.index0].numerica %}num{% endif %}">{{ valor }}</td>{% endfor %}</tr>
+  {% else %}
+    <tr><td colspan="{{ tabela.colunas | length }}">Nenhum registro para os filtros escolhidos.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+{% endmacro %}
+{% if doc.tabelas | length > 1 %}
+{% for tabela in doc.tabelas %}<section class="secao"><h2>{{ tabela.titulo }}</h2>{{ conteudo(tabela) }}</section>{% endfor %}
+{% else %}
+{{ conteudo(doc.tabelas[0]) }}
+{% endif %}
+</body>
+</html>

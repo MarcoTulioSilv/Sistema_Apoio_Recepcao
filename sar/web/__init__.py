@@ -57,6 +57,15 @@ MENU: tuple[ItemMenu, ...] = (
     ItemMenu("Novo cadastro", "cadastro.novo", (("cadastro.paciente.criar", None),)),
     ItemMenu("Escalas", "escalas.geral", (("operacao.escala.consultar", None),)),
     ItemMenu("Conferência", "documentos.fila", (("documento.ingestao.conferir", None),)),
+    ItemMenu(
+        "Relatórios",
+        "relatorios.lista",
+        (
+            ("relatorio.operacional.ver", None),
+            ("relatorio.gerencial.ver", None),
+        ),
+    ),
+    ItemMenu("Pedidos do titular", "titular.lista", (("titular.requisicao.consultar", None),)),
     ItemMenu("Usuários", "usuarios.lista", (("acesso.usuario.consultar", None),)),
     ItemMenu(
         "Parâmetros",
@@ -67,6 +76,8 @@ MENU: tuple[ItemMenu, ...] = (
         ),
     ),
     ItemMenu("Convênios", "convenios.lista", (("config.convenio.gerir", None),)),
+    ItemMenu("Dados da clínica", "instituicao.ver", (("config.institucional.alterar", None),)),
+    ItemMenu("Modelos de documento", "emissao.modelos", (("emissao.modelo.enviar", None),)),
     ItemMenu(
         "Autorizações",
         "autorizacoes.lista",
@@ -112,10 +123,14 @@ def criar_app(servicos: ServicosWeb | None = None, config: ConfigWeb | None = No
     from sar.web.rotas_captura import bp as captura
     from sar.web.rotas_convenios import bp as convenios
     from sar.web.rotas_documentos import bp as documentos
+    from sar.web.rotas_emissao import bp as emissao
     from sar.web.rotas_escalas import bp as escalas
+    from sar.web.rotas_instituicao import bp as instituicao
     from sar.web.rotas_pacientes import bp as pacientes
     from sar.web.rotas_parametros import bp as parametros
+    from sar.web.rotas_relatorios import bp as relatorios
     from sar.web.rotas_saude import bp as saude
+    from sar.web.rotas_titular import bp as titular
     from sar.web.rotas_trilha_integridade import autorizacoes, integridade, trilha
     from sar.web.rotas_turnos import bp as turnos
     from sar.web.rotas_usuarios import bp as usuarios
@@ -136,6 +151,10 @@ def criar_app(servicos: ServicosWeb | None = None, config: ConfigWeb | None = No
             escalas,
             documentos,
             captura,
+            emissao,
+            instituicao,
+            relatorios,
+            titular,
         ):
             app.register_blueprint(blueprint)
 

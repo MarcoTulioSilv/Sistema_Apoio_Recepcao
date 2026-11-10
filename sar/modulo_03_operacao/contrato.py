@@ -432,8 +432,39 @@ class MarcaAlteracao:
     motivo: str
 
 
+@dataclass(frozen=True, slots=True)
+class TrocaParaDocumento:
+    """O que a declaração de troca de turno (DOC-03, RF-804) preenche: as duas datas e os dois turnos."""
+
+    paciente_id: int
+    origem: date
+    turno_origem: int | None  # o turno da escala em que o paciente estava alocado na data de origem
+    destino: date
+    turno_destino: int
+
+
 class LeituraOperacao(Protocol):
     """Somente leitura, na unidade de trabalho de quem chama (MOD-05, MOD-07). Paciente anulado não aparece."""
+
+    def troca(self, uow: UnidadeDeTrabalho, troca_id: int) -> TrocaParaDocumento | None:
+        """A troca registrada e não cancelada (DOC-03 só sai dela, §9.1); None se não existe ou foi cancelada."""
+        ...
+
+    def turno_em(self, uow: UnidadeDeTrabalho, paciente_id: int, data: date) -> int | None:
+        """O turno da escala vigente do paciente na data (DOC-07, RF-805); None sem período ou sem alocação."""
+        ...
+
+    def escalas(self, uow: UnidadeDeTrabalho) -> list[Escala]:
+        """As seis escalas, em ordem de turno e dias (RF-401)."""
+        ...
+
+    def distribuicao(self, uow: UnidadeDeTrabalho, data: date) -> list[PacienteNaEscala]:
+        """Os pacientes em tratamento na data com a escala de cada um, None sem alocação (RF-908), em ordem de nome."""
+        ...
+
+    def realizadas(self, uow: UnidadeDeTrabalho, inicio: date, fim: date) -> dict[int, int]:
+        """Sessões realizadas (presença gravada na confirmação, DD-24) por paciente no intervalo, inclusive."""
+        ...
 
     def mes_fechado(self, uow: UnidadeDeTrabalho, competencia: str, hoje: date) -> SituacaoDoMes: ...
 

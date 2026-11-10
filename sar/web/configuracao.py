@@ -24,8 +24,9 @@ from sar.modulo_02_cadastro.contrato import (
 )
 from sar.modulo_03_operacao.contrato import EscalaService, FrequenciaService, SessaoTurnoService
 from sar.modulo_04_documentos.contrato import DocumentoService, IngestaoService
-from sar.modulo_05_emissao.contrato import RelatorioService
+from sar.modulo_05_emissao.contrato import EmissaoService, ModeloService, RelatorioService
 from sar.modulo_06_configuracao.contrato import ConfiguracaoService
+from sar.modulo_11_titular.contrato import TitularService
 
 
 @dataclass(frozen=True, slots=True)
@@ -75,3 +76,6 @@ class ServicosWeb:
     relatorios: RelatorioService
     ingestao: IngestaoService
     documentos: DocumentoService
+    modelos: ModeloService
+    emissao: EmissaoService
+    titular: TitularService

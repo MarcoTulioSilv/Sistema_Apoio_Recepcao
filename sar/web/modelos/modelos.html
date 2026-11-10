@@ -1,0 +1,74 @@
+{% extends "layout.html" %}
+{# Modelos .docx (DDS §9.2, DD-42, DD-103): baixar, editar no Word, enviar, conferir a prévia com paciente fictício e
+   ativar; reverter é ativar uma versão anterior, inclusive a 0 (o modelo inicial). #}
+{% block titulo_pagina %}Modelos de documento{% endblock %}
+{% block subtitulo %}Texto e leiaute dos documentos impressos, editados no Word pela administração{% endblock %}
+{% block conteudo %}
+<div class="flex flex-col gap-5">
+  {% include "_avisos.html" %}
+  {% if problemas %}
+  <section class="rounded-xl border border-urgencia-borda bg-urgencia-fundo p-4" aria-labelledby="problemas-t" role="alert">
+    <h2 id="problemas-t" class="m-0 text-lg text-urgencia">O arquivo não foi aceito</h2>
+    <ul class="m-0 mt-2 flex flex-col gap-1 pl-5">{% for p in problemas %}<li>{{ p }}</li>{% endfor %}</ul>
+    <p class="m-0 mt-2 text-sm">Corrija no Word e envie de novo. Nada foi gravado.</p>
+  </section>
+  {% endif %}
+  {% if avisos %}
+  <section class="rounded-xl border border-borda-forte bg-alta-fundo p-4" aria-labelledby="avisos-t">
+    <h2 id="avisos-t" class="m-0 text-lg text-alta">Avisos sobre o modelo enviado</h2>
+    <ul class="m-0 mt-2 flex flex-col gap-1 pl-5">{% for a in avisos %}<li>{{ a }}</li>{% endfor %}</ul>
+  </section>
+  {% endif %}
+  <p class="m-0 max-w-4xl">Para mudar um documento: baixe a versão ativa, edite no Word sem apagar as variáveis entre chaves, envie o arquivo,
+    abra a prévia e, se estiver certo, ative. As versões antigas continuam guardadas e podem voltar a valer.</p>
+
+  {% for r in resumos %}
+  <section class="cartao flex flex-col gap-3 p-5" aria-labelledby="modelo-{{ r.modelo.value }}" data-modelo="{{ r.modelo.value }}">
+    <h2 id="modelo-{{ r.modelo.value }}" class="m-0 text-xl">{{ r.modelo.titulo }}</h2>
+    <div class="overflow-x-auto">
+      <table class="w-full border-collapse text-left">
+        <caption class="sr-only">Versões do modelo {{ r.modelo.titulo }}</caption>
+        <thead><tr class="text-sm text-suave">
+          <th scope="col" class="px-3 py-2 font-bold">Versão</th>
+          <th scope="col" class="px-3 py-2 font-bold">Enviada em</th>
+          <th scope="col" class="px-3 py-2 font-bold">Situação</th>
+          <th scope="col" class="px-3 py-2 font-bold"><span class="sr-only">Ações</span></th>
+        </tr></thead>
+        <tbody>
+        {% for v in r.versoes %}
+          {% set nova = modelo_enviado == r.modelo.value and versao_enviada == v.versao|string %}
+          <tr class="border-t border-linha" data-versao="{{ v.versao }}"{% if v.ativo %} data-estado="ativa"{% endif %}>
+            <td class="numero px-3 py-2">{{ v.versao }}{% if v.versao == 0 %} <span class="text-sm text-suave">(modelo inicial)</span>{% endif %}</td>
+            <td class="px-3 py-2">{{ v.enviado_em|data_hora if v.enviado_em else "—" }}</td>
+            <td class="px-3 py-2">{% if v.ativo %}<span class="etiqueta-a">Em uso</span>{% elif nova %}<span class="etiqueta-n">Enviada agora</span>{% endif %}</td>
+            <td class="px-3 py-2">
+              <div class="flex flex-wrap justify-end gap-2">
+                <a class="btn-pequeno" href="{{ url_for('emissao.previa_modelo', codigo=r.modelo.value, versao=v.versao) }}" target="_blank">Prévia<span class="sr-only"> da versão {{ v.versao }}</span></a>
+                <a class="btn-pequeno" href="{{ url_for('emissao.baixar_modelo', codigo=r.modelo.value, versao=v.versao) }}">Baixar<span class="sr-only"> a versão {{ v.versao }}</span></a>
+                {% if not v.ativo %}
+                <form method="post" action="{{ url_for('emissao.ativar_modelo', codigo=r.modelo.value, versao=v.versao) }}">
+                  <button class="btn-pequeno" type="submit">{{ "Ativar" if v.versao > r.ativa else "Voltar a usar" }}<span class="sr-only"> a versão {{ v.versao }} de {{ r.modelo.titulo }}</span></button>
+                </form>
+                {% endif %}
+              </div>
+            </td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <form class="flex flex-wrap items-end gap-3" method="post" enctype="multipart/form-data" action="{{ url_for('emissao.enviar_modelo', codigo=r.modelo.value) }}">
+      <label class="campo"><span class="rotulo">Nova versão (.docx)</span>
+        <input class="entrada" type="file" name="arquivo" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" required></label>
+      <button class="btn-primario" type="submit">Enviar<span class="sr-only"> nova versão de {{ r.modelo.titulo }}</span></button>
+    </form>
+    <details>
+      <summary class="cursor-pointer font-bold text-acao">Variáveis deste documento</summary>
+      <dl class="mt-2 grid gap-x-6 gap-y-1 sm:grid-cols-[minmax(12rem,auto)_1fr]">
+        {% for var in r.variaveis %}<dt class="numero">{{ "{{ " ~ var.nome ~ " }}" }}</dt><dd class="m-0 text-suave">{{ var.descricao }}</dd>{% endfor %}
+      </dl>
+    </details>
+  </section>
+  {% endfor %}
+</div>
+{% endblock %}

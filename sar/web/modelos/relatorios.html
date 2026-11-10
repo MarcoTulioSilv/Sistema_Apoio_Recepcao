@@ -1,0 +1,83 @@
+{% extends "layout.html" %}
+{% from "_intervalo.html" import intervalo %}
+{% from "_filtros_relatorio.html" import campos_filtro %}
+{% block cabeca %}<script src="{{ url_for('static', filename='js/relatorios.js') }}" defer></script>{% endblock %}
+{# Os relatórios que o perfil vê (§4.5, P-20, DEC-55). Em cima, frequência e escalas, com as entradas e os eventos:
+   o card com filtros abre ali mesmo os filtros, já preenchidos, e o relatório só é gerado no botão; o sem filtros (a
+   prévia) é um link que abre o relatório. Um card aberto por vez (<details name>), sem script. Embaixo, os dados de
+   cadastro, escolhidos numa caixa de seleção e gerados num relatório só (DD-109). #}
+{% block titulo_pagina %}Relatórios{% endblock %}
+{% block subtitulo %}Clique no relatório para ver os filtros, já preenchidos, e gerar{% endblock %}
+{% block conteudo %}
+<div class="flex flex-col gap-5">
+  {% if relatorios %}
+  <section class="flex flex-col gap-3" aria-labelledby="secao-1">
+    <h2 id="secao-1" class="m-0 text-xl">Frequência e escalas</h2>
+    <ul class="m-0 grid list-none items-start gap-3 p-0 md:grid-cols-2 xl:grid-cols-3">
+      {% for r in relatorios %}
+      <li data-relatorio="{{ r.value }}">
+        {% if r.filtros | reject("equalto", "paciente_id") | list %}
+        <details class="cartao-filtros" name="relatorio-aberto">
+          <summary class="flex flex-col gap-1">
+            <span class="text-lg font-bold text-acao">{{ r.titulo }}</span>
+            <span class="text-sm text-suave">{{ descricoes[r] }}</span>
+          </summary>
+          <form class="mt-3 flex flex-wrap items-end gap-3 border-t border-borda pt-3" method="get"
+                action="{{ url_for('relatorios.ver', codigo=r.value) }}" aria-label="Filtros: {{ r.titulo }}">
+            <input type="hidden" name="gerar" value="1">
+            {{ campos_filtro(r, {}, padrao, eventos) }}
+            <button class="btn-primario" type="submit">Gerar relatório</button>
+          </form>
+        </details>
+        {% else %}
+        <div class="cartao flex flex-col gap-1 p-4">
+          <a class="text-lg font-bold" href="{{ url_for('relatorios.ver', codigo=r.value) }}">{{ r.titulo }}</a>
+          <span class="text-sm text-suave">{{ descricoes[r] }}</span>
+        </div>
+        {% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+  </section>
+  {% endif %}
+
+  {% if cadastrais %}
+  <section class="flex flex-col gap-3" aria-labelledby="secao-2">
+    <h2 id="secao-2" class="m-0 text-xl">Pacientes e cadastro</h2>
+    {% if erro %}<p class="m-0 rounded-lg border border-urgencia-borda bg-urgencia-fundo p-3 font-bold text-urgencia" role="alert">{{ erro }}</p>{% endif %}
+    <form class="cartao flex flex-col gap-4 p-5" method="get" action="{{ url_for('relatorios.cadastro') }}" aria-labelledby="secao-2" data-cadastrais>
+      <input type="hidden" name="escolha" value="1">
+      <fieldset class="m-0 flex flex-col gap-2 border-0 p-0">
+        <legend class="rotulo mb-2">Incluir no relatório</legend>
+        <div class="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
+          {% for r in cadastrais %}
+          <label class="opcao-simulador w-full items-start py-2" data-relatorio="{{ r.value }}">
+            <input class="mt-1" type="checkbox" name="incluir" value="{{ r.value }}"{% if r.value in marcados %} checked{% endif %}>
+            <span class="flex flex-col"><span>{{ r.titulo }}</span><span class="text-sm font-normal text-suave">{{ explicacoes[r] }}</span></span>
+          </label>
+          {% endfor %}
+        </div>
+        <div class="flex flex-wrap gap-2" data-atalhos-selecao hidden>
+          <button type="button" class="btn-pequeno" data-marcar="todos">Marcar todos</button>
+          <button type="button" class="btn-pequeno" data-marcar="nenhum">Desmarcar todos</button>
+        </div>
+      </fieldset>
+      <div class="flex flex-wrap items-end gap-3">
+        <label class="campo"><span class="rotulo">Data de referência</span>
+          <input class="entrada" type="date" name="data" value="{{ a.get('data', hoje) }}"></label>
+        {% if "convenio" in cadastrais | map(attribute="value") %}
+        <label class="campo"><span class="rotulo">Convênio: contar</span>
+          <select class="entrada" name="modo">
+            <option value="situacao"{% if a.get('modo', 'situacao') == 'situacao' %} selected{% endif %}>A cobertura na data de referência</option>
+            <option value="periodo"{% if a.get('modo') == 'periodo' %} selected{% endif %}>A cobertura vigente no período</option>
+          </select></label>
+        <div class="so-no-periodo">{{ intervalo("Período do convênio", "inicio", a.get("inicio", ""), "fim", a.get("fim", hoje)) }}</div>
+        {% endif %}
+        <button class="btn-primario" type="submit">Gerar relatório</button>
+      </div>
+      <p class="m-0 text-sm text-suave">Todos os escolhidos saem num relatório só, um embaixo do outro, na tela, no PDF e na planilha.</p>
+    </form>
+  </section>
+  {% endif %}
+</div>
+{% endblock %}

@@ -19,9 +19,11 @@ from sar.modulo_02_cadastro.contrato import (
     EnderecoSugerido,
     Ficha,
     Identificacao,
+    PacienteRelatorio,
     PaginaPacientes,
     PeriodoFicha,
     PeriodoRef,
+    PeriodoRelatorio,
     Sexo,
     TelefoneFicha,
     TipoCobertura,
@@ -888,6 +890,27 @@ class ServicoLeituraCadastro:
 
     def pacientes_com_periodo_aberto_em(self, uow: UnidadeDeTrabalho, data: date) -> list[int]:
         return uow.repositorio(RepositorioPaciente).pacientes_com_periodo_em(data)
+
+    def base_relatorios(self, uow: UnidadeDeTrabalho) -> list[PacienteRelatorio]:
+        repositorio = uow.repositorio(RepositorioPaciente)
+        periodos = repositorio.periodos_de(None)
+        coberturas = {c.periodo_id: c for c in repositorio.coberturas([p.id for p in periodos])}
+        por_paciente: dict[int, list[PeriodoRelatorio]] = {}
+        for p in periodos:
+            cobertura = coberturas.get(p.id)
+            por_paciente.setdefault(p.paciente_id, []).append(PeriodoRelatorio(
+                p.id, p.inicio, TipoEvento(p.evento_tipo) if p.evento_tipo else None, p.evento_data,
+                p.evento_documento_id is not None, TipoCobertura(cobertura.tipo) if cobertura else None,
+                cobertura.convenio_id if cobertura else None,
+            ))  # fmt: skip
+        pacientes = [
+            PacienteRelatorio(
+                g.id, g.campos.nome or "", g.campos.prontuario or "", Sexo(g.campos.sexo) if g.campos.sexo else None,
+                g.campos.data_nascimento, g.campos.municipio, tuple(por_paciente.get(g.id, ())),
+            )
+            for g in repositorio.vivos(None)
+        ]  # fmt: skip
+        return sorted(pacientes, key=lambda p: (p.nome, p.paciente_id))
 
     def periodos_de(self, uow: UnidadeDeTrabalho, paciente_ids: Sequence[int] | None) -> dict[int, list[PeriodoRef]]:
         if paciente_ids is not None and not paciente_ids:

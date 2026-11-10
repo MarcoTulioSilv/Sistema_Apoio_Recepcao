@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{# DD-105: declaração que acompanha a cópia entregue ao titular no atendimento de acesso (RF-1009). #}
+{% block corpo %}
+<p>Declaramos, em atendimento ao pedido de confirmação e acesso aos dados pessoais apresentado por
+<strong>{{ nome }}</strong>, prontuário {{ prontuario }}, recebido em {{ recebida_em }}, nos termos dos arts. 9º, 18,
+incisos I e II, e 19 da Lei nº 13.709/2018 (Lei Geral de Proteção de Dados Pessoais), que entregamos nesta data:</p>
+<p>1. a ficha de cadastro, com todos os dados pessoais registrados no Sistema de Apoio à Recepção;</p>
+<p>2. {% if paginas_documentos %}a cópia dos documentos digitalizados guardados pela clínica, com
+{{ paginas_documentos }} página{{ "s" if paginas_documentos > 1 else "" }}{% else %}a informação de que não há
+documento digitalizado guardado em nome do titular{% endif %}.</p>
+<p>Os dados são tratados para a prestação do serviço de hemodiálise e para o cumprimento das obrigações legais e
+regulatórias da clínica, e não são compartilhados fora das hipóteses previstas em lei.</p>
+<p class="local-data">{{ data_extenso }}.</p>
+<div class="assinatura">Responsável pelo atendimento</div>
+<div class="assinatura">Titular ou representante, recebi a cópia acima</div>
+{% endblock %}
