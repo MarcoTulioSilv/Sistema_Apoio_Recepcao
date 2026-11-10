@@ -38,7 +38,7 @@ CAMPOS = (
 ATRIBUTO_RESTRICAO = "sar_restricao"  # anexado à exceção de banco pelo MOD-08
 EVENTO_DESCARTADO = "externo.mensagem_descartada"
 VALOR_DESCARTADO = "valor_descartado"
-RUIDOSOS = ("alembic", "sqlalchemy", "werkzeug")  # mensagens livres que só gerariam linhas descartadas
+RUIDOSOS = ("alembic", "apscheduler", "sqlalchemy", "werkzeug")  # mensagens livres que só gerariam linhas descartadas
 
 _EVENTO = re.compile(r"^[a-z0-9_]+(\.[a-z0-9_]+)+$")
 _CODIGO = re.compile(r"^[A-Za-z0-9_.\-]{1,64}$")  # resultado, erro, restrição e perfil: só códigos

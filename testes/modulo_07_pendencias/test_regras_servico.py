@@ -202,9 +202,7 @@ def fontes_compostas(tmp_path: Path) -> Any:
 
 @pytest.mark.requisito("DD-54", "DD-55")
 def test_composicao_liga_uma_fonte_por_linha_da_matriz(fontes_compostas: Any) -> None:
-    ligadas = {fonte.codigo for fonte in fontes_compostas}
-    faltam = {linha.codigo for linha in MATRIZ} - ligadas
-    assert faltam <= {"job_atrasado", "disco_acima_do_limite"}  # as do MOD-09 entram com o agendador
+    assert sorted(fonte.codigo for fonte in fontes_compostas) == sorted(linha.codigo for linha in MATRIZ)
 
 
 @pytest.mark.requisito("RF-1004", "RF-1010", "CT-PEN-03")

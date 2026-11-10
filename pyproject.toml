@@ -9,6 +9,7 @@ description = "Sistema de Apoio à Recepção — Centro de Uro-Nefrologia de Ja
 requires-python = ">=3.14"
 dependencies = [
     "alembic==1.20.0",
+    "apscheduler==3.11.3",  # agendador do worker (AD-12, DD-61); a série 4 ainda é pré-lançamento
     "bcrypt==5.0.0",
     "cryptography==50.0.2",
     "docxtpl==0.20.2",  # modelos .docx da emissão (AD-21, DD-42)
@@ -82,7 +83,7 @@ exclude = ["sar/modulo_08_dados/migracoes/"]
 disable_error_code = ["type-abstract"]
 
 [[tool.mypy.overrides]]
-module = ["waitress", "pypdfium2", "win32com.*", "pythoncom", "docxtpl", "lxml", "lxml.*", "weasyprint", "weasyprint.*", "xlsxwriter"]
+module = ["apscheduler", "apscheduler.*", "waitress", "pypdfium2", "win32com.*", "pythoncom", "docxtpl", "lxml", "lxml.*", "weasyprint", "weasyprint.*", "xlsxwriter"]
 ignore_missing_imports = true
 
 [tool.bandit]

@@ -6,7 +6,10 @@
   sar verificar-cadeia       verifica a trilha de auditoria como o job diário (§13.1), pelo usuário do worker
   sar criar-usuario-ti       primeiro TI da implantação, quando não há TI ativo (DD-85)
   sar criar-superusuario     superusuário, só em desenvolvimento (DD-85)
-  sar worker                 consumidor da fila de ingestão de documentos (DD-63), até Ctrl+C
+  sar worker                 consumidor da fila de ingestão (DD-63) e agendador dos jobs (§13.1), até Ctrl+C
+  sar job listar             último sucesso e atraso de cada job do catálogo (§13.1)
+  sar job executar NOME      execução manual de um job, pelo TI no servidor (DD-112)
+  sar job registrar NOME     registro do backup e da cópia para o pen drive pelos scripts do servidor (DD-62)
   sar documentos-revarrer    revarredura antimalware do acervo (SEG-22); --minutos e --depois-de para retomar
   sar documentos-hash        conferência de hash do acervo (SEG-15, P-19); mesmas opções
   sar documentos-orfaos      remove do cofre arquivo sem documento (DD-37)
@@ -19,17 +22,20 @@ from __future__ import annotations
 import argparse
 import sys
 import threading
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
+from datetime import datetime
 
 from sqlalchemy.exc import DBAPIError
 
 from sar.composicao import (
     Ambiente,
+    Worker,
     ambiente_atual,
     antimalware_do_ambiente,
+    compor_agendamento,
     compor_auditoria,
+    compor_registro,
     compor_rotinas,
-    compor_worker,
     montar_barramento,
     montar_executor,
     pastas_do_ambiente,
@@ -41,9 +47,10 @@ from sar.modulo_08_dados import cli as banco
 from sar.modulo_08_dados.banco import ConfigBanco, criar_engine
 from sar.modulo_08_dados.cifra import carregar_chave_mestra
 from sar.modulo_08_dados.erros_banco import anotar_restricao
-from sar.modulo_08_dados.relogio import RelogioSistema
+from sar.modulo_08_dados.relogio import FUSO_CLINICA, RelogioSistema
+from sar.modulo_09_agendamento.contrato import Execucao, JobDesconhecido, JobEmAndamento, Resultado
 from sar.nucleo.contexto import Contexto
-from sar.nucleo.erros import ConfiguracaoInvalida, RegraViolada
+from sar.nucleo.erros import AcessoNegado, ConfiguracaoInvalida, RegraViolada
 from sar.nucleo.logs import campos_do_erro, configurar, iniciar_requisicao
 
 
@@ -106,20 +113,104 @@ def criar_superusuario(nome: str, login: str) -> int:
     return 0
 
 
-def worker(parar: threading.Event | None = None) -> int:
-    """Laço da fila de ingestão pelo usuário de banco do worker (DD-58), com o clamd do ambiente."""
-    parar = parar or threading.Event()
+def _com_worker[T](tarefa: Callable[[Worker], T]) -> T:
+    """Monta o worker pelos usuários de banco dele e do expurgo (DD-58), com o clamd do ambiente."""
     pastas = pastas_do_ambiente()  # a configuração do terminal primeiro: sem ela, nem vale ler os segredos
     engine = criar_engine(ConfigBanco.do_ambiente("sar_worker"))
     try:
-        processador = compor_worker(engine, carregar_chave_mestra(), pastas, antimalware_do_ambiente())
-        print("Worker da ingestão no ar. Ctrl+C para parar.", flush=True)
-        processador.rodar(parar)
-    except KeyboardInterrupt:
-        parar.set()
+        engine_expurgo = criar_engine(ConfigBanco.do_ambiente("sar_expurgo"))
+        try:
+            montado = compor_agendamento(engine, engine_expurgo, carregar_chave_mestra(), pastas,
+                                         antimalware_do_ambiente())  # fmt: skip
+            return tarefa(montado)
+        finally:
+            engine_expurgo.dispose()
     finally:
         engine.dispose()
+
+
+def worker(parar: threading.Event | None = None) -> int:
+    """O laço da fila no processo principal e o agendador nas linhas dele, até Ctrl+C."""
+    parar = parar or threading.Event()
+
+    def rodar(w: Worker) -> int:
+        imediatos = w.agendador.iniciar()
+        try:
+            print(f"Worker no ar: fila de ingestão e agendador ({len(w.agendamento.jobs)} jobs). Ctrl+C para parar.",
+                  flush=True)  # fmt: skip
+            if imediatos:
+                print(f"Perderam o horário e rodam agora: {', '.join(imediatos)}.", flush=True)
+            w.processador.rodar(parar)
+        except KeyboardInterrupt:
+            parar.set()
+        finally:
+            w.agendador.parar()
+        return 0
+
+    return _com_worker(rodar)
+
+
+def _local(instante: datetime | None) -> str:
+    return f"{instante.astimezone(FUSO_CLINICA):%d/%m/%Y %H:%M}" if instante else "nunca"
+
+
+def _linha(execucao: Execucao) -> str:
+    parcial = ", parou no limite de horário" if execucao.parcial else ""
+    erro = f", erro {execucao.resumo_erro}" if execucao.resumo_erro else ""
+    itens = f", {execucao.itens} item(ns)" if execucao.itens is not None else ""
+    return f"{execucao.job}: {execucao.resultado.value} em {_local(execucao.inicio)}{itens}{parcial}{erro}"
+
+
+def job_listar() -> int:
+    """1 se algum job estiver atrasado, para o script de monitoramento do servidor poder usar."""
+    engine = criar_engine(ConfigBanco.do_ambiente("sar_worker"))
+    try:
+        situacao = compor_registro(engine).situacao_do_sistema(RelogioSistema().agora())
+    finally:
+        engine.dispose()
+    for job in situacao:
+        marca = "ATRASADO" if job.atrasado else "em dia"
+        print(f"{job.nome:22} {marca:9} último sucesso: {_local(job.ultimo_sucesso):16}  ({job.quando})")
+    return 1 if any(j.atrasado for j in situacao) else 0
+
+
+def job_executar(nome: str, minutos: float | None) -> int:
+    def executar(w: Worker) -> int:
+        contexto = Contexto.sistema(f"cli.job.{nome}", RelogioSistema().agora())
+        try:
+            feita = w.agendamento.executar(contexto, nome, minutos)
+        except JobDesconhecido:
+            print(f"Job desconhecido: {nome}. Veja os nomes com: sar job listar", file=sys.stderr)
+            return 1
+        except JobEmAndamento:
+            print(f"{nome} já está rodando noutro processo.", file=sys.stderr)
+            return 1
+        except AcessoNegado:
+            print(f"{nome} não tem execução manual (DDS §13.1).", file=sys.stderr)
+            return 1
+        print(_linha(feita))
+        return 0 if feita.resultado is not Resultado.FALHA else 1
+
+    return _com_worker(executar)
+
+
+def job_registrar(nome: str, resultado: str, inicio: str, fim: str, itens: int | None) -> int:
+    """Pelo usuário de banco do worker, sem a chave mestra: o script do backup roda como o sistema (DD-62)."""
+    engine = criar_engine(ConfigBanco.do_ambiente("sar_worker"))
+    try:
+        contexto = Contexto.sistema(f"cli.job.registrar.{nome}", RelogioSistema().agora())
+        feita = compor_registro(engine).registrar_externo(contexto, nome, Resultado(resultado), _instante(inicio),
+                                                          _instante(fim), itens)  # fmt: skip
+    finally:
+        engine.dispose()
+    print(f"Registrado. {_linha(feita)}")
     return 0
+
+
+def _instante(texto: str) -> datetime:
+    """ISO 8601; sem fuso, é a hora da clínica (o date --iso-8601=seconds do servidor já traz o fuso)."""
+    valor = datetime.fromisoformat(texto)
+    return valor if valor.tzinfo is not None else valor.replace(tzinfo=FUSO_CLINICA)
 
 
 def rotina_documentos(comando: str, depois_de: str | None, minutos: float | None) -> int:
@@ -162,7 +253,19 @@ def main(argv: Sequence[str] | None = None) -> int:
     p = sub.add_parser("criar-superusuario", help="superusuário de desenvolvimento")
     p.add_argument("--nome", required=True)
     p.add_argument("--login", required=True)
-    sub.add_parser("worker", help="consumidor da fila de ingestão de documentos")
+    sub.add_parser("worker", help="consumidor da fila de ingestão e agendador dos jobs")
+    p = sub.add_parser("job", help="jobs do agendador (DDS §13)")
+    jobs = p.add_subparsers(dest="acao", required=True)
+    jobs.add_parser("listar", help="último sucesso e atraso de cada job")
+    p = jobs.add_parser("executar", help="executa agora um job com execução manual (DD-112)")
+    p.add_argument("nome")
+    p.add_argument("--minutos", type=float, help="para depois deste tempo e guarda o cursor (rotinas do acervo)")
+    p = jobs.add_parser("registrar", help="registra o backup ou a cópia para o pen drive (DD-62)")
+    p.add_argument("nome", choices=["backup", "copia_pendrive"])
+    p.add_argument("--resultado", required=True, choices=["sucesso", "falha"])
+    p.add_argument("--inicio", required=True, help="ISO 8601, como date --iso-8601=seconds")
+    p.add_argument("--fim", required=True, help="ISO 8601")
+    p.add_argument("--itens", type=int, help="opcional: quantidade de arquivos, por exemplo")
     for nome, ajuda in (("documentos-revarrer", "revarredura antimalware do acervo"),
                         ("documentos-hash", "conferência de hash do acervo")):  # fmt: skip
         p = sub.add_parser(nome, help=ajuda)
@@ -186,6 +289,12 @@ def main(argv: Sequence[str] | None = None) -> int:
             return criar_superusuario(args.nome, args.login)
         elif args.comando == "worker":
             return worker()
+        elif args.comando == "job":
+            if args.acao == "listar":
+                return job_listar()
+            if args.acao == "executar":
+                return job_executar(args.nome, args.minutos)
+            return job_registrar(args.nome, args.resultado, args.inicio, args.fim, args.itens)
         elif args.comando in ("documentos-revarrer", "documentos-hash", "documentos-orfaos"):
             return rotina_documentos(args.comando, getattr(args, "depois_de", None), getattr(args, "minutos", None))
         else:

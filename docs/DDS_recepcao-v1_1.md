@@ -1483,8 +1483,13 @@ nunca repositórios (DAS §4.2).
 ### 13.4 Registro de execução
 
 `job_execucao`: job, início, fim, resultado (sucesso, falha, sem trabalho), itens processados, resumo
-do erro sem dado pessoal (RNF-624). A pendência 17 compara, para cada job, o último sucesso com o
-intervalo máximo da §13.1.
+do erro sem dado pessoal (RNF-624) e, desde a migração 0008, o cursor da rotina que parou no limite de horário
+(DD-64). A pendência 17 compara, para cada job, o último sucesso com o intervalo máximo da §13.1: conta como sucesso
+a execução terminada com "sucesso" ou "sem trabalho" e sem cursor (uma passada parcial do acervo não basta); sem
+nenhum sucesso, o prazo conta da data de implantação. No job de ocupação de disco, `itens` guarda o percentual medido
+(DD-111). O backup e a cópia para o pen drive são registrados pelos scripts do servidor (`sar job registrar`, DD-62);
+o consumidor da fila, que é um laço e não um job, conta como parado quando há ingestão recebida esperando mais que
+5 minutos.
 
 ---
 
