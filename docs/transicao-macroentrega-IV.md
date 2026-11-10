@@ -27,10 +27,10 @@ pessoal sensível de saúde.
 
 | Macroentrega | Situação | Documento de referência |
 |---|---|---|
-| I — Requisitos | Concluída. ERS em assinatura, com as decisões DEC-57 a DEC-73 incorporadas antes da assinatura | `fase3-ers-v1_0.md` e `.docx` (ERS-002 v1.0) |
-| II — Arquitetura | Aprovada; revisada na Macroentrega III | `DAS_recepcao-v1_1.md` e `.docx` |
+| I — Requisitos | Concluída. ERS em assinatura, com as decisões DEC-57 a DEC-73 incorporadas antes da assinatura | `fase3-ers-v1_0.md` (ERS-002 v1.0) |
+| II — Arquitetura | Aprovada; revisada na Macroentrega III | `DAS_recepcao-v1_1.md` |
 | III — Design detalhado | **Concluída e aprovada em 2026-10-06** | `DDS_recepcao-v1_0.md`, `PT_recepcao-v1_0.md` |
-| IV — Codificação e verificação | **A iniciar** | — |
+| IV — Codificação e verificação | **Em andamento:** incrementos 0 a 5 concluídos (§5) | `DDS_recepcao-v1_1.md`, `PT_recepcao-v1_1.md`, `comandos.md` |
 
 ## 3. O que a Macroentrega III entregou
 
@@ -97,6 +97,17 @@ risco: a fundação primeiro; depois o que vira faturamento e o que guarda docum
 | 7 | Carga inicial | MOD-10 com planilhas sintéticas que reproduzem os defeitos reais | CT-MIG passando; contagem fecha em toda simulação |
 | 8 | Homologação e go-live | Servidor provisório ou dedicado; desempenho com base de volume; ensaios de recuperação; ZAP e ASVS; roteiros com as usuárias; carga real; conferência amostral; decisão do R-43 (scanner pela rede ou agente à prova de leigo, DAS §8); ata | Critérios da §9.2 do PT_recepcao |
 
+**Andamento (10/11/2026).** Incrementos 0 a 5 concluídos e na `main` (o 5 pelo PR #6). Próximo: **Incremento 6**.
+
+- **Incremento 5:** CT-EMI-01 a 03 e CT-REL-01 a 03 passando; modelos iniciais (DOC-02, DOC-03, DOC-04, DOC-07 e
+  crachá) a partir dos formulários da clínica, embutidos como versão 0 (DD-103). Decisões do incremento: DD-103 a
+  DD-110 e a emenda DEC-76.
+- **RNF-206, ensaio em desenvolvimento** (10/11/2026, conversor local, cinco emissões de cada): de 0,21 s a 0,36 s
+  de mediana por modelo .docx, 0,70 s no pior caso; PDF em leiaute fixo pelo WeasyPrint, 0,13 s. A medição que vale
+  é a da homologação, com a base de volume e na rede da clínica (PT §6).
+- **Seguem para depois:** a medição dos 30 s da captura na estação (Incremento 4) e a decisão do R-43 sobre o agente
+  de captura, ambas na homologação (Incremento 8).
+
 **Regra de cada incremento:** nenhum requisito sai do incremento sem teste marcado com
 `@pytest.mark.requisito(...)`. O relatório de rastreabilidade mostra o que falta e vai zerando.
 
@@ -140,7 +151,6 @@ O arquivo `dados/municipios_ibge.csv` precisa ser gerado a partir da tabela DTB 
 - Validação dos protótipos com a recepcionista (início com o ciclo da sessão, cadastro, pendências).
 - Compra do servidor dedicado; enquanto isso, montagem do notebook provisório (DAS §7.6).
 - Medir o desempenho atual do SCE antes de qualquer implantação (RNF-302).
-- Logotipo e dados institucionais; textos dos documentos DOC-01 a DOC-07, que entram nos modelos .docx.
 - Ficha de cadastro em papel revisada, com a frase informativa da DEC-46.
 - AP-07: aprovação em bloco dos refinamentos da Fase 2.
 
@@ -167,19 +177,23 @@ O arquivo `dados/municipios_ibge.csv` precisa ser gerado a partir da tabela DTB 
 
 - Teste da aplicação do SCE contra o MySQL LTS novo antes da migração (R-35).
 - Repetir `verificar_esquema.sh` na imagem do MySQL 9.7 LTS de produção.
-- Gerar o CSV de municípios do IBGE.
 - Medir o processamento da ingestão no servidor (alvo de 15 s por página, DDS §8.5).
 
 **Ajuste da reunião de aprovação já aplicado:** telefones e contatos do cadastro em linhas
 alternadas, branco e cinza (componente `lista-zebrada` no guia de componentes).
+
+**Resolvidas no Incremento 5:** logotipo e dados institucionais, cadastrados pela tela "Dados da clínica"; textos
+dos documentos, tirados dos formulários em branco da clínica (DEC-76: DOC-05 e DOC-06 fora; DOC-01 em leiaute fixo).
+**Resolvida antes:** o CSV de municípios do IBGE (`dados/municipios_ibge.csv`, `scripts/gerar_municipios_ibge.py`).
 
 **Resolvidas na Macroentrega III:** teste do agente de captura (R-34 mitigado); modelo do scanner
 confirmado (Brother DCP-1610NW); webcam disponível na estação (USB, 1280×720).
 
 ## 8. Como trabalhamos
 
-- Documentos em português, no padrão da casa; o `.md` é a fonte versionada no Git. O `.docx` é gerado
-  para a ERS e a DAS; o DDS e o plano de testes ficam só em `.md`.
+- Documentos em português, no padrão da casa; o `.md` é a fonte versionada no Git. O `.docx` da ERS e
+  da DAS é gerado quando preciso (assinatura, envio) e não fica no repositório; o DDS e o plano de testes ficam só
+  em `.md`.
 - **Durante o desenvolvimento não se registram versões.** Depois da aprovação, qualquer mudança gera nova
   versão do documento.
 - Tecnologias na versão estável mais recente, linha LTS onde existir; versões exatas fixadas no arquivo

@@ -327,6 +327,15 @@ município:
 python scripts\gerar_municipios_ibge.py
 ```
 
+Modelos .docx iniciais da emissão (versão 0, DD-103), em `sar\modulo_05_emissao\modelos_iniciais\`, regerados
+depois de mudar o script. Cada modelo reproduz o formulário em branco da clínica, criado do zero: nada dos arquivos
+originais é copiado. O teste de validação passa cada um pela mesma conferência do envio:
+
+```powershell
+python scripts\gerar_modelos_iniciais.py
+python -m pytest testes\modulo_05_emissao\test_validacao.py -q
+```
+
 ---
 
 ## 10. Problemas comuns
