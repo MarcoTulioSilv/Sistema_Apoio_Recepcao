@@ -192,8 +192,8 @@ confirmado (Brother DCP-1610NW); webcam disponível na estação (USB, 1280×720
 |---|---|---|---|
 | RF | RF-1011 (e RF-922; RF-303, RF-806 e RF-807 removidos) | DEC | DEC-76 |
 | RNF | RNF-628 | AD | AD-27 |
-| SEG | SEG-31 | DD | DD-110 |
+| SEG | SEG-31 | DD | DD-112 |
 | QAS | QAS-15 | P (pontos validados) | P-29 |
 | INV | INV-15 | R (riscos) | R-43 |
 | MOD | MOD-11 | DOC | DOC-07 |
-| CT (casos de teste) | por área: CT-FRQ-10, CT-AUD-06, CT-ACE-07, CT-CAD-07, CT-DOC-14, CT-EMI-03, CT-REL-03, CT-MIG-05 | PJ | PJ-08 |
+| CT (casos de teste) | por área: CT-FRQ-10, CT-AUD-06, CT-ACE-07, CT-CAD-07, CT-DOC-14, CT-EMI-03, CT-REL-03, CT-MIG-05, CT-PEN-05, CT-JOB-07 | PJ | PJ-08 |

@@ -213,6 +213,23 @@ que a garante.
 | INV-13 | Serviço e banco | Descarte antes do prazo recusado |
 | INV-14 | Estrutural | Presença só existe após confirmação, exceto exceções |
 
+### 4.10 Pendências e agendamento
+
+| **ID** | **Caso** | **Técnica** | **Rastreia** |
+|---|---|---|---|
+| CT-PEN-01 | A matriz de pendências do código é a da ERS §3.2.13 e a do DDS §11.1, linha a linha, com perfis e prioridade | Leitura dos documentos pelo teste | DD-55, RF-1010 |
+| CT-PEN-02 | Urgência no topo; dentro da prioridade, a mais antiga primeiro; contagem por tipo, com a prioridade variável do pedido de titular | Unidade | RNF-408, IU-04 |
+| CT-PEN-03 | Cada perfil vê só as suas linhas; a fonte não consulta o banco para quem não vê a linha; linha de outro perfil é recusada | Tabela de decisão, integração | RF-1010 |
+| CT-PEN-04 | Pendências por paciente para a preparação do turno e a ficha, com uma consulta por fonte | Integração | RF-922, DD-30, §11.3 |
+| CT-PEN-05 | Cada pendência some quando a causa é resolvida: solicitação decidida, aviso encerrado, job com sucesso, disco abaixo do alarme | Integração | §11.1, RF-1008, RF-1011 |
+| CT-JOB-01 | O catálogo de jobs do código é a tabela do DDS §13.1 | Leitura do documento pelo teste | DD-61 |
+| CT-JOB-02 | Duas execuções do mesmo job ao mesmo tempo: uma roda, a outra é recusada pela trava; os pesados esperam a trava compartilhada | Integração, concorrência | DD-61, DD-64 |
+| CT-JOB-03 | Toda execução grava início, fim, resultado e itens; a falha grava só o nome do erro, sem dado pessoal | Integração | DD-61, RNF-624 |
+| CT-JOB-04 | Sem sucesso além do intervalo máximo, a pendência 17 abre para o TI e fecha no sucesso seguinte; o backup registrado pela linha de comando segue a mesma regra | Valor-limite, relógio fixo | R-38, DD-61, DD-62 |
+| CT-JOB-05 | Horário perdido: roda ao subir ou espera o próximo, conforme a §13.1; rotina com cursor para às 04:30 e continua depois | Relógio fixo | DD-08, DD-64 |
+| CT-JOB-06 | Alarme de disco em 84%, 85% e 86% com o parâmetro padrão | Valor-limite | RNF-621, DD-111 |
+| CT-JOB-07 | Execução manual só pela linha de comando, só dos jobs marcados na §13.1, e auditada | Integração | DD-112 |
+
 ---
 
 ## 5. Dados de teste
