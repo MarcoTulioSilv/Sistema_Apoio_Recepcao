@@ -54,6 +54,11 @@ class PendenciaService(Protocol):
         perfil não vê: AcessoNegado."""
         ...
 
+    def nomes(self, contexto: Contexto, itens: Sequence[ItemPendencia]) -> dict[int, str]:
+        """O nome de cada paciente dos itens, para a tela; vazio para o TI, que nunca recebe dado de paciente
+        (RF-1004). Anulados ficam de fora."""
+        ...
+
     def dos_pacientes(self, contexto: Contexto, ids: Sequence[int]) -> dict[int, list[ItemPendencia]]:
         """As pendências de paciente que o perfil vê, por paciente, numa consulta por fonte (§11.3). Usada na
         preparação do turno (DD-30) e na ficha."""

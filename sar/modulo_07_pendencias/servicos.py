@@ -12,7 +12,8 @@ from sar.modulo_01_acesso.contrato import PermissionGuard
 from sar.modulo_07_pendencias import regras
 from sar.modulo_07_pendencias.contrato import ContagemTipo, Resumo
 from sar.modulo_07_pendencias.matriz import MATRIZ, POR_CODIGO
-from sar.nucleo.contexto import Contexto
+from sar.modulo_08_dados.interfaces.pacientes import RepositorioPaciente
+from sar.nucleo.contexto import Contexto, Perfil
 from sar.nucleo.erros import AcessoNegado
 from sar.nucleo.portas import FontePendencia, ItemPendencia, Prioridade
 from sar.nucleo.uow import ExecutorDeOperacao, UnidadeDeTrabalho
@@ -66,6 +67,14 @@ class ServicoPendencias:
             return [item for fonte in fontes for item in fonte.listar(uow, contexto)]
 
         return regras.ordenar(regras.filtrar(self._executar(operacao), contexto.perfil))
+
+    def nomes(self, contexto: Contexto, itens: Sequence[ItemPendencia]) -> dict[int, str]:
+        GUARDA.exigir(contexto, OPERACAO)
+        ids = sorted({i.paciente_id for i in itens if i.paciente_id is not None})
+        if contexto.perfil is Perfil.TI or not ids:
+            return {}
+        vivos = self._executar(lambda uow: uow.repositorio(RepositorioPaciente).vivos(ids))
+        return {p.id: p.campos.nome for p in vivos if p.campos.nome}
 
     def dos_pacientes(self, contexto: Contexto, ids: Sequence[int]) -> dict[int, list[ItemPendencia]]:
         GUARDA.exigir(contexto, OPERACAO)
