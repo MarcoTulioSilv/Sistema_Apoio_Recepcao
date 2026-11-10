@@ -144,19 +144,24 @@ def test_relatorios_pela_tela_com_filtros_e_exportacao(
     recepcao, admin = logado(montar(engine_web), "webe_recepcao"), logado(montar(engine_web), "webe_admin")
     lista = get(recepcao, "/relatorios").get_data(as_text=True)
     assert "Frequência mensal" in lista and "Pacientes por sexo" not in lista  # P-20: só os operacionais
-    assert get(recepcao, "/relatorios/sexo?gerar=1&data=2026-10-13").status_code == 403
+    sexo_na_data = "/relatorios/cadastro?escolha=1&incluir=sexo&data=2026-10-13"
+    assert get(recepcao, sexo_na_data).status_code == 403
+    assert get(admin, "/relatorios/sexo").status_code == 404  # sem tela própria: só junto, no cadastro (DD-109)
 
-    sexo = get(admin, "/relatorios/sexo?gerar=1&data=2026-10-13").get_data(as_text=True)
+    sexo = get(admin, sexo_na_data).get_data(as_text=True)
     assert "Pacientes por sexo" in sexo and "Data de referência:" in sexo and "Baixar planilha" in sexo
-    assert "Informe a data de referência" in get(admin, "/relatorios/sexo?gerar=1").get_data(as_text=True)
+    sem_data = get(admin, "/relatorios/cadastro?escolha=1&incluir=sexo&data=").get_data(as_text=True)
+    assert "Informe a data de referência" in sem_data
     mensal = get(admin, "/relatorios/frequencia_mensal?gerar=1&competencia=2026-10").get_data(as_text=True)
     assert 'data-relatorio="frequencia_mensal"' in mensal  # sem implantação, nenhuma sessão é devida (DD-91)
     assert "Baixar planilha" not in get(recepcao, "/relatorios/previa?gerar=1").get_data(as_text=True)
 
-    planilha = post(admin, "/relatorios/sexo/exportar", {"data": "2026-10-13", "formato": "xlsx"})
-    assert planilha.headers["Content-Disposition"] == 'attachment; filename="sexo-' + planilha.headers[
-        "Content-Disposition"].split('sexo-')[1] and planilha.data.startswith(b"PK")  # fmt: skip
-    assert post(recepcao, "/relatorios/sexo/exportar", {"data": "2026-10-13", "formato": "pdf"}).status_code == 403
+    exportar = "/relatorios/cadastro/exportar"
+    planilha = post(admin, exportar, {"incluir": "sexo", "data": "2026-10-13", "formato": "xlsx"})
+    assert planilha.headers["Content-Disposition"].startswith('attachment; filename="cadastro-')
+    assert planilha.data.startswith(b"PK")
+    assert post(recepcao, exportar, {"incluir": "sexo", "data": "2026-10-13", "formato": "pdf"}).status_code == 403
+    assert post(admin, "/relatorios/sexo/exportar", {"data": "2026-10-13", "formato": "pdf"}).status_code == 404
     with engine_web.connect() as c:
         assert c.execute(text("SELECT COUNT(*) FROM auditoria WHERE operacao = 'relatorio.exportar'")).scalar_one() == 1
 
@@ -200,7 +205,7 @@ def test_pedido_do_titular_da_ficha_ate_a_resposta(
 def test_relatorio_ja_sai_gerado_ao_abrir_pelo_card(ambiente: dict[str, int], engine_web: Engine) -> None:
     """Sem tela intermediária: aberto pelo card, o relatório vem com os filtros padrão, que seguem na tela."""
     admin = logado(montar(engine_web), "webe_admin")
-    for codigo in ("entradas", "eventos", "ocupacao", "sexo", "recorte_livre", "previa"):
+    for codigo in ("entradas", "eventos", "ocupacao", "recorte_livre", "previa"):
         tela = get(admin, f"/relatorios/{codigo}").get_data(as_text=True)
         assert 'id="resultado-t"' in tela and "Gerar relatório" in tela, codigo
     entradas = get(admin, "/relatorios/entradas").get_data(as_text=True)

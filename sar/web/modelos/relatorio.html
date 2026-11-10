@@ -58,7 +58,7 @@
       <div class="flex flex-wrap gap-2">
         {% for formato, rotulo in [("pdf", "Baixar PDF"), ("xlsx", "Baixar planilha")] %}
         <form method="post" action="{{ url_for('relatorios.exportar', codigo=relatorio.value) }}">
-          {% for chave in ["inicio", "fim", "data", "competencia", "tipo_evento", "modo"] %}{% if a.get(chave) %}<input type="hidden" name="{{ chave }}" value="{{ a.get(chave) }}">{% endif %}{% endfor %}
+          {% for chave in ["inicio", "fim", "data", "competencia", "tipo_evento"] %}{% if a.get(chave) %}<input type="hidden" name="{{ chave }}" value="{{ a.get(chave) }}">{% endif %}{% endfor %}
           <input type="hidden" name="formato" value="{{ formato }}">
           <button class="btn-secundario" type="submit">{{ rotulo }}</button>
         </form>

@@ -3,20 +3,12 @@
    data de hoje, o mês anterior na competência). Usados no card da lista, antes de gerar, e na tela do relatório. #}
 {% macro campos_filtro(relatorio, a, padrao, eventos) %}
   {% set f = relatorio.filtros %}
-  {% if relatorio.value == "convenio" %}
-  <label class="campo"><span class="rotulo">Contar</span>
-    <select class="entrada" name="modo">
-      <option value="situacao"{% if a.get('modo', 'situacao') == 'situacao' %} selected{% endif %}>A cobertura numa data</option>
-      <option value="periodo"{% if a.get('modo') == 'periodo' %} selected{% endif %}>A cobertura vigente no período</option>
-    </select></label>
-  {% endif %}
   {% if "data_referencia" in f %}
-  <label class="campo"><span class="rotulo">Data de referência{% if relatorio.value == "convenio" %} (cobertura numa data){% endif %}</span>
+  <label class="campo"><span class="rotulo">Data de referência</span>
     <input class="entrada" type="date" name="data" value="{{ a.get('data', padrao.data) }}"></label>
   {% endif %}
   {% if "periodo" in f %}
-  {{ intervalo("Período" ~ (" (cobertura no período)" if relatorio.value == "convenio" else ""), "inicio",
-               a.get("inicio", padrao.inicio), "fim", a.get("fim", padrao.fim)) }}
+  {{ intervalo("Período", "inicio", a.get("inicio", padrao.inicio), "fim", a.get("fim", padrao.fim)) }}
   {% endif %}
   {% if "competencia" in f %}
   <label class="campo"><span class="rotulo">Mês</span>

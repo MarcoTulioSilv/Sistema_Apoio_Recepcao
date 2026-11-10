@@ -27,14 +27,10 @@ EVENTOS = {TipoEvento.OBITO: "Óbito", TipoEvento.ALTA: "Alta", TipoEvento.TRANS
            TipoEvento.TRANSPLANTE: "Transplante", TipoEvento.DESISTENCIA: "Desistência"}  # fmt: skip
 DESCRICOES = {
     Relatorio.ENTRADAS: "Pacientes que começaram ou retornaram ao tratamento no período.",
-    Relatorio.CIDADE: "Pacientes em tratamento por município de residência numa data.",
     Relatorio.EVENTOS: "Altas, óbitos, transferências, transplantes e desistências no período.",
-    Relatorio.CONVENIO: "Pacientes por convênio ou SUS, numa data ou no período.",
     Relatorio.FREQUENCIA_MENSAL: "Previstas, realizadas, ausências, reposições e extras de cada paciente no mês.",
     Relatorio.PREVIA: "A frequência mensal do mês em andamento, que ainda muda até o fechamento.",
     Relatorio.OCUPACAO: "Os pacientes de cada escala numa data, turno a turno.",
-    Relatorio.FAIXA_ETARIA: "Pacientes em tratamento por faixa de idade numa data.",
-    Relatorio.SEXO: "Pacientes em tratamento por sexo numa data.",
     Relatorio.RECORTE_LIVRE: "Sessões realizadas por paciente num intervalo qualquer.",
 }
 ERROS = {
@@ -57,10 +53,14 @@ def _servicos() -> ServicosWeb:
 
 
 def _relatorio(codigo: str) -> Relatorio:
+    """Os de cadastro não têm tela própria: só saem juntos, em /relatorios/cadastro (DD-109)."""
     try:
-        return Relatorio(codigo)
+        relatorio = Relatorio(codigo)
     except ValueError:
         raise NaoEncontrado() from None
+    if relatorio in CADASTRAIS:
+        raise NaoEncontrado()
+    return relatorio
 
 
 def _data(texto: str | None) -> date | None:
@@ -87,8 +87,7 @@ def _padroes() -> dict[str, str]:
     """Os filtros já preenchidos: o mês corrente até hoje no período, a data de hoje e o mês anterior na competência."""
     hoje = _hoje()
     return {"inicio": hoje.replace(day=1).isoformat(), "fim": hoje.isoformat(), "data": hoje.isoformat(),
-            "competencia": (hoje.replace(day=1) - timedelta(days=1)).strftime("%Y-%m"),
-            "modo": ModoConvenio.SITUACAO.value}  # fmt: skip
+            "competencia": (hoje.replace(day=1) - timedelta(days=1)).strftime("%Y-%m")}  # fmt: skip
 
 
 @bp.get("")
