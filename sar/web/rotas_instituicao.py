@@ -9,11 +9,11 @@ from werkzeug.wrappers import Response as RespostaWerkzeug
 
 from sar.modulo_01_acesso.contrato import PermissionGuard
 from sar.modulo_06_configuracao.contrato import DadosInstitucionais
-from sar.modulo_06_configuracao.regras import UFS
 from sar.nucleo.contexto import Contexto
 from sar.nucleo.erros import RegraViolada
 from sar.web import contexto_atual
 from sar.web.configuracao import ServicosWeb
+from sar.web.rotas_cadastro import UFS
 
 bp = Blueprint("instituicao", __name__, url_prefix="/clinica")
 GUARDA = PermissionGuard()
@@ -58,7 +58,7 @@ def _pagina(contexto: Contexto, valores: dict[str, str] | None = None, **dados: 
     uf = request.args.get("uf") or valores.get("uf") or UF_PADRAO
     uf = uf if uf in UFS else UF_PADRAO
     municipios = _servicos().configuracao.listar_municipios(contexto, uf)
-    return render_template("instituicao.html", v=valores, uf=uf, ufs=sorted(UFS), municipios=municipios,
+    return render_template("instituicao.html", v=valores, uf=uf, ufs=UFS, municipios=municipios,
                            tem_logotipo=bool(atual and atual.tem_logotipo), cadastrada=atual is not None,
                            **dados)  # fmt: skip
 
