@@ -1,0 +1,61 @@
+{% extends "layout.html" %}
+{# Jobs do catálogo (DDS §13.1), só leitura para o TI (DD-112). Tabela de dados do guia de componentes. #}
+{% block titulo_pagina %}Jobs{% endblock %}
+{% block subtitulo %}{{ perfil_rotulo }}, {{ situacao | length }} jobs no catálogo{% if atrasados %}; {{ atrasados }} {{ 'atrasado' if atrasados == 1 else 'atrasados' }}{% endif %}{% endblock %}
+{% block conteudo %}
+<div class="flex flex-col gap-5">
+  <p class="m-0 max-w-[75ch] text-[15px] text-suave">Só leitura. Para executar um job agora, use no servidor <code>sar job executar NOME</code> (DD-112).</p>
+  <section class="cartao flex flex-col gap-3 p-5" aria-labelledby="jobs-t">
+    <h2 id="jobs-t" class="m-0 text-xl">Situação de cada job</h2>
+    <div class="w-full overflow-x-auto">
+      <table class="w-full border-collapse text-left">
+        <caption class="sr-only">Jobs do catálogo</caption>
+        <thead><tr class="text-sm text-suave">
+          <th scope="col" class="px-3 py-2">Job</th><th scope="col" class="px-3 py-2">Quando</th>
+          <th scope="col" class="px-3 py-2">Último sucesso</th><th scope="col" class="px-3 py-2">Última execução</th>
+          <th scope="col" class="px-3 py-2">Situação</th>
+        </tr></thead>
+        <tbody>
+          {% for s in situacao %}
+          <tr class="border-t border-linha" data-job="{{ s.nome }}">
+            <td class="px-3 py-2"><span class="flex flex-col"><span>{{ s.rotulo }}</span><span class="text-sm text-suave">{{ s.modulo }} · <code>{{ s.nome }}</code></span></span></td>
+            <td class="px-3 py-2"><span class="flex flex-col"><span>{{ s.quando }}</span><span class="text-sm text-suave">no máximo {{ intervalo(s.intervalo_maximo.total_seconds()) }} sem sucesso</span></span></td>
+            <td class="numero px-3 py-2">{{ s.ultimo_sucesso | data_hora if s.ultimo_sucesso else 'Nunca' }}</td>
+            <td class="px-3 py-2">{{ resumo(s.ultima) }}</td>
+            <td class="px-3 py-2"><span class="{{ 'etiqueta-u' if s.atrasado else 'etiqueta-n' }}">{{ 'Atrasado' if s.atrasado else 'Em dia' }}</span></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+  <section class="cartao flex flex-col gap-3 p-5" aria-labelledby="exec-t">
+    <h2 id="exec-t" class="m-0 text-xl">Últimas execuções</h2>
+    {% if execucoes %}
+    <div class="w-full overflow-x-auto">
+      <table class="w-full border-collapse text-left">
+        <caption class="sr-only">Últimas execuções</caption>
+        <thead><tr class="text-sm text-suave">
+          <th scope="col" class="px-3 py-2">Início</th><th scope="col" class="px-3 py-2">Job</th>
+          <th scope="col" class="px-3 py-2">Resultado</th><th scope="col" class="px-3 py-2">Itens</th>
+          <th scope="col" class="px-3 py-2">Observação</th>
+        </tr></thead>
+        <tbody>
+          {% for e in execucoes %}
+          <tr class="border-t border-linha">
+            <td class="numero px-3 py-2">{{ e.inicio | data_hora }}</td>
+            <td class="px-3 py-2">{{ rotulos.get(e.job, e.job) }}</td>
+            <td class="px-3 py-2">{{ resultados[e.resultado] }}</td>
+            <td class="numero px-3 py-2">{{ itens(e) }}</td>
+            <td class="px-3 py-2">{% if e.resumo_erro %}Erro <code>{{ e.resumo_erro }}</code>{% elif e.parcial %}Parou no limite de horário{% endif %}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <p class="m-0 text-suave">Nenhuma execução registrada.</p>
+    {% endif %}
+  </section>
+</div>
+{% endblock %}

@@ -26,6 +26,8 @@ from sar.modulo_03_operacao.contrato import EscalaService, FrequenciaService, Se
 from sar.modulo_04_documentos.contrato import DocumentoService, IngestaoService
 from sar.modulo_05_emissao.contrato import EmissaoService, ModeloService, RelatorioService
 from sar.modulo_06_configuracao.contrato import ConfiguracaoService
+from sar.modulo_07_pendencias.contrato import PendenciaService
+from sar.modulo_09_agendamento.contrato import AgendamentoService
 from sar.modulo_11_titular.contrato import TitularService
 
 
@@ -79,3 +81,5 @@ class ServicosWeb:
     modelos: ModeloService
     emissao: EmissaoService
     titular: TitularService
+    pendencias: PendenciaService
+    agendamento: AgendamentoService

@@ -23,12 +23,22 @@
     </section>
     {% endif %}
   </div>
-  {% if aniversariantes is not none %}
+  {% if aniversariantes is not none or contagens is not none %}
   <aside class="flex w-full shrink-0 flex-col gap-5 xl:w-72">
+    {% if contagens is not none %}
+    {# A cada minuto, como o painel, sem renovar a sessão (DD-57). #}
+    <section aria-labelledby="pend-titulo" class="cartao flex flex-col gap-2.5 p-4" id="pendencias-resumo"
+             hx-get="{{ url_for('pendencias.resumo') }}" hx-trigger="every 60s" hx-target="this" hx-swap="innerHTML"
+             hx-headers='{"X-SAR-Automatica": "1"}'>
+      {% include "_pendencias_resumo.html" %}
+    </section>
+    {% endif %}
+    {% if aniversariantes is not none %}
     <section aria-labelledby="aniv-titulo" class="cartao flex flex-col gap-2 p-4">
       <h2 id="aniv-titulo" class="m-0 text-lg">Aniversariantes de hoje</h2>
       {% for nome in aniversariantes %}<p class="m-0">{{ nome }}</p>{% else %}<p class="m-0 text-sm text-suave">Nenhum hoje.</p>{% endfor %}
     </section>
+    {% endif %}
   </aside>
   {% endif %}
 </div>

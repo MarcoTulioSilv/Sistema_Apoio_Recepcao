@@ -1,0 +1,8 @@
+{# A contagem da tela inicial (RNF-408; protótipo inicio.html), por prioridade, com link para a seção da tela. #}
+{% if contagens is not none %}
+<h2 id="pend-titulo" class="m-0 mb-1 text-lg">Pendências</h2>
+{% for prioridade, nome, classes in (('U', 'Urgência', 'bg-urgencia-fundo text-urgencia'), ('A', 'Alta', 'bg-alta-fundo text-alta'), ('N', 'Normal', 'bg-normal-fundo text-normal')) %}
+<a class="flex min-h-11 items-center justify-between rounded-lg px-3 font-bold no-underline {{ classes }}" href="{{ url_for('pendencias.lista') }}#g-{{ prioridade }}" data-contagem="{{ prioridade }}"><span>{{ nome }}</span><span class="numero">{{ contagens[prioridade] }}</span></a>
+{% endfor %}
+<p class="m-0 text-sm text-suave">A contagem se atualiza sozinha a cada minuto.</p>
+{% endif %}

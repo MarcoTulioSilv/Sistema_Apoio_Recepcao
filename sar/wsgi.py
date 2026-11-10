@@ -77,6 +77,8 @@ def montar() -> Flask:
         componentes.modelos,
         componentes.emissao,
         componentes.titular,
+        componentes.pendencias,
+        componentes.agendamento,
     )
     return criar_app(servicos, config)
 
