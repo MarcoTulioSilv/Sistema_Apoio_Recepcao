@@ -351,6 +351,10 @@ class RascunhoService(Protocol):
 
     def descartar(self, contexto: Contexto) -> None: ...
 
+    def descartar_expirados(self, contexto: Contexto) -> int:
+        """Job diário (DDS §13.1, RF-920), só com o contexto de sistema: elimina os rascunhos cujo prazo passou."""
+        ...
+
 
 class ContatoService(Protocol):
     """Contatos e telefones dentro do agregado do paciente (RF-201, RF-202, INV-12). Toda operação trava o

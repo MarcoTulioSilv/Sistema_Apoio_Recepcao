@@ -1,13 +1,13 @@
 """Rascunho de cadastro (DDS §6.6, RF-919, RF-920, DD-07): o destino do preenchimento sem o mínimo da P-03 e o
 salvamento automático da tela. Um por usuário, só dele, cifrado com a finalidade `rascunhos` e o id do rascunho
 como dado associado. Nenhuma regra do cadastro roda aqui (unicidade, dígito, tríade): todas rodam quando o
-rascunho vira paciente. O descarte dos vencidos é o job do Incremento 6."""
+rascunho vira paciente. O descarte dos vencidos é um job diário do MOD-09 (§13.1)."""
 
 from __future__ import annotations
 
 import json
 from collections.abc import Mapping, Sequence
-from datetime import datetime, timedelta
+from datetime import datetime, time, timedelta
 
 from sar.modulo_01_acesso.contrato import AuditService, PermissionGuard
 from sar.modulo_02_cadastro.contrato import RascunhoSalvo
@@ -119,6 +119,22 @@ class ServicoRascunhos:
             self._auditoria.registrar(uow, contexto, "cadastro.rascunho.descartar", ENTIDADE, str(atual.id))
 
         self._executar(operacao)
+
+    def descartar_expirados(self, contexto: Contexto) -> int:
+        GUARDA.exigir(contexto, "cadastro.rascunho.descartar_expirados")
+        # Vencido quando hoje passou do dia do descarte: o último salvamento foi antes de (hoje - prazo) (RF-920).
+        limite = datetime.combine(hoje_na_clinica(contexto) - timedelta(days=self._prazo()), time(), FUSO_CLINICA)
+
+        def operacao(uow: UnidadeDeTrabalho) -> int:
+            repositorio = uow.repositorio(RepositorioRascunho)
+            vencidos = repositorio.atualizados_antes(limite)
+            for rascunho in vencidos:
+                repositorio.remover(rascunho.id)
+                self._auditoria.registrar(uow, contexto, "cadastro.rascunho.descartar_expirados", ENTIDADE,
+                                          str(rascunho.id))  # fmt: skip
+            return len(vencidos)
+
+        return self._executar(operacao)
 
     def _abrir(self, rascunho: RascunhoGravado) -> dict[str, str]:
         texto = self._cifra.decifrar(
