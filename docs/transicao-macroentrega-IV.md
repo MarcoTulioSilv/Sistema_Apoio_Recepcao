@@ -100,8 +100,8 @@ risco: a fundação primeiro; depois o que vira faturamento e o que guarda docum
 | 7 | Carga inicial | MOD-10 com planilhas sintéticas que reproduzem os defeitos reais | CT-MIG passando; contagem fecha em toda simulação |
 | 8 | Homologação e go-live | Servidor provisório ou dedicado; desempenho com base de volume; ensaios de recuperação; ZAP e ASVS; roteiros com as usuárias; carga real; conferência amostral; decisão do R-43 (scanner pela rede ou agente à prova de leigo, DAS §8); ata | Critérios da §9.2 do PT_recepcao |
 
-**Andamento (10/11/2026).** Incrementos 0 a 5 concluídos e na `main` (o 5 pelo PR #6). **Incremento 6** concluído na
-branch `incremento-6`, à espera do PR. Próximo: **Incremento 7** (carga inicial).
+**Andamento (10/11/2026).** Incrementos 0 a 6 concluídos e na `main` (o 6 pelo PR #7). Próximo: **Incremento 7**
+(carga inicial).
 
 - **Incremento 6:** CT-PEN-01 a 05 e CT-JOB-01 a 07 passando (PT §4.10). MOD-07 com a matriz única igual à da ERS
   (DD-55), as 19 fontes ligadas, a tela de pendências, a contagem no início e as pendências de cada paciente nos
