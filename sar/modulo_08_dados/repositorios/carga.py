@@ -101,11 +101,15 @@ class RepositorioCargaSQL:
         linha = self._s.scalars(consulta.with_for_update() if travar else consulta).one_or_none()
         return _linha(linha) if linha is not None else None
 
+    def ligada_a(self, paciente_id: int) -> DadosLinha | None:
+        consulta = select(CargaLinha).where(CargaLinha.paciente_id == paciente_id).limit(1)
+        linha = self._s.scalars(consulta).one_or_none()
+        return _linha(linha) if linha is not None else None
+
     def tratar(self, linha_id: int, tratamento: str, motivo: str, paciente_id: int | None) -> None:
         linha = self._s.get_one(CargaLinha, linha_id)
-        linha.excecao_tratada, linha.excecao_motivo = tratamento, motivo
-        if paciente_id is not None:
-            linha.paciente_id = paciente_id
+        # Só linha em exceção é tratada, e ela nunca tem paciente da carga: o paciente é o ligado à mão, ou nenhum.
+        linha.excecao_tratada, linha.excecao_motivo, linha.paciente_id = tratamento, motivo, paciente_id
         self._s.flush()
 
     def marcar_amostra(self, linha_ids: Sequence[int], rodada: int) -> None:

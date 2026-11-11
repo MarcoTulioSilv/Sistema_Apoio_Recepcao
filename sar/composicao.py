@@ -535,7 +535,10 @@ def compor_carga(
     referencias = ServicoReferencias()
     pacientes = ServicoPacientes(executar, auditoria, referencias, SemCep())
     autenticacao = ServicoAutenticacao(executar, auditoria, LeitorParametrosSQL(executar), relogio, hasher or Hasher())
-    return Carga(autenticacao, ServicoCarga(executar, auditoria, pacientes, referencias, CifraAesGcm(chave_mestra)))
+    carga = ServicoCarga(
+        executar, auditoria, pacientes, referencias, CifraAesGcm(chave_mestra), pacientes, ServicoLeituraCadastro()
+    )
+    return Carga(autenticacao, carga)
 
 
 def ids_dos_logins(executar: ExecutorDeOperacao, logins: list[str]) -> dict[str, int]:

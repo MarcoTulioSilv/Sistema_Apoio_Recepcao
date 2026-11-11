@@ -1555,10 +1555,10 @@ conferência amostral é obrigatória (§3.2.11 da ERS).
 |---|---|---|---|
 | `CargaService.simular` | Contexto (T), pasta das planilhas | contagens por planilha e código de exceção, sem dado pessoal | `AcessoNegado`, `RegraViolada` (contagem não fecha, RNF-103) |
 | `CargaService.efetivar` | Contexto (T), pasta das planilhas | idem | `RegraViolada` (já efetivada; contagem não fecha) |
-| `CargaService.excecoes` | Contexto (R ou A) | linhas em exceção, com o conteúdo original e o motivo | `AcessoNegado` |
-| `CargaService.tratar_excecao` | Contexto (R ou A), linha, tratamento, motivo | — | `RegraViolada` |
-| `CargaService.amostra` / `registrar_conferencia` | Contexto (R ou A), paciente, campo, resultado | pacientes sorteados; — | `AcessoNegado` |
-| `CargaService.aceitar` | Contexto (A) | — | `RegraViolada` (amostra incompleta ou exceção sem tratamento) |
+| `CargaService.relatorio` | Contexto (R ou A), `carga.excecoes.ver` | contagens e linhas com exceção ou aviso do último lote, com a ficha original decifrada; auditada | `AcessoNegado` (inclusive o TI, RF-1004) |
+| `CargaService.tratar_excecao` | Contexto (R ou A), `carga.conferencia.registrar`, linha, tratamento, motivo, prontuário do cadastro feito pela tela (importada à mão) | — | `RegraViolada` (sem efetivação, já aceita, linha sem exceção, motivo, paciente não encontrado ou já ligado a outra linha) |
+| `CargaService.amostra` / `conferencia` / `registrar_conferencia` / `sortear_mais` | Contexto (R ou A), `carga.conferencia.registrar`; linha sorteada, campo, resultado | sorteados com o andamento; a ficha original ao lado do cadastro; —; quantos foram sorteados | `AcessoNegado`, `NaoEncontrado` (linha não sorteada), `RegraViolada` (campo fora da lista; sortear mais sem a amostra conferida ou sem divergência) |
+| `CargaService.aceitar` | Contexto (A), número de pacientes em tratamento confirmado pela recepção (DD-114), confirmar a diferença | — | `RegraViolada` (amostra incompleta ou exceção sem tratamento), `ConfirmacaoNecessaria` (o número confirmado não bate com os carregados) |
 
 ---
 
