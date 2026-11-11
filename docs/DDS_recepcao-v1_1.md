@@ -180,6 +180,8 @@ da Macroentrega III.
 | DD-110 | **Fundo de vidro fosco com a marca da clínica.** Em todas as telas, inclusive a de entrar, o fundo é um vidro fosco no estilo dos vidros canelados dos anos 80 e 90: atrás dele, duas luzes desfocadas nos cantos (azul-acinzentado e cinza-fumê); nele, frisos verticais finos, uma faixa de luz na diagonal e a marca da clínica a 22%. A marca é um arquivo próprio do sistema (`static/img/fundo-marca.png`, já esmaecido, sem metadados), independente do logotipo cadastrado (RF-1202), por isso aparece antes do login sem expor endereço novo. Só CSS, sem script e dentro da CSP (DD-09); os cartões, o cabeçalho e o menu continuam opacos, e o contraste do texto não muda. No alto contraste, nas cores forçadas e na impressão, o fundo volta a ser liso | Pedido do uso (09/11/2026), validado em maquete: dar identidade às telas sem prejudicar a leitura |
 | DD-111 | **Alarme de ocupação de disco por parâmetro técnico.** A pendência 19 (RNF-621) abre quando a ocupação medida pelo job de hora em hora passa do parâmetro "ocupação de disco que abre o alarme" (§10.1): 85% por padrão, de 50% a 95%, alterado pelo TI. O job mede as pastas montadas no worker (o armazenamento e as listadas em `SAR_DISCOS_MONITORADOS`) e grava na própria execução (`job_execucao.itens`) o percentual da mais cheia; a pendência compara a última medição com o parâmetro. É um alarme, não um limite: nada é bloqueado (decidido em 10/11/2026) | Disco cheio para tudo de uma vez: o banco deixa de gravar, a digitalização falha, o backup local não cabe. O alarme dá ao TI tempo de liberar espaço ou trocar o disco, e o valor pode acompanhar o tamanho do disco do servidor definitivo |
 | DD-112 | **Execução manual de job pela linha de comando do servidor.** Revisa o §4.8 e a §13.3 (decidido em 10/11/2026): `agendamento.job.executar_agora` sai da tela. O TI executa um job marcado como manual na §13.1 no próprio servidor (`sar job executar <nome>`), com o contexto de sistema, a mesma trava (DD-61) e o mesmo registro em `job_execucao`; a execução é auditada. Pela tela, o TI só consulta as execuções (`agendamento.execucoes.ver`), sem botão | O worker é quem tem as pastas, o antimalware e o usuário de banco das rotinas (DD-58); a web não precisa de escrita em `job_execucao` nem de um canal de pedidos até o worker. Quem executa uma rotina manualmente já está no servidor para investigar |
+| DD-113 | **TI identificado no terminal do servidor, sem sessão.** Os comandos que a matriz dá a uma pessoa, e não ao contexto de sistema, como `carga.simular` e `carga.efetivar` (§4.9), pedem login e senha no terminal (senha sem eco). O `AuthService.autenticar_terminal` faz a mesma conferência do `entrar` (senha, usuário ativo, bloqueio progressivo da §5.2, termo de ciência) e devolve o Contexto do usuário, mas **não abre sessão**, para não encerrar a sessão da tela (P-02). Troca de senha pendente se resolve pela tela. A trilha registra a entrada com o motivo "terminal", e as operações seguintes ficam em nome do usuário | A matriz §4.9 dá a carga ao TI e não ao sistema; com o contexto de sistema, a trilha perderia quem rodou a carga. Abrir sessão derrubaria o TI logado na tela |
+| DD-114 | **Papel de cada planilha na carga, exceção de linha e aviso de campo.** Detalha a §14.1 com o perfilamento da fase 1 (`docs/fase1-*.md`), decidido em 11/11/2026. **P1** (endereços e telefones) é a base e prevalece (RN-04); traz o próprio início do tratamento. **P4** (entradas) só completa o que falta na ficha (início, CPF, CNS, CEP) e confere o que já existe, pelo prontuário em forma numérica (ND-48): CPF ou CNS divergente vira aviso; linha da P4 sem ficha correspondente é contada como "fora da base" e a sem prontuário como "sem prontuário", sem virar exceção; ficha sem linha na P4 é importada com aviso. PLANO e CNES da P4 não são usados (DEC-73). **P3** (eventos) é só conferida, pelo nome normalizado, porque não tem prontuário; nenhum evento é gravado (RN-05). **Exceção de linha** é a ficha que não vira paciente (ilegível, rótulo desconhecido ou repetido, sem o mínimo da P-03, prontuário, CPF ou CNS já usado, evento de saída na P3) e precisa de tratamento antes do aceite. **Aviso de campo** é o valor que não entrou ou foi presumido (CPF, CNS, CEP, IBGE, telefone, contato, convênio, DDD presumido, endereço incompleto, divergência com a P4): o paciente entra, o caso vai ao relatório (RF-1106) e a pendência 1 cuida do resto. Conta por planilha: P1 = importadas + exceções; P4 = ligadas + fora da base + sem prontuário; P3 = casadas + sem correspondência. O CID é descartado na leitura e só contado (ND-45). A recepção confirma no dia o número de pacientes em tratamento, conferido contra a escala (R-16 da fase 1), e a administração o informa no aceite: ele fica no lote e na trilha. Migração 0009: `carga_linha.avisos`, `carga_linha.amostra_rodada` e `carga_lote.ativos_confirmados` | A §14.1 foi escrita antes do perfilamento detalhado: a P4 tem cerca de 700 linhas, quase todas históricas, e a ficha da P1 já tem o início; tratar cada linha histórica como exceção enterraria o relatório, e a P4 "trazer o início" contrariaria a RN-04. A distinção entre exceção e aviso deixa a conta da §14.2 fechar sem esconder nada |
 
 ### 2.2 Alterações incorporadas ao DAS
 
@@ -584,6 +586,7 @@ independentemente de quem a pediu.
 | **Serviço.método** | **Entrada** | **Saída** | **Erros** |
 |---|---|---|---|
 | `AuthService.entrar` | login, senha, origem | token da sessão e Contexto | `CredencialInvalida` (genérico), `TermoPendente`, `TrocaDeSenhaExigida` |
+| `AuthService.autenticar_terminal` | login, senha, origem | Contexto, sem sessão (DD-113) | `CredencialInvalida` (genérico), `TermoPendente`, `TrocaDeSenhaExigida` |
 | `AuthService.sair` | Contexto | — | — |
 | `SessionManager.validar` | token, automática: bool | Contexto | `SessaoEncerrada` |
 | `PermissionGuard.pode` | Contexto, operação, recurso opcional | bool | — |
@@ -704,6 +707,12 @@ eliminado na mesma transação. O job diário avisa e depois elimina os que pass
 | `PacienteService.registrar_cobertura` | Contexto, período, dados | — | `RegraViolada` (INV-09, `cobertura.periodo_encerrado`) |
 | `EventoService.registrar` | Contexto, paciente, tipo, data, local | — | `RegraViolada` com impedimentos |
 | `RascunhoService.salvar` / `retomar` / `descartar` | Contexto, conteúdo | — / conteúdo / — | `AcessoNegado` |
+
+**Para a carga inicial (MOD-10, DD-67)**
+
+| **Serviço.método** | **Entrada** | **Saída** | **Erros** |
+|---|---|---|---|
+| `CadastroDaCarga.criar_na_carga` | unidade de trabalho da carga, Contexto (T), operação da carga, dados, início, cobertura, telefones, contatos | id e avisos (códigos dos valores que não entraram, DD-22) | `AcessoNegado`; `RegraViolada` só quando o paciente não entra (mínimo da P-03, prontuário, CPF ou CNS já usado), sem o id de quem usa |
 
 **Para outros módulos (somente leitura)**
 
@@ -1499,9 +1508,9 @@ o consumidor da fila, que é um laço e não um job, conta como parado quando h�
 
 | # | **Etapa** | **Regra** | **Vai para exceções quando** |
 |---|---|---|---|
-| 1 | Leitura das planilhas pelo extrator já validado (AD-22) | Planilha de endereços e telefones é a base (RF-1101, RN-04) | Linha ilegível ou sem prontuário |
-| 2 | Complemento pela planilha de entradas, pelo prontuário (RF-1102) | Traz a data de início do tratamento | Prontuário da base sem entrada, ou entrada sem base |
-| 3 | Conferência com a planilha de eventos (RF-1103) | Paciente da base com evento de saída registrado é cadastro desatualizado | Sempre: a recepção decide se importa ou não; a carga não registra evento por conta própria |
+| 1 | Leitura das planilhas pelo extrator já validado (AD-22), dirigida pelo dicionário de rótulos da fase 1 (ND-49) | Planilha de endereços e telefones (P1) é a base (RF-1101, RN-04); o CID é descartado e só contado (ND-45) | Ficha ilegível, com rótulo desconhecido ou repetido |
+| 2 | Complemento pela planilha de entradas (P4), pelo prontuário (RF-1102, DD-114) | Preenche só o que falta na ficha (início, CPF, CNS, CEP) e confere o resto; a P1 prevalece | Nunca: divergência, ficha sem entrada e entrada fora da base viram aviso ou contagem |
+| 3 | Conferência com a planilha de eventos (P3, RF-1103, DD-114) | Paciente da base com evento de saída registrado, casado pelo nome, é cadastro desatualizado | Sempre: a recepção decide se importa ou não; a carga não registra evento por conta própria |
 | 4 | Conversão do IBGE de 6 para 7 dígitos (RF-1104) | Por consulta à tabela (DD-53) | Código sem correspondência; campo fica vazio |
 | 5 | Validação dos campos | CPF e CNS pelo dígito (DEC-58); CEP pelo formato (DD-68) | Valor inválido; campo fica vazio e vira pendência |
 | 6 | Mínimo do cadastro (P-03) | Nome, data de início e prontuário | Faltando qualquer um: o paciente não é importado; a recepção o cadastra pela tela (P-28) |
@@ -1536,8 +1545,8 @@ conferência amostral é obrigatória (§3.2.11 da ERS).
 
 | **Tabela** | **Colunas principais** | **Restrições** |
 |---|---|---|
-| `carga_lote` | modo (simulação, efetivação), situação, contagens por planilha, iniciado_em, concluido_em, aceito_em, aceito_por | Uma efetivação só |
-| `carga_linha` | lote_id, planilha, numero_linha, conteudo_cifrado, paciente_id, excecao_codigo, excecao_tratada | Apagada no aceite (DD-69) |
+| `carga_lote` | modo (simulação, efetivação), situação, contagens por planilha, iniciado_em, concluido_em, aceito_em, aceito_por, ativos_confirmados (0009) | Uma efetivação só |
+| `carga_linha` | lote_id, planilha, numero_linha, conteudo_cifrado, paciente_id, excecao_codigo, excecao_tratada, avisos e amostra_rodada (0009) | Apagada no aceite (DD-69). Uma linha por ficha da P1, com as linhas da P4 e da P3 ligadas a ela no mesmo cifrado; na simulação, só as fichas com exceção ou aviso, e cada simulação substitui o relatório da anterior |
 | `carga_conferencia` | paciente_id, campo, resultado, conferido_por, conferido_em | Apagada no aceite; o resultado resumido fica na auditoria |
 
 ### 14.5 Contratos públicos

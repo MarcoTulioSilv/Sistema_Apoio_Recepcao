@@ -378,7 +378,44 @@ python -m pytest testes\modulo_05_emissao\test_validacao.py -q
 
 ---
 
-## 10. Problemas comuns
+## 10. Carga inicial (MOD-10)
+
+A carga é do TI, no servidor, e roda uma vez só (DDS §14, DD-65, DD-66). O terminal mostra só contagens; o relatório
+com as linhas fica na aplicação, para a recepção e a administração. O TI entra com o próprio login e a senha, pedida
+sem eco, sem abrir sessão: a sessão dele na tela continua (DD-113).
+
+Preparar a pasta (protegida, fora do repositório) com as três planilhas, salvas como `.xlsx` e com estes nomes. A P4
+da clínica é `.xls`: abra no Excel ou no LibreOffice e salve como `.xlsx` antes.
+
+| Arquivo na pasta | Planilha |
+|---|---|
+| `p1_enderecos.xlsx` | P1, endereços e telefones (a base) |
+| `p4_entradas.xlsx` | P4, entradas (só completa e confere) |
+| `p3_eventos.xlsx` | P3, eventos (só conferida) |
+
+```powershell
+sar carga simular D:\carga --login ti.fulano                 # quantas vezes for preciso; desfaz tudo no fim
+sar carga efetivar D:\carga --login ti.fulano --definitiva   # uma vez só, depois do relatório aceito
+```
+
+Cada simulação substitui o relatório da anterior. Sem `--definitiva`, a efetivação é recusada. Se a conta de alguma
+planilha não fechar (RNF-103), o comando falha com `carga.contagem_nao_fecha` e nada é gravado.
+
+Planilhas sintéticas para ensaiar no banco de desenvolvimento ou na homologação (dados fictícios, PT §5.3; nunca use
+planilha real para ensaio):
+
+```powershell
+python scripts\gerar_planilhas_sinteticas.py armazenamento\carga_sintetica              # 146 fichas, como a base real
+python scripts\gerar_planilhas_sinteticas.py armazenamento\carga_sintetica --fichas 30 --semente 3
+sar carga simular armazenamento\carga_sintetica --login ti.fulano
+```
+
+Para repetir o ensaio da efetivação no banco de desenvolvimento, recrie o banco (seção 4: `sar reverter base; sar
+migrar`), porque a efetivação não se desfaz pela aplicação.
+
+---
+
+## 11. Problemas comuns
 
 | Sintoma | Causa e solução |
 |---|---|
