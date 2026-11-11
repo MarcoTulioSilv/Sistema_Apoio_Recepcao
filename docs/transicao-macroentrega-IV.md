@@ -30,7 +30,7 @@ pessoal sensível de saúde.
 | I — Requisitos | Concluída. ERS em assinatura, com as decisões DEC-57 a DEC-73 incorporadas antes da assinatura | `fase3-ers-v1_0.md` (ERS-002 v1.0) |
 | II — Arquitetura | Aprovada; revisada na Macroentrega III | `DAS_recepcao-v1_1.md` |
 | III — Design detalhado | **Concluída e aprovada em 2026-10-06** | `DDS_recepcao-v1_1.md`, `PT_recepcao-v1_1.md` (as v1.0 aprovadas ficam no histórico do Git) |
-| IV — Codificação e verificação | **Em andamento:** incrementos 0 a 5 concluídos (§5) | `DDS_recepcao-v1_1.md`, `PT_recepcao-v1_1.md`, `comandos.md` |
+| IV — Codificação e verificação | **Em andamento:** incrementos 0 a 6 na `main`; o 7 concluído na branch `incremento-7` (§5) | `DDS_recepcao-v1_1.md`, `PT_recepcao-v1_1.md`, `comandos.md` |
 
 ## 3. O que a Macroentrega III entregou
 
@@ -100,8 +100,17 @@ risco: a fundação primeiro; depois o que vira faturamento e o que guarda docum
 | 7 | Carga inicial | MOD-10 com planilhas sintéticas que reproduzem os defeitos reais | CT-MIG passando; contagem fecha em toda simulação |
 | 8 | Homologação e go-live | Servidor provisório ou dedicado; desempenho com base de volume; ensaios de recuperação; ZAP e ASVS; roteiros com as usuárias; carga real; conferência amostral; decisão do R-43 (scanner pela rede ou agente à prova de leigo, DAS §8); ata | Critérios da §9.2 do PT_recepcao |
 
-**Andamento (10/11/2026).** Incrementos 0 a 6 concluídos e na `main` (o 6 pelo PR #7). Próximo: **Incremento 7**
-(carga inicial).
+**Andamento (11/11/2026).** Incrementos 0 a 6 concluídos e na `main` (o 6 pelo PR #7). **Incremento 7** concluído na
+branch `incremento-7`, à espera do PR. Próximo: **Incremento 8** (homologação e go-live).
+
+- **Incremento 7:** CT-MIG-01 a 05 passando (PT §4.7), RF-1101 a RF-1108 com teste. MOD-10 com o extrator dirigido por
+  rótulo, a partir do extrator de referência da fase 1 (`docs/extrator_p1.py`, `docs/fase1-*.md`), a simulação que
+  desfaz tudo e deixa só o relatório, a efetivação única e o terminal do TI só com contagens (`sar carga`, comandos.md
+  §10). Na aplicação: relatório de exceções e avisos com o tratamento, conferência amostral lado a lado e aceite da
+  administração com o número de ativos contado pela recepção. Migração 0009; dependência `openpyxl==3.1.5` (AD-22);
+  planilhas sintéticas com os defeitos reais (`scripts/gerar_planilhas_sinteticas.py`). Ensaio em desenvolvimento: 146
+  fichas simuladas em 2,7 s, numa transação, com a conta fechando. Decisões do incremento: DD-113 (TI identificado no
+  terminal, sem sessão) e DD-114 (papel de cada planilha, exceção de linha e aviso de campo).
 
 - **Incremento 6:** CT-PEN-01 a 05 e CT-JOB-01 a 07 passando (PT §4.10). MOD-07 com a matriz única igual à da ERS
   (DD-55), as 19 fontes ligadas, a tela de pendências, a contagem no início e as pendências de cada paciente nos
@@ -160,6 +169,15 @@ referência. Um chat no Projeto continua útil para decisões e revisões.
   (PJ-09) e termo de sigilo. O desenho atual comporta essa adição sem retrabalho: perfil novo é uma
   migração e uma linha na matriz; o módulo novo não toca os existentes.
 
+**Da carga inicial (para a homologação, Incremento 8)**
+
+- Confirmar com a recepção, no dia, o número de pacientes em tratamento contado na escala (R-16 da fase 1): ele é
+  informado no aceite.
+- A P4 da clínica é `.xls`: salvá-la como `.xlsx` antes. O arranjo da P3 (blocos por ano, coluna do nome) foi deduzido
+  do perfilamento, sem amostra; confirmar na primeira simulação com a planilha real e ajustar `classificar_linha_p3`
+  se preciso.
+- Cadastrar os convênios (IPASGO e outros) antes da efetivação, para a cobertura entrar; os não cadastrados viram aviso.
+
 **Técnicas**
 
 - Teste da aplicação do SCE contra o MySQL LTS novo antes da migração (R-35).
@@ -200,7 +218,7 @@ confirmado (Brother DCP-1610NW); webcam disponível na estação (USB, 1280×720
 |---|---|---|---|
 | RF | RF-1011 (e RF-922; RF-303, RF-806 e RF-807 removidos) | DEC | DEC-76 |
 | RNF | RNF-628 | AD | AD-27 |
-| SEG | SEG-31 | DD | DD-112 |
+| SEG | SEG-31 | DD | DD-114 |
 | QAS | QAS-15 | P (pontos validados) | P-29 |
 | INV | INV-15 | R (riscos) | R-43 |
 | MOD | MOD-11 | DOC | DOC-07 |
