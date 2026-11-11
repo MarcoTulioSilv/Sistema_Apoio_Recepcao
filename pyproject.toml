@@ -16,6 +16,7 @@ dependencies = [
     "flask==3.1.3",
     "httpx==0.28.1",
     "lxml==6.1.3",  # leitura do XML dos modelos sem entidades nem rede (§9.2)
+    "openpyxl==3.1.5",  # leitura das planilhas da carga inicial, só leitura (AD-22, MOD-10)
     "pikepdf==10.16.0",
     "pillow==13.0.0",  # exceção às duas semanas (22/10/2026): corrige 35 vulnerabilidades da 12.3.0
     "pymysql==1.2.3",
@@ -61,7 +62,7 @@ include = ["sar*"]
 line-length = 120
 target-version = "py314"
 # Migrações revisadas à mão na Macroentrega III: nem o linter nem o formatador reescrevem o texto delas.
-extend-exclude = ["sar/modulo_08_dados/migracoes"]
+extend-exclude = ["sar/modulo_08_dados/migracoes", "docs"]  # docs/extrator_p1.py é o artefato da fase 1, como entregue
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "B", "UP", "S", "SIM", "RUF", "DTZ"]
@@ -83,7 +84,7 @@ exclude = ["sar/modulo_08_dados/migracoes/"]
 disable_error_code = ["type-abstract"]
 
 [[tool.mypy.overrides]]
-module = ["apscheduler", "apscheduler.*", "waitress", "pypdfium2", "win32com.*", "pythoncom", "docxtpl", "lxml", "lxml.*", "weasyprint", "weasyprint.*", "xlsxwriter"]
+module = ["apscheduler", "apscheduler.*", "waitress", "pypdfium2", "win32com.*", "pythoncom", "docxtpl", "lxml", "lxml.*", "weasyprint", "weasyprint.*", "xlsxwriter", "openpyxl", "openpyxl.*"]
 ignore_missing_imports = true
 
 [tool.bandit]

@@ -13,6 +13,8 @@
   sar documentos-revarrer    revarredura antimalware do acervo (SEG-22); --minutos e --depois-de para retomar
   sar documentos-hash        conferência de hash do acervo (SEG-15, P-19); mesmas opções
   sar documentos-orfaos      remove do cofre arquivo sem documento (DD-37)
+  sar carga simular PASTA    carga inicial em simulação, pelo TI, com login e senha (DD-65, DD-66, DD-113)
+  sar carga efetivar PASTA   a carga de verdade, uma vez só; o terminal mostra só contagens
 
 Fica fora dos módulos porque junta comandos do MOD-08 e do MOD-01, como a raiz de composição.
 """
@@ -20,10 +22,13 @@ Fica fora dos módulos porque junta comandos do MOD-08 e do MOD-01, como a raiz 
 from __future__ import annotations
 
 import argparse
+import getpass
 import sys
 import threading
 from collections.abc import Callable, Sequence
 from datetime import datetime
+from pathlib import Path
+from typing import Any
 
 from sqlalchemy.exc import DBAPIError
 
@@ -34,13 +39,14 @@ from sar.composicao import (
     antimalware_do_ambiente,
     compor_agendamento,
     compor_auditoria,
+    compor_carga,
     compor_registro,
     compor_rotinas,
     montar_barramento,
     montar_executor,
     pastas_do_ambiente,
 )
-from sar.modulo_01_acesso.contrato import UsuarioCriado
+from sar.modulo_01_acesso.contrato import CredencialInvalida, TermoPendente, TrocaDeSenhaExigida, UsuarioCriado
 from sar.modulo_01_acesso.senhas import Hasher
 from sar.modulo_01_acesso.servicos import ServicoAuditoria, ServicoUsuarios
 from sar.modulo_08_dados import cli as banco
@@ -49,6 +55,7 @@ from sar.modulo_08_dados.cifra import carregar_chave_mestra
 from sar.modulo_08_dados.erros_banco import anotar_restricao
 from sar.modulo_08_dados.relogio import FUSO_CLINICA, RelogioSistema
 from sar.modulo_09_agendamento.contrato import Execucao, JobDesconhecido, JobEmAndamento, Resultado
+from sar.modulo_10_carga.contrato import ResumoCarga
 from sar.nucleo.contexto import Contexto
 from sar.nucleo.erros import AcessoNegado, ConfiguracaoInvalida, RegraViolada
 from sar.nucleo.logs import campos_do_erro, configurar, iniciar_requisicao
@@ -235,6 +242,64 @@ def rotina_documentos(comando: str, depois_de: str | None, minutos: float | None
     return 1 if resultado.bloqueados else 0
 
 
+ORIGEM_CARGA = "cli.carga"
+
+
+def _linhas_da_carga(resumo: ResumoCarga) -> list[str]:
+    """Só contagens e códigos, nunca dado de paciente (DD-65, RF-1004): é o que o TI vê."""
+    c: dict[str, Any] = resumo.contagens
+    p1, p4, p3 = c["p1"], c["p4"], c["p3"]
+    linhas = [
+        f"Carga em {resumo.modo.value} (lote {resumo.lote_id}). A conta fecha: {'sim' if c['fecha'] else 'NÃO'}.",
+        f"  P1 endereços e telefones: {p1['linhas']} ficha(s) = {p1['importados']} importada(s) + "
+        f"{p1['excecoes']} exceção(ões)",
+        f"  P4 entradas: {p4['linhas']} linha(s) = {p4['ligadas']} ligada(s) a uma ficha + {p4['fora_da_base']} fora "
+        f"da base + {p4['sem_prontuario']} sem prontuário",
+        f"  P3 eventos: {p3['linhas']} linha(s) = {p3['casadas']} casada(s) com uma ficha + "
+        f"{p3['sem_correspondencia']} sem correspondência",
+        f"  CID descartado (ND-45): {c['cid_descartados']}",
+    ]
+    for titulo, chave in (("Exceções", "excecoes"), ("Avisos", "avisos")):
+        if c[chave]:
+            linhas.append(f"{titulo}, por código:")
+            linhas.extend(f"  {codigo:32} {quantos}" for codigo, quantos in c[chave].items())
+    linhas.append("O relatório com as linhas fica na aplicação, para a recepção e a administração (DD-65).")
+    return linhas
+
+
+def carga(acao: str, pasta: str, login: str, definitiva: bool) -> int:
+    """O TI entra com login e senha, sem abrir sessão (DD-113); a operação roda com o perfil dele (§4.9)."""
+    if acao == "efetivar" and not definitiva:
+        print(
+            "Recusado: a efetivação é única e não se desfaz (DD-66). Rode antes a simulação e, com o relatório "
+            "aceito pela recepção, repita com --definitiva.",
+            file=sys.stderr,
+        )
+        return 1
+    senha = getpass.getpass(f"Senha de {login}: ")
+    engine = criar_engine(ConfigBanco.do_ambiente("sar_web"))
+    try:
+        montado = compor_carga(engine, carregar_chave_mestra())
+        try:
+            contexto = montado.autenticacao.autenticar_terminal(login, senha, ORIGEM_CARGA)
+        except CredencialInvalida, TermoPendente, TrocaDeSenhaExigida:
+            print(
+                "Recusado: login ou senha não conferem, ou o usuário precisa entrar antes pela tela.", file=sys.stderr
+            )
+            return 1
+        try:
+            rodar = montado.carga.simular if acao == "simular" else montado.carga.efetivar
+            resumo = rodar(contexto, Path(pasta))
+        except AcessoNegado:
+            print("Recusado: a carga é do perfil TI (DDS §4.9).", file=sys.stderr)
+            return 1
+    finally:
+        engine.dispose()
+    for linha in _linhas_da_carga(resumo):
+        print(linha)
+    return 0
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="sar", description="Linha de comando do SAR")
     sub = parser.add_subparsers(dest="comando", required=True)
@@ -272,6 +337,15 @@ def main(argv: Sequence[str] | None = None) -> int:
         p.add_argument("--depois-de", help="cursor devolvido pela execução anterior")
         p.add_argument("--minutos", type=float, help="para depois deste tempo e mostra o cursor")
     sub.add_parser("documentos-orfaos", help="remove do cofre arquivo sem documento")
+    p = sub.add_parser("carga", help="carga inicial das planilhas (DDS §14), pelo TI")
+    cargas = p.add_subparsers(dest="acao", required=True)
+    for nome, ajuda in (("simular", "simulação: desfaz tudo e deixa só o relatório (DD-66)"),
+                        ("efetivar", "efetivação única (DD-66, DD-72)")):  # fmt: skip
+        p = cargas.add_parser(nome, help=ajuda)
+        p.add_argument("pasta", help="pasta com p1_enderecos.xlsx, p4_entradas.xlsx e p3_eventos.xlsx")
+        p.add_argument("--login", required=True, help="login do TI; a senha é pedida sem eco")
+        if nome == "efetivar":
+            p.add_argument("--definitiva", action="store_true", help="confirma que a efetivação não se desfaz")
     args = parser.parse_args(argv)
     configurar("cli")
     iniciar_requisicao()  # liga as linhas de log e a auditoria desta execução (DD-81)
@@ -295,6 +369,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             if args.acao == "executar":
                 return job_executar(args.nome, args.minutos)
             return job_registrar(args.nome, args.resultado, args.inicio, args.fim, args.itens)
+        elif args.comando == "carga":
+            return carga(args.acao, args.pasta, args.login, getattr(args, "definitiva", False))
         elif args.comando in ("documentos-revarrer", "documentos-hash", "documentos-orfaos"):
             return rotina_documentos(args.comando, getattr(args, "depois_de", None), getattr(args, "minutos", None))
         else:

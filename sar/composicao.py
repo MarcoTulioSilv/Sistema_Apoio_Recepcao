@@ -93,6 +93,7 @@ from sar.modulo_08_dados.cadeia import gravar_encadeado
 from sar.modulo_08_dados.cifra import CifraAesGcm
 from sar.modulo_08_dados.interfaces.agendamento import RepositorioAgendamento
 from sar.modulo_08_dados.interfaces.autorizacoes import RepositorioAutorizacao
+from sar.modulo_08_dados.interfaces.carga import RepositorioCarga
 from sar.modulo_08_dados.interfaces.documentos import RepositorioDocumentos
 from sar.modulo_08_dados.interfaces.emissao import RepositorioEmissao, RepositorioModelo
 from sar.modulo_08_dados.interfaces.operacao import RepositorioOperacao
@@ -111,6 +112,7 @@ from sar.modulo_08_dados.interfaces.usuarios import RepositorioUsuario
 from sar.modulo_08_dados.relogio import RelogioSistema
 from sar.modulo_08_dados.repositorios.agendamento import RepositorioAgendamentoSQL, TravaMySQL
 from sar.modulo_08_dados.repositorios.autorizacoes import RepositorioAutorizacaoSQL
+from sar.modulo_08_dados.repositorios.carga import RepositorioCargaSQL
 from sar.modulo_08_dados.repositorios.documentos import RepositorioDocumentosSQL
 from sar.modulo_08_dados.repositorios.emissao import RepositorioEmissaoSQL, RepositorioModeloSQL
 from sar.modulo_08_dados.repositorios.operacao import RepositorioOperacaoSQL
@@ -133,11 +135,13 @@ from sar.modulo_09_agendamento.contrato import AgendamentoService, ResultadoJob,
 from sar.modulo_09_agendamento.disco import OcupacaoDisco, pastas_monitoradas
 from sar.modulo_09_agendamento.pendencias import fontes as fontes_agendamento
 from sar.modulo_09_agendamento.servicos import ServicoAgendamento
+from sar.modulo_10_carga.contrato import CargaService
+from sar.modulo_10_carga.servicos import ServicoCarga
 from sar.modulo_11_titular.contrato import TitularService
 from sar.modulo_11_titular.pendencias import fontes as fontes_titular
 from sar.modulo_11_titular.servicos import ServicoTitular
 from sar.nucleo.contexto import Contexto
-from sar.nucleo.erros import ConfiguracaoInvalida
+from sar.nucleo.erros import ConfiguracaoInvalida, IndisponivelExterno
 from sar.nucleo.eventos import (
     Barramento,
     CadeiaDivergente,
@@ -148,6 +152,7 @@ from sar.nucleo.eventos import (
 from sar.nucleo.parametros import LeitorParametros, VerificadorUso
 from sar.nucleo.portas import (
     Cifra,
+    EnderecoCep,
     ExecutorAutorizavel,
     FonteMarcoRetencao,
     FontePendencia,
@@ -216,6 +221,7 @@ REPOSITORIOS: dict[type, FabricaRepositorio] = {
     RepositorioOperacao: RepositorioOperacaoSQL,
     RepositorioDocumentos: RepositorioDocumentosSQL,
     RepositorioAgendamento: RepositorioAgendamentoSQL,
+    RepositorioCarga: RepositorioCargaSQL,
 }
 
 
@@ -502,6 +508,34 @@ def compor_agendamento(
     }
     servico = ServicoAgendamento(executar, auditoria, parametros, TravaMySQL(engine), com_rotinas(rotinas), relogio)
     return Worker(processador, servico, Agendador(servico, relogio))
+
+
+class SemCep:
+    """A carga nunca consulta CEP (DD-68: nada de validação em massa no serviço externo): todo CEP entra como não
+    verificado. Se algo chamar, é defeito, e a falha aparece."""
+
+    def consultar(self, cep: str) -> EnderecoCep | None:
+        raise IndisponivelExterno()
+
+
+@dataclass(frozen=True, slots=True)
+class Carga:
+    autenticacao: AuthService
+    carga: CargaService
+
+
+def compor_carga(
+    engine: Engine, chave_mestra: bytes, relogio: Relogio | None = None, hasher: Hasher | None = None
+) -> Carga:
+    """O `sar carga` do TI no servidor (DD-65, DD-113), pelo usuário de banco da web, que tem os privilégios do
+    cadastro e da carga (DD-58). Sem cofre, sem antimalware e sem internet."""
+    relogio = relogio or RelogioSistema()
+    executar = montar_executor(engine, montar_barramento(relogio))
+    auditoria = ServicoAuditoria(executar)
+    referencias = ServicoReferencias()
+    pacientes = ServicoPacientes(executar, auditoria, referencias, SemCep())
+    autenticacao = ServicoAutenticacao(executar, auditoria, LeitorParametrosSQL(executar), relogio, hasher or Hasher())
+    return Carga(autenticacao, ServicoCarga(executar, auditoria, pacientes, referencias, CifraAesGcm(chave_mestra)))
 
 
 def ids_dos_logins(executar: ExecutorDeOperacao, logins: list[str]) -> dict[str, int]:
