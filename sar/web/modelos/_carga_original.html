@@ -1,0 +1,28 @@
+{# A ficha como estava na planilha (o lado esquerdo da conferência, §14.3) e as linhas da P4 e da P3 ligadas a ela. #}
+{% set colunas_p4 = {"PRONT": "Prontuário", "ENT": "Entrada", "PACIENTE": "Paciente", "CARTAOSUS": "Cartão SUS", "CPF": "CPF", "CIDADE": "Cidade", "CEP": "CEP", "PLANO": "Plano"} %}
+{% macro ficha_p1(original) %}
+<div class="subquadro">
+  <table class="w-full border-collapse text-left">
+    <caption class="rotulo mb-1 text-left">Ficha na planilha de endereços</caption>
+    <tbody>
+    {% for rotulo, valor in original.p1 %}
+      <tr class="border-t border-linha"><th scope="row" class="py-1.5 pr-3 align-top text-sm font-bold text-suave">{{ rotulo }}</th><td class="py-1.5 align-top break-words">{{ valor or "" }}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endmacro %}
+{% macro ligadas(original) %}
+{% if original.p3 or original.p4 %}
+<div class="subquadro">
+  {% for evento in original.p3 %}
+  <p class="rotulo m-0">Na planilha de eventos (aba {{ evento.aba }}{% if evento.ano %}, bloco de {{ evento.ano }}{% endif %})</p>
+  <p class="m-0">{{ evento.valores | select | join(" · ") }}</p>
+  {% endfor %}
+  {% for entrada in original.p4 %}
+  <p class="rotulo m-0{% if original.p3 or not loop.first %} mt-2{% endif %}">Na planilha de entradas</p>
+  <p class="m-0 numero">{% for chave, rotulo in colunas_p4.items() if entrada.get(chave) %}{{ rotulo }} {{ entrada[chave] }}{% if not loop.last %} · {% endif %}{% endfor %}</p>
+  {% endfor %}
+</div>
+{% endif %}
+{% endmacro %}

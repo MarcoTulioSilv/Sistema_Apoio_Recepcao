@@ -14,8 +14,8 @@ from sar.nucleo.contexto import Perfil
 from sar.nucleo.erros import AcessoNegado, ConfirmacaoNecessaria, NaoEncontrado, RegraViolada
 from testes.apoio import planilhas
 from testes.apoio.cadastro import INICIO, dados_completos, montar, pessoa
+from testes.apoio.carga import contar, servico, ti
 from testes.apoio.fabrica import Fabrica
-from testes.modulo_10_carga.conftest import contar, servico, ti
 
 pytestmark = pytest.mark.integracao
 

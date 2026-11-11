@@ -160,6 +160,11 @@ class CargaService(Protocol):
         revisão e a conferência, e sorteia a primeira amostra (P-29). Os mesmos erros da simulação."""
         ...
 
+    def em_revisao(self, contexto: Contexto) -> bool:
+        """Há carga simulada ou efetivada e ainda não aceita, e o perfil vê o relatório: o item do menu aparece.
+        Não é auditada: não mostra dado nenhum."""
+        ...
+
     def relatorio(self, contexto: Contexto) -> Relatorio | None:
         """RF-1106, para a recepção e a administração (nunca para o TI, RF-1004); a consulta é auditada. None antes
         da primeira simulação. Depois do aceite, só as contagens: as linhas já foram apagadas (DD-69)."""

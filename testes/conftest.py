@@ -17,6 +17,7 @@ from sqlalchemy import Engine, text
 
 from sar.modulo_08_dados.banco import ConfigBanco, criar_engine
 from sar.nucleo.logs import RUIDOSOS
+from testes.apoio import planilhas
 from testes.apoio.acesso import HASH, CriarUsuario
 from testes.apoio.fabrica import VALORES_SENSIVEIS, Fabrica, PacienteFicticio
 from testes.apoio.relogio_controlado import RelogioControlado
@@ -261,3 +262,24 @@ def tesseract_falso(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Paciente
 @pytest.fixture
 def sem_tesseract(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     monkeypatch.setenv("SAR_TESSERACT", str(tmp_path / "nao-existe"))
+
+
+# ------------------------------------------------------------------ carga inicial (MOD-10)
+@pytest.fixture
+def carga(
+    cadastro_zerado: dict[str, int], criar_usuario: CriarUsuario, trilha_zerada: Engine
+) -> Iterator[dict[str, int]]:
+    """Cadastro vazio e o convênio da ficha que não é SUS (IPASGO), como a administração teria cadastrado. Depende de
+    criar_usuario para sair antes dele: a conferência aponta para quem conferiu."""
+    with trilha_zerada.begin() as c:
+        c.execute(text("INSERT INTO convenio (nome, ativo) VALUES ('IPASGO', 1)"))
+    yield cadastro_zerado
+    with trilha_zerada.begin() as c:
+        for comando in ZERAR_CADASTRO[:3]:  # as tabelas da carga
+            c.execute(text(comando))
+
+
+@pytest.fixture
+def sinteticas(fabrica: Fabrica, tmp_path: Path) -> tuple[planilhas.Sinteticas, Path]:
+    gerado = planilhas.gerar(fabrica)
+    return gerado, gerado.gravar(tmp_path / "carga")

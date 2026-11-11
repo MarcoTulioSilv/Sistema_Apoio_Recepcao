@@ -1,0 +1,133 @@
+{% extends "layout.html" %}
+{# Relatório de exceções e avisos da carga (RF-1106, DDS §14.3; maquete aprovada em 11/11/2026). As exceções pedem
+   uma decisão antes do aceite; os avisos não: o que ficou vazio já está nas pendências do paciente. #}
+{% from "_carga_original.html" import ficha_p1, ligadas %}
+{% block titulo_pagina %}Carga inicial{% endblock %}
+{% block subtitulo %}{% if not rel %}Nenhuma carga ainda. O TI roda a simulação no servidor.{% elif rel.aceito_em %}Aceita em {{ rel.aceito_em | data_hora }}. A carga inicial está encerrada.{% elif rel.modo.value == "simulacao" %}Simulada em {{ rel.concluido_em | data_hora }} pelo TI. Corrija as planilhas e peça nova simulação; as decisões vêm depois da efetivação.{% else %}Efetivada em {{ rel.concluido_em | data_hora }} pelo TI. {{ rel.contagens.p1.importados }} pacientes importados.{% endif %}{% endblock %}
+{% block conteudo %}
+<div class="flex max-w-6xl flex-col gap-5">
+  {% include "_carga_topo.html" %}
+  {% if not erro_linha %}{% include "_avisos.html" %}{% endif %}
+  {% if rel %}
+  {% set c = rel.contagens %}
+  <div class="grid grid-cols-1 gap-3 md:grid-cols-3">
+    <section class="cartao flex flex-col gap-1 p-4" data-planilha="p1">
+      <h2 class="m-0 text-sm text-suave">Endereços e telefones (base)</h2>
+      <p class="m-0 text-lg font-bold numero">{{ c.p1.linhas }} fichas = {{ c.p1.importados }} importadas + {{ c.p1.excecoes }} exceções</p>
+      <p class="m-0 text-sm text-suave">{{ "A conta fecha." if c.fecha else "A conta NÃO fecha." }} CID descartado em {{ c.cid_descartados }} fichas, sem guardar.</p>
+    </section>
+    <section class="cartao flex flex-col gap-1 p-4" data-planilha="p4">
+      <h2 class="m-0 text-sm text-suave">Entradas</h2>
+      <p class="m-0 text-lg font-bold numero">{{ c.p4.linhas }} linhas</p>
+      <p class="m-0 text-sm text-suave">{{ c.p4.ligadas }} ligadas a uma ficha · {{ c.p4.fora_da_base }} de quem já saiu · {{ c.p4.sem_prontuario }} sem prontuário</p>
+    </section>
+    <section class="cartao flex flex-col gap-1 p-4" data-planilha="p3">
+      <h2 class="m-0 text-sm text-suave">Eventos (óbitos, altas, transferências, transplantes)</h2>
+      <p class="m-0 text-lg font-bold numero">{{ c.p3.linhas }} linhas</p>
+      <p class="m-0 text-sm text-suave">{{ c.p3.casadas }} com o nome de uma ficha ainda listada</p>
+    </section>
+  </div>
+
+  {% if not rel.aceito_em %}
+  {% set a_tratar = excecoes | rejectattr("tratamento") | list | length %}
+  <section class="cartao overflow-hidden" aria-labelledby="exc-t">
+    <div class="flex flex-wrap items-center gap-2.5 px-4 py-3">
+      <h2 id="exc-t" class="m-0 text-lg">Exceções: fichas que não entraram</h2>
+      {% if a_tratar %}<span class="etiqueta-a numero">{{ a_tratar }} a tratar</span>{% else %}<span class="etiqueta-n numero">{{ excecoes | length }}</span>{% endif %}
+    </div>
+    <p class="m-0 px-4 pb-3 text-[15px] text-suave">{% if pode_tratar %}Cada uma precisa de uma decisão antes do aceite: cadastrar pela tela ou descartar com o motivo.{% elif rel.modo.value == "simulacao" %}Corrija na planilha o que for erro dela; a decisão sobre as que restarem é feita depois da efetivação.{% endif %}</p>
+    <ul class="m-0 list-none p-0">
+    {% for li in excecoes %}
+      {% set texto = textos_excecao.get(li.excecao, (li.excecao, "")) %}
+      {% set estado = "d" if li.tratamento and li.tratamento.value == "descartada" else ("i" if li.tratamento else "a") %}
+      <li id="linha-{{ li.linha_id }}" class="flex flex-col gap-3 border-t border-linha px-4 py-4" data-estado="{{ estado }}" data-excecao="{{ li.excecao }}">
+        <div class="flex min-w-0 flex-col gap-0.5">
+          <div class="flex flex-wrap items-center gap-2"><strong>{{ nome_da_ficha(li.original) }}</strong>
+            {% if estado == "a" %}<span class="etiqueta-a">A tratar</span>{% elif estado == "d" %}<span class="etiqueta-n">Descartada</span>{% else %}<span class="etiqueta-n">Cadastrada pela tela</span>{% endif %}</div>
+          <span><span class="font-bold">{{ texto[0] }}.</span> {{ texto[1] }}</span>
+          <span class="text-sm text-suave numero">Linha {{ li.numero_linha }} da planilha de endereços</span>
+        </div>
+        <details{% if loop.first and estado == "a" or erro_linha == li.linha_id %} open{% endif %}><summary class="cursor-pointer font-bold text-acao">Ver a ficha como está na planilha</summary>
+          <div class="mt-3 grid grid-cols-1 gap-4 xl:grid-cols-2">{{ ficha_p1(li.original) }}{{ ligadas(li.original) }}</div>
+        </details>
+        {% if li.tratamento %}
+        <p class="m-0 text-sm">{% if estado == "d" %}<span class="font-bold">Descartada:</span> {{ li.motivo }}{% else %}<span class="font-bold">Cadastrada pela tela.</span> <a href="{{ url_for('pacientes.ficha', paciente_id=li.paciente_id) }}">Abrir a ficha</a>{% endif %}</p>
+        {% endif %}
+        {% if pode_tratar %}
+        {% set d = digitado if erro_linha == li.linha_id else {} %}
+        {% if li.tratamento and erro_linha != li.linha_id %}
+        <details><summary class="cursor-pointer text-sm font-bold text-acao">Refazer a decisão</summary>
+          <form class="mt-1 flex flex-col gap-3" method="post" action="{{ url_for('carga.tratar', linha_id=li.linha_id) }}">
+            {% if erro_linha == li.linha_id %}<p class="m-0 rounded-lg border border-urgencia-borda bg-urgencia-fundo p-3 font-bold text-urgencia" role="alert">{{ erro }}</p>{% endif %}
+            <fieldset class="m-0 flex flex-col gap-2 border-0 p-0">
+              <legend class="mb-1 p-0 font-bold">O que foi feito</legend>
+              <div class="flex flex-wrap gap-3">
+                <label class="opcao-decisao has-checked:border-aprovar has-checked:bg-aprovar-fundo has-checked:text-aprovar-escura">
+                  <input class="sr-only" type="radio" name="tratamento" value="importada_manual"{% if d.get("tratamento") == "importada_manual" %} checked{% endif %}> Cadastrei pela tela</label>
+                <label class="opcao-decisao has-checked:border-urgencia has-checked:bg-urgencia-fundo has-checked:text-urgencia">
+                  <input class="sr-only" type="radio" name="tratamento" value="descartada"{% if d.get("tratamento") == "descartada" %} checked{% endif %}> Descartar</label>
+              </div>
+            </fieldset>
+            <div class="flex flex-wrap items-end gap-3">
+              <label class="campo w-44"><span class="rotulo">Prontuário do cadastro</span><input class="entrada numero" name="prontuario" autocomplete="off" value="{{ d.get('prontuario', '') }}"></label>
+              <label class="campo min-w-60 grow"><span class="rotulo">Motivo <span class="font-normal text-suave">(obrigatório para descartar)</span></span><input class="entrada" name="motivo" maxlength="300" autocomplete="off" value="{{ d.get('motivo', '') }}"></label>
+              <button class="btn-primario" type="submit">Registrar<span class="sr-only">: {{ nome_da_ficha(li.original) }}</span></button>
+            </div>
+          </form>
+        </details>
+        {% else %}
+          <form class="mt-1 flex flex-col gap-3" method="post" action="{{ url_for('carga.tratar', linha_id=li.linha_id) }}">
+            {% if erro_linha == li.linha_id %}<p class="m-0 rounded-lg border border-urgencia-borda bg-urgencia-fundo p-3 font-bold text-urgencia" role="alert">{{ erro }}</p>{% endif %}
+            <fieldset class="m-0 flex flex-col gap-2 border-0 p-0">
+              <legend class="mb-1 p-0 font-bold">O que foi feito</legend>
+              <div class="flex flex-wrap gap-3">
+                <label class="opcao-decisao has-checked:border-aprovar has-checked:bg-aprovar-fundo has-checked:text-aprovar-escura">
+                  <input class="sr-only" type="radio" name="tratamento" value="importada_manual"{% if d.get("tratamento") == "importada_manual" %} checked{% endif %}> Cadastrei pela tela</label>
+                <label class="opcao-decisao has-checked:border-urgencia has-checked:bg-urgencia-fundo has-checked:text-urgencia">
+                  <input class="sr-only" type="radio" name="tratamento" value="descartada"{% if d.get("tratamento") == "descartada" %} checked{% endif %}> Descartar</label>
+              </div>
+            </fieldset>
+            <div class="flex flex-wrap items-end gap-3">
+              <label class="campo w-44"><span class="rotulo">Prontuário do cadastro</span><input class="entrada numero" name="prontuario" autocomplete="off" value="{{ d.get('prontuario', '') }}"></label>
+              <label class="campo min-w-60 grow"><span class="rotulo">Motivo <span class="font-normal text-suave">(obrigatório para descartar)</span></span><input class="entrada" name="motivo" maxlength="300" autocomplete="off" value="{{ d.get('motivo', '') }}"></label>
+              <button class="btn-primario" type="submit">Registrar<span class="sr-only">: {{ nome_da_ficha(li.original) }}</span></button>
+            </div>
+          </form>
+        {% endif %}
+        {% endif %}
+      </li>
+    {% else %}
+      <li class="border-t border-linha px-4 py-3">Nenhuma exceção.</li>
+    {% endfor %}
+    </ul>
+  </section>
+
+  <section class="cartao overflow-hidden" aria-labelledby="av-t">
+    <div class="flex flex-wrap items-center gap-2.5 px-4 py-3">
+      <h2 id="av-t" class="m-0 text-lg">Avisos: entraram, com algo a conferir</h2><span class="etiqueta-n numero">{{ avisos | map(attribute=1) | map("length") | sum }}</span>
+    </div>
+    <p class="m-0 px-4 pb-3 text-[15px] text-suave">Nada a decidir aqui: o que ficou vazio já está na lista de pendências de cada paciente.</p>
+    <ul class="m-0 list-none p-0">
+    {% for codigo, linhas in avisos %}
+      {% set texto = textos_aviso.get(codigo, (codigo, "")) %}
+      <li class="border-t border-linha px-4 py-3" data-aviso="{{ codigo }}"><details{% if loop.first %} open{% endif %}>
+        <summary class="cursor-pointer"><span class="font-bold">{{ texto[0] }}</span> <span class="etiqueta-n numero">{{ linhas | length }}</span></summary>
+        <p class="m-0 mt-1 text-sm text-suave">{{ texto[1] }}</p>
+        <ul class="m-0 mt-2 list-none p-0">
+        {% for li in linhas %}
+          <li class="flex flex-wrap items-center justify-between gap-3 border-t border-linha py-2">
+            <span>{{ nome_da_ficha(li.original) }} <span class="text-sm text-suave numero">· linha {{ li.numero_linha }}</span></span>
+            {% if li.paciente_id %}<a class="btn-pequeno" href="{{ url_for('pacientes.ficha', paciente_id=li.paciente_id) }}">Abrir a ficha<span class="sr-only">: {{ nome_da_ficha(li.original) }}</span></a>{% endif %}
+          </li>
+        {% endfor %}
+        </ul>
+      </details></li>
+    {% else %}
+      <li class="border-t border-linha px-4 py-3">Nenhum aviso.</li>
+    {% endfor %}
+    </ul>
+  </section>
+  {% endif %}
+  {% endif %}
+</div>
+{% endblock %}

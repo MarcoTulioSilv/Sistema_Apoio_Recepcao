@@ -293,6 +293,7 @@ class Componentes:
     ingestao: IngestaoService
     documentos: DocumentoService
     leitura_documentos: LeituraDocumentos
+    carga: CargaService
 
 
 # Verificadores de uso dos parâmetros imutáveis (DD-51): a data de implantação trava na primeira sessão confirmada.
@@ -410,6 +411,7 @@ def compor(
         ingestao=ServicoIngestao(executar, auditoria, parametros, quarentena, cofre, cifra, relogio),
         documentos=ServicoDocumentos(executar, auditoria, cofre),
         leitura_documentos=leitura_documentos,
+        carga=ServicoCarga(executar, auditoria, pacientes, referencias, cifra, pacientes, leitura_cadastro),
     )
 
 

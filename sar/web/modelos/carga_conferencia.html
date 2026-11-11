@@ -1,0 +1,41 @@
+{% extends "layout.html" %}
+{# Conferência lado a lado (DDS §14.3, item 2; maquete aprovada em 11/11/2026): a ficha como estava na planilha à
+   esquerda, presa no alto; à direita, cada campo do cadastro com Confere ou Diverge. A divergência se corrige na ficha,
+   pela tela de sempre (item 3). Dá para registrar em partes. #}
+{% from "_carga_original.html" import ficha_p1, ligadas %}
+{% block titulo_pagina %}Conferir: {{ nome }}{% endblock %}
+{% block subtitulo %}Paciente {{ posicao }} de {{ total }} da amostra. Compare cada campo do cadastro com a ficha da planilha.{% endblock %}
+{% block conteudo %}
+<div class="flex max-w-7xl flex-col gap-5">
+  <p class="m-0"><a href="{{ url_for('carga.amostra') }}">Voltar à amostra</a></p>
+  {% include "_avisos.html" %}
+  <div class="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,21rem)_minmax(0,1fr)] xl:grid-cols-[minmax(0,26rem)_minmax(0,1fr)]">
+    <section class="flex flex-col gap-4 self-start lg:sticky lg:top-6" aria-labelledby="pl-t">
+      <h2 id="pl-t" class="m-0 text-lg">Na planilha</h2>
+      {{ ficha_p1(c.original) }}
+      {{ ligadas(c.original) }}
+    </section>
+    <section class="flex flex-col gap-3" aria-labelledby="cad-t">
+      <h2 id="cad-t" class="m-0 text-lg">No cadastro, como ficou</h2>
+      <form class="cartao overflow-hidden" method="post" action="{{ url_for('carga.registrar', linha_id=c.linha_id) }}">
+        {% for campo in c.campos %}
+        <fieldset class="m-0 grid grid-cols-1 items-center gap-x-4 gap-y-2 border-0 border-t border-linha px-4 py-3 first:border-t-0 sm:grid-cols-[minmax(11rem,1fr)_auto]" data-campo="{{ campo.campo }}" data-estado="{{ campo.resultado.value if campo.resultado else 'aberto' }}">
+          <legend class="sr-only">{{ campo.rotulo }}</legend>
+          <span class="flex min-w-0 flex-col gap-0.5"><span class="text-sm font-bold text-suave" aria-hidden="true">{{ campo.rotulo }}</span><span class="min-w-0 break-words" data-sobre="valor">{{ campo.valor_cadastro or "—" }}</span></span>
+          <span class="flex max-w-[15rem] flex-wrap items-center gap-2 sm:justify-end">
+            <label class="opcao-decisao min-h-11 min-w-28 px-3 has-checked:border-aprovar has-checked:bg-aprovar-fundo has-checked:text-aprovar-escura"><input class="sr-only" type="radio" name="campo-{{ campo.campo }}" value="conferido"{% if campo.resultado and campo.resultado.value == "conferido" %} checked{% endif %}> Confere</label>
+            <label class="opcao-decisao min-h-11 min-w-28 px-3 has-checked:border-urgencia has-checked:bg-urgencia-fundo has-checked:text-urgencia"><input class="sr-only" type="radio" name="campo-{{ campo.campo }}" value="divergente"{% if campo.resultado and campo.resultado.value == "divergente" %} checked{% endif %}> Diverge</label>
+            {% if campo.resultado and campo.resultado.value == "divergente" %}<a class="basis-full text-sm sm:text-right" href="{{ url_for('pacientes.editar', paciente_id=c.paciente_id) }}">Corrigir na ficha</a>{% endif %}
+          </span>
+        </fieldset>
+        {% endfor %}
+        {% set marcados = c.campos | selectattr("resultado") | list | length %}
+        <div class="flex flex-wrap items-center gap-3 border-t border-linha px-4 py-4">
+          <button class="btn-primario" type="submit">Registrar a conferência</button>
+          <span class="text-sm text-suave">{{ marcados }} de {{ c.campos | length }} campos registrados. Dá para registrar em partes.</span>
+        </div>
+      </form>
+    </section>
+  </div>
+</div>
+{% endblock %}

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, replace
 from typing import Any
 
@@ -45,6 +46,8 @@ class ItemMenu:
     rotulo: str
     endpoint: str
     permissoes: tuple[tuple[str, str | None], ...] = ()  # (operação, condição); vazio: todo perfil autenticado
+    enquanto: Callable[[ServicosWeb, Contexto], bool] | None = None  # item que só existe numa fase (a carga)
+    secao: str | None = None  # blueprint cujas telas todas marcam o item como atual (as várias telas da carga)
 
     def visivel(self, contexto: Contexto) -> bool:
         return not self.permissoes or any(GUARDA.pode(contexto, op, cond) for op, cond in self.permissoes)
@@ -97,6 +100,10 @@ MENU: tuple[ItemMenu, ...] = (
             ("acesso.ancora.conferir", None),
         ),
     ),
+    # Só enquanto houver carga simulada ou efetivada e não aceita (DDS §14.3); depois do aceite, o item some.
+    ItemMenu(
+        "Carga inicial", "carga.relatorio", (("carga.excecoes.ver", None),), lambda s, c: s.carga.em_revisao(c), "carga"
+    ),
 )
 
 
@@ -124,6 +131,7 @@ def criar_app(servicos: ServicosWeb | None = None, config: ConfigWeb | None = No
     from sar.web.rotas_agendamento import bp as agendamento
     from sar.web.rotas_cadastro import bp as cadastro
     from sar.web.rotas_captura import bp as captura
+    from sar.web.rotas_carga import bp as carga
     from sar.web.rotas_convenios import bp as convenios
     from sar.web.rotas_documentos import bp as documentos
     from sar.web.rotas_emissao import bp as emissao
@@ -161,6 +169,7 @@ def criar_app(servicos: ServicosWeb | None = None, config: ConfigWeb | None = No
             titular,
             pendencias,
             agendamento,
+            carga,
         ):
             app.register_blueprint(blueprint)
 
@@ -206,7 +215,13 @@ def criar_app(servicos: ServicosWeb | None = None, config: ConfigWeb | None = No
         contexto: Contexto | None = g.get("contexto")
         if contexto is None:
             return {}
-        itens = [i for i in MENU if i.visivel(contexto)]
+        servicos_app: ServicosWeb | None = app.config["SAR_SERVICOS"]
+        itens = [
+            i
+            for i in MENU
+            if i.visivel(contexto)
+            and (i.enquanto is None or (servicos_app is not None and i.enquanto(servicos_app, contexto)))
+        ]
         return {
             "menu": itens,
             "perfil_rotulo": ROTULOS_PERFIL.get(contexto.perfil, contexto.perfil.value),

@@ -1,0 +1,12 @@
+{# Topo comum das telas da carga (DDS §14.3): as etapas e a navegação entre o relatório e a conferência amostral. #}
+{% if passos %}
+<ol class="passos" aria-label="Etapas da carga">
+  {% for texto, feito in passos %}<li{% if feito %} data-feito{% endif %}>{{ texto }}</li>{% endfor %}
+</ol>
+{% endif %}
+{% if rel and rel.modo.value == "efetivacao" and not rel.aceito_em %}
+<nav aria-label="Telas da carga" class="flex flex-wrap gap-2">
+  <a class="{{ 'btn-primario' if aba == 'relatorio' else 'btn-secundario' }}" href="{{ url_for('carga.relatorio') }}"{% if aba == 'relatorio' %} aria-current="page"{% endif %}>Exceções e avisos</a>
+  <a class="{{ 'btn-primario' if aba == 'amostra' else 'btn-secundario' }}" href="{{ url_for('carga.amostra') }}"{% if aba == 'amostra' %} aria-current="page"{% endif %}>Conferência amostral</a>
+</nav>
+{% endif %}

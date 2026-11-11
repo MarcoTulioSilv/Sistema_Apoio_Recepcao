@@ -26,8 +26,8 @@ from sar.nucleo.portas import Finalidade
 from testes.apoio import planilhas
 from testes.apoio.acesso import SENHA, CriarUsuario
 from testes.apoio.cadastro import AGORA, montar, pessoa
+from testes.apoio.carga import CHAVE, contar, servico, ti
 from testes.apoio.fabrica import VALORES_SENSIVEIS
-from testes.modulo_10_carga.conftest import CHAVE, contar, servico, ti
 
 pytestmark = pytest.mark.integracao
 

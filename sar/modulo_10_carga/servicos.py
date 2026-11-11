@@ -284,6 +284,12 @@ class ServicoCarga:
         dados = json.loads(claro)
         return Original(tuple((r, v) for r, v in dados["p1"]), tuple(dados["p4"]), tuple(dados["p3"]))
 
+    def em_revisao(self, contexto: Contexto) -> bool:
+        if not GUARDA.pode(contexto, VER):
+            return False
+        lote = self._executar(lambda uow: uow.repositorio(RepositorioCarga).ultimo_lote())
+        return lote is not None and lote.situacao != "aceita"
+
     def relatorio(self, contexto: Contexto) -> Relatorio | None:
         GUARDA.exigir(contexto, VER)  # RF-1004: o TI não passa daqui
 
