@@ -275,6 +275,40 @@ class PacienteService(Protocol):
         ...
 
 
+@dataclass(frozen=True, slots=True)
+class CriadoNaCarga:
+    """O paciente criado pela carga inicial e os valores que não entraram (DD-22): cada aviso é um código, sem o
+    valor, para o relatório de exceções (RF-1106)."""
+
+    paciente_id: int
+    avisos: tuple[str, ...]
+
+
+class CadastroDaCarga(Protocol):
+    """A criação usada pela carga inicial (MOD-10, DD-67), na unidade de trabalho dela: a simulação desfaz tudo no
+    fim, e a efetivação grava tudo de uma vez (DD-66)."""
+
+    def criar_na_carga(
+        self,
+        uow: UnidadeDeTrabalho,
+        contexto: Contexto,
+        operacao: str,
+        dados: DadosPaciente,
+        inicio: date | None,
+        cobertura: DadosCobertura | None = None,
+        telefones: Sequence[DadosTelefone] = (),
+        contatos: Sequence[DadosContato] = (),
+    ) -> CriadoNaCarga:
+        """As mesmas regras do criar, com a permissão da operação da carga (carga.simular ou carga.efetivar). Valor
+        inválido não é gravado: o campo fica vazio e o código vai aos avisos (DD-22, DEC-58), inclusive telefone,
+        contato e cobertura recusados. CEP não é consultado: entra como não verificado (DD-68). Tríade coincidente
+        não pede confirmação: vira possível duplicidade (pendência 9) e o aviso "triade.coincidente".
+
+        RegraViolada só quando o paciente não pode entrar: "P-03.minimo" e "prontuario.repetido", "cpf.repetido" ou
+        "cns.repetido" (INV-07, INV-15), sem o id de quem já usa o número no detalhe."""
+        ...
+
+
 class EventoService(Protocol):
     """Eventos do paciente (RF-601 a RF-606). O registro é direto; correção e remoção só por autorização da
     administração (DEC-42), que aprova na hora quando é ela quem pede (P-01)."""

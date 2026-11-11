@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import calendar
 from collections.abc import Callable, Sequence
-from dataclasses import dataclass, fields
+from dataclasses import dataclass, fields, replace
 from datetime import date
 from typing import Literal
 
@@ -12,6 +12,7 @@ from sar.modulo_01_acesso.contrato import AuditService, PermissionGuard
 from sar.modulo_02_cadastro.contrato import (
     CoberturaFicha,
     ContatoFicha,
+    CriadoNaCarga,
     DadosCobertura,
     DadosContato,
     DadosPaciente,
@@ -150,6 +151,41 @@ def _contatos_limpos(contatos: Sequence[DadosContato]) -> list[tuple[str, str | 
     return limpos
 
 
+_CAMPOS_PACIENTE = frozenset(f.name for f in fields(DadosPaciente))
+
+
+def _normalizado_na_carga(dados: DadosPaciente, hoje: date, avisos: list[str]) -> DadosPaciente:
+    """DD-22 na carga: cada valor que o normalizar recusa sai, com o código do campo, e o resto segue."""
+    for _ in _CAMPOS_PACIENTE:
+        try:
+            return normalizar(dados, hoje)
+        except RegraViolada as erro:
+            campo = erro.codigo.split(".", 1)[0]
+            if campo not in _CAMPOS_PACIENTE or getattr(dados, campo) is None:
+                raise
+            avisos.append(erro.codigo)
+            dados = replace(dados, **{campo: None})
+    return normalizar(dados, hoje)
+
+
+def _telefones_na_carga(
+    telefones: Sequence[DadosTelefone], ja: list[_TelefoneLimpo], avisos: list[str]
+) -> list[_TelefoneLimpo]:
+    """Os telefones que passam nas regras da tela; o recusado e o repetido no mesmo dono saem com aviso."""
+    limpos = ja
+    for telefone in telefones:
+        try:
+            ddd, numero = validar_telefone(telefone.ddd, telefone.numero, telefone.tipo)
+        except RegraViolada as erro:
+            avisos.append(erro.codigo)
+            continue
+        if any((t.ddd, t.numero) == (ddd, numero) for t in limpos):
+            avisos.append("telefone.repetido")
+            continue
+        limpos.append(_TelefoneLimpo(ddd, numero, telefone.tipo.value))
+    return limpos
+
+
 def _com_unicidade[R](chamada: Callable[[], R]) -> R:
     """Duas gravações simultâneas que a verificação prévia não viu: a restrição do banco barra a segunda
     (INV-02, INV-07, INV-09, INV-15)."""
@@ -281,6 +317,87 @@ class ServicoPacientes:
             return paciente_id
 
         return _com_unicidade(lambda: self._executar(operacao))
+
+    def criar_na_carga(
+        self,
+        uow: UnidadeDeTrabalho,
+        contexto: Contexto,
+        operacao: str,
+        dados: DadosPaciente,
+        inicio: date | None,
+        cobertura: DadosCobertura | None = None,
+        telefones: Sequence[DadosTelefone] = (),
+        contatos: Sequence[DadosContato] = (),
+    ) -> CriadoNaCarga:
+        """DD-67 e DD-22: as regras do criar, campo a campo, deixando vazio o valor que elas recusariam."""
+        if operacao not in ("carga.simular", "carga.efetivar"):
+            raise ValueError("operação de carga desconhecida")
+        GUARDA.exigir(contexto, operacao)
+        avisos: list[str] = []
+        dados = _normalizado_na_carga(dados, hoje_na_clinica(contexto), avisos)
+        verificar_minimo(dados, inicio)
+        if inicio is None:
+            raise RuntimeError("inalcançável: verificar_minimo exige a data de início")
+        try:
+            verificar_inicio(inicio, dados.data_nascimento)
+        except RegraViolada as erro:  # não se sabe qual das duas está errada; o início é o mínimo da P-03
+            avisos.append(erro.codigo)
+            dados = replace(dados, data_nascimento=None)
+        repositorio = uow.repositorio(RepositorioPaciente)
+        for _ in range(2):  # residência e naturalidade: cada uma pode sair sozinha
+            try:
+                self._verificar.municipios(uow, dados)
+                break
+            except RegraViolada as erro:
+                avisos.append(erro.codigo)
+                dados = replace(dados, **{erro.codigo.split(".", 1)[0]: None})
+        else:
+            self._verificar.municipios(uow, dados)
+        try:
+            self._verificar.unicos(repositorio, dados, None)
+        except RegraViolada as erro:
+            raise RegraViolada(erro.codigo) from None  # sem o id de quem usa: o terminal do TI não vê (RF-1004)
+        if self._verificar.candidatos_triade(repositorio, dados, None):
+            avisos.append("triade.coincidente")
+        carteirinha: str | None = None
+        if cobertura is not None:
+            try:
+                carteirinha = validar_cobertura(cobertura.tipo, cobertura.convenio_id, cobertura.carteirinha)
+                if cobertura.convenio_id is not None and not self._convenio_ativo(uow, cobertura.convenio_id):
+                    raise RegraViolada("cobertura.convenio_inativo")
+            except RegraViolada as erro:
+                avisos.append(erro.codigo)
+                cobertura = None
+        telefones_limpos = _telefones_na_carga(telefones, [], avisos)
+        contatos_limpos: list[tuple[str, str | None, list[_TelefoneLimpo]]] = []
+        for contato in contatos:
+            try:
+                nome, parentesco = validar_contato(contato.nome, None)
+            except RegraViolada as erro:
+                avisos.append(erro.codigo)
+                continue
+            try:
+                parentesco = validar_contato(nome, contato.parentesco)[1]
+            except RegraViolada as erro:
+                avisos.append(erro.codigo)
+            contatos_limpos.append((nome, parentesco, _telefones_na_carga(contato.telefones, [], avisos)))
+
+        campos = _campos(dados)
+        paciente_id = repositorio.criar(campos, cep_verificado=False, em=contexto.instante)  # DD-68: sem consulta
+        periodo_id = repositorio.abrir_periodo(paciente_id, inicio)
+        alteracoes = campos_alterados(DadosPaciente(), dados)
+        alteracoes["periodo_inicio"] = (None, inicio)
+        self._auditoria.registrar(
+            uow, contexto, "cadastro.paciente.criar", "paciente", str(paciente_id), alteracoes, "carga inicial"
+        )
+        if cobertura is not None:
+            self._gravar_cobertura(uow, contexto, periodo_id, cobertura, carteirinha)
+        self._gravar_telefones_e_contatos(uow, contexto, paciente_id, telefones_limpos, contatos_limpos)
+        return CriadoNaCarga(paciente_id, tuple(avisos))
+
+    def _convenio_ativo(self, uow: UnidadeDeTrabalho, convenio_id: int) -> bool:
+        convenio = self._referencias.convenio(uow, convenio_id)
+        return convenio is not None and convenio.ativo
 
     def atualizar(self, contexto: Contexto, paciente_id: int, versao: int, dados: DadosPaciente) -> int:
         GUARDA.exigir(contexto, "cadastro.paciente.atualizar")

@@ -39,6 +39,10 @@ class RepositorioConvenio(Protocol):
 class RepositorioMunicipio(Protocol):
     def por_codigo(self, codigo: str) -> DadosMunicipio | None: ...
 
+    def com_prefixo(self, prefixo: str) -> list[DadosMunicipio]:
+        """Os códigos de 7 dígitos que começam pelo prefixo (DD-53: o de 6 dígitos tem no máximo um)."""
+        ...
+
     def da_uf(self, uf: str) -> list[DadosMunicipio]:
         """Todos os da UF, em ordem de nome (Goiás tem 246)."""
         ...

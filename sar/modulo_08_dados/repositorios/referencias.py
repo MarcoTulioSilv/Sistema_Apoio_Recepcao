@@ -62,6 +62,10 @@ class RepositorioMunicipioSQL:
         linha = self._s.get(Municipio, codigo)
         return _municipio(linha) if linha is not None else None
 
+    def com_prefixo(self, prefixo: str) -> list[DadosMunicipio]:
+        consulta = select(Municipio).where(Municipio.codigo_ibge.like(f"{_escapar_like(prefixo)}%", escape="\\"))
+        return [_municipio(linha) for linha in self._s.scalars(consulta.order_by(Municipio.codigo_ibge))]
+
     def da_uf(self, uf: str) -> list[DadosMunicipio]:
         consulta = select(Municipio).where(Municipio.uf == uf).order_by(Municipio.nome)
         return [_municipio(linha) for linha in self._s.scalars(consulta)]

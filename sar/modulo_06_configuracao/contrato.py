@@ -86,6 +86,11 @@ class Referencias(Protocol):
 
     def municipio(self, uow: UnidadeDeTrabalho, codigo: str) -> Municipio | None: ...
 
+    def codigo_7_digitos(self, uow: UnidadeDeTrabalho, codigo_6: str) -> Municipio | None:
+        """O município cujo código de 7 dígitos começa pelos 6 informados, por consulta à tabela e nunca por cálculo
+        do dígito (DD-53, RF-1104). None se não houver correspondência; ValueError se não forem 6 dígitos."""
+        ...
+
     def buscar_municipios(self, uow: UnidadeDeTrabalho, termo: str, uf: str | None = None) -> list[Municipio]:
         """Nomes que começam pelo termo, sem distinção de caixa e de acento; no máximo 20. Termo com menos de
         2 caracteres não busca. RegraViolada se a UF não existir."""
