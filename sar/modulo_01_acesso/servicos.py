@@ -336,6 +336,7 @@ class _Desfecho:
 
     sessao: SessaoAberta | None = None
     erro: type[ErroSAR] | None = None
+    contexto: Contexto | None = None  # entrada pelo terminal (DD-113): quem é, sem sessão
 
 
 def _inteiro(valor: object) -> int:
@@ -362,6 +363,19 @@ class ServicoAutenticacao:
     def entrar(self, login: str, senha: str, origem: str, nova_senha: str | None = None) -> SessaoAberta:
         """CredencialInvalida (sempre a mesma), TermoPendente, TrocaDeSenhaExigida ou RegraViolada (nova senha
         fraca). Abre a sessão na mesma transação e encerra a anterior do usuário (P-02, DEC-63)."""
+        desfecho = self._conferir(login, senha, origem, nova_senha, terminal=False)
+        if desfecho.sessao is None:  # sem erro, a operação sempre devolve a sessão
+            raise RuntimeError("entrada sem desfecho")
+        return desfecho.sessao
+
+    def autenticar_terminal(self, login: str, senha: str, origem: str) -> Contexto:
+        """DD-113: a mesma conferência, sem sessão; a trilha registra a entrada com o motivo "terminal"."""
+        desfecho = self._conferir(login, senha, origem, None, terminal=True)
+        if desfecho.contexto is None:
+            raise RuntimeError("entrada sem desfecho")
+        return desfecho.contexto
+
+    def _conferir(self, login: str, senha: str, origem: str, nova_senha: str | None, terminal: bool) -> _Desfecho:
         agora = self._relogio.agora()
         limite = _inteiro(self._parametros.valor("login_tentativas"))
         inicial = _inteiro(self._parametros.valor("login_bloqueio_inicial"))
@@ -370,6 +384,7 @@ class ServicoAutenticacao:
 
         def falha(uow: UnidadeDeTrabalho, contexto: Contexto, motivo: str, erro: type[ErroSAR]) -> _Desfecho:
             entidade_id = str(contexto.usuario_id) if contexto.usuario_id else None
+            motivo = f"terminal; {motivo}" if terminal else motivo
             self._auditoria.registrar(uow, contexto, "acesso.sessao.entrar", "usuario", entidade_id, motivo=motivo)
             return _Desfecho(erro=erro)
 
@@ -401,14 +416,17 @@ class ServicoAutenticacao:
                 if nova_senha is None:
                     return falha(uow, contexto, "falha.troca_exigida", TrocaDeSenhaExigida)
                 self._gravar_nova_senha(uow, contexto, usuario, nova_senha)
+            if terminal:  # DD-113: sem sessão, para não encerrar a da tela (P-02)
+                self._auditoria.registrar(
+                    uow, contexto, "acesso.sessao.entrar", "usuario", str(usuario.id), motivo="terminal"
+                )
+                return _Desfecho(contexto=contexto)
             return _Desfecho(sessao=self._abrir_sessao(uow, contexto, usuario.nome))
 
         desfecho = self._executar(operacao)
         if desfecho.erro is not None:
             raise desfecho.erro()
-        if desfecho.sessao is None:  # sem erro, a operação sempre devolve a sessão
-            raise RuntimeError("entrada sem desfecho")
-        return desfecho.sessao
+        return desfecho
 
     def _abrir_sessao(self, uow: UnidadeDeTrabalho, contexto: Contexto, nome: str) -> SessaoAberta:
         usuario_id = contexto.usuario_id

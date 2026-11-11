@@ -215,3 +215,53 @@ def test_tempo_de_resposta_igual_para_login_existente_e_inexistente(
 
     existente, inexistente = medir("auth_tempo"), medir("nao_existe_tempo")
     assert 0.75 < existente / inexistente < 1.33
+
+
+# ------------------------------------------------------------------ terminal do servidor (DD-113)
+def sessoes_ativas(engine: Engine, usuario_id: int) -> int:
+    with engine.connect() as c:
+        sql = "SELECT COUNT(*) FROM sessao_usuario WHERE usuario_id = :u AND encerrada_em IS NULL"
+        return int(c.execute(text(sql), {"u": usuario_id}).scalar_one())
+
+
+@pytest.mark.requisito("DD-113", "RF-1002", "P-02")
+def test_terminal_identifica_sem_abrir_sessao_nem_derrubar_a_da_tela(
+    criar_usuario: CriarUsuario, engine_web: Engine, relogio: RelogioControlado
+) -> None:
+    uid = criar_usuario("auth_terminal", perfil="ti")
+    auth = servico(engine_web, relogio)
+    auth.entrar("auth_terminal", SENHA, "10.0.0.5")
+    contexto = auth.autenticar_terminal("auth_terminal", SENHA, "cli.carga")
+    assert (contexto.usuario_id, contexto.perfil, contexto.sessao_id, contexto.origem) == (
+        uid, Perfil.TI, None, "cli.carga",
+    )  # fmt: skip
+    assert sessoes_ativas(engine_web, uid) == 1  # a da tela continua
+    assert trilha(engine_web)[-1] == ("acesso.sessao.entrar", uid, str(uid), "terminal", None)
+
+
+@pytest.mark.requisito("DD-113", "RF-1002", "CT-ACE-04")
+def test_terminal_conta_a_falha_e_bloqueia_como_a_tela(
+    criar_usuario: CriarUsuario, engine_web: Engine, relogio: RelogioControlado
+) -> None:
+    uid = criar_usuario("auth_terminal_erro", perfil="ti")
+    auth = servico(engine_web, relogio)
+    for _ in range(5):
+        with pytest.raises(CredencialInvalida):
+            auth.autenticar_terminal("auth_terminal_erro", "senha errada", "cli.carga")
+    assert estado(engine_web, uid)[1] is not None  # bloqueado pelo mesmo contador da tela (§5.2)
+    with pytest.raises(CredencialInvalida):  # bloqueado: nem a senha certa entra
+        auth.autenticar_terminal("auth_terminal_erro", SENHA, "cli.carga")
+    assert all(linha[3].startswith("terminal; falha.") for linha in trilha(engine_web))
+
+
+@pytest.mark.requisito("DD-113", "DEC-47")
+def test_terminal_exige_termo_e_troca_de_senha_pela_tela(
+    criar_usuario: CriarUsuario, engine_web: Engine, relogio: RelogioControlado
+) -> None:
+    criar_usuario("auth_terminal_termo", perfil="ti", termo=False)
+    criar_usuario("auth_terminal_troca", perfil="ti", trocar=True)
+    auth = servico(engine_web, relogio)
+    with pytest.raises(TermoPendente):
+        auth.autenticar_terminal("auth_terminal_termo", SENHA, "cli.carga")
+    with pytest.raises(TrocaDeSenhaExigida):
+        auth.autenticar_terminal("auth_terminal_troca", SENHA, "cli.carga")
