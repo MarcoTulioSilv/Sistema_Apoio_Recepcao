@@ -223,9 +223,21 @@ umount /media/pendrive-a
 
 ```powershell
 sar migrar                                   # aplica as migrações até a última
-sar reverter base; sar migrar                # desfaz tudo e refaz (só antes do go-live, DD-60)
+sar reverter base; sar migrar                # desfaz tudo e refaz: SÓ com o banco sem cadastro (ver abaixo)
 sar reverter 0003                            # volta até uma migração específica
 sar verificar-cadeia                         # confere a trilha de auditoria, como o job diário (§13.1)
+```
+
+**`sar reverter base` só serve com o banco sem cadastro.** Com pacientes, a reversão da 0002 para (eles apontam para
+os municípios), mas o MySQL não desfaz o que as reversões anteriores já tinham feito na estrutura: colunas somem sem a
+versão acompanhar, e o `sar migrar` seguinte não as recria. Para começar do zero com dados, recrie o banco (perde tudo
+o que há nele, inclusive os usuários da aplicação):
+
+```powershell
+docker compose exec -T mysql bash -c 'mysql -uroot -p"$(cat /run/secrets/mysql_root)" -e "DROP DATABASE sar; CREATE DATABASE sar CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;"'
+sar migrar
+sar criar-usuarios-banco
+sar criar-superusuario --nome "Seu Nome" --login seu.login      # seção 5
 ```
 
 Para agir no banco de testes, defina `$env:SAR_BANCO_NOME = "sar_teste"` antes (e remova depois com
@@ -410,8 +422,9 @@ python scripts\gerar_planilhas_sinteticas.py armazenamento\carga_sintetica --fic
 sar carga simular armazenamento\carga_sintetica --login ti.fulano
 ```
 
-Para repetir o ensaio da efetivação no banco de desenvolvimento, recrie o banco (seção 4: `sar reverter base; sar
-migrar`), porque a efetivação não se desfaz pela aplicação.
+Para repetir o ensaio da efetivação no banco de desenvolvimento, recrie o banco pela receita da seção 4 (o `DROP
+DATABASE`, não o `sar reverter base`, que para no meio quando há pacientes), porque a efetivação não se desfaz pela
+aplicação.
 
 ---
 
