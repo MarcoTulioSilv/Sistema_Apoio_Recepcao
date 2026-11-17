@@ -110,7 +110,8 @@ branch `incremento-7`, à espera do PR. Próximo: **Incremento 8** (homologaçã
   administração com o número de ativos contado pela recepção. Migração 0009; dependência `openpyxl==3.1.5` (AD-22);
   planilhas sintéticas com os defeitos reais (`scripts/gerar_planilhas_sinteticas.py`). Ensaio em desenvolvimento: 146
   fichas simuladas em 2,7 s, numa transação, com a conta fechando. Decisões do incremento: DD-113 (TI identificado no
-  terminal, sem sessão) e DD-114 (papel de cada planilha, exceção de linha e aviso de campo).
+  terminal, sem sessão) e DD-114 (papel de cada planilha, exceção de linha e aviso de campo); no uso, DD-115
+  (metadados da imagem fora da busca de outros formatos no logotipo).
 
 - **Incremento 6:** CT-PEN-01 a 05 e CT-JOB-01 a 07 passando (PT §4.10). MOD-07 com a matriz única igual à da ERS
   (DD-55), as 19 fontes ligadas, a tela de pendências, a contagem no início e as pendências de cada paciente nos
@@ -218,7 +219,7 @@ confirmado (Brother DCP-1610NW); webcam disponível na estação (USB, 1280×720
 |---|---|---|---|
 | RF | RF-1011 (e RF-922; RF-303, RF-806 e RF-807 removidos) | DEC | DEC-76 |
 | RNF | RNF-628 | AD | AD-27 |
-| SEG | SEG-31 | DD | DD-114 |
+| SEG | SEG-31 | DD | DD-115 |
 | QAS | QAS-15 | P (pontos validados) | P-29 |
 | INV | INV-15 | R (riscos) | R-43 |
 | MOD | MOD-11 | DOC | DOC-07 |
