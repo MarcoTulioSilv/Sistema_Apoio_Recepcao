@@ -223,15 +223,21 @@ umount /media/pendrive-a
 
 ```powershell
 sar migrar                                   # aplica as migrações até a última
-sar reverter base; sar migrar                # desfaz tudo e refaz: SÓ com o banco sem cadastro (ver abaixo)
-sar reverter 0003                            # volta até uma migração específica
+sar zerar-desenvolvimento --confirmo         # apaga os dados de uso e mantém estrutura, dados fixos e usuários
+sar reverter base; sar migrar                # desfaz e refaz a estrutura: só com o banco SEM dados
 sar verificar-cadeia                         # confere a trilha de auditoria, como o job diário (§13.1)
 ```
 
-**`sar reverter base` só serve com o banco sem cadastro.** Com pacientes, a reversão da 0002 para (eles apontam para
-os municípios), mas o MySQL não desfaz o que as reversões anteriores já tinham feito na estrutura: colunas somem sem a
-versão acompanhar, e o `sar migrar` seguinte não as recria. Para começar do zero com dados, recrie o banco (perde tudo
-o que há nele, inclusive os usuários da aplicação):
+**Para recomeçar no desenvolvimento** (por exemplo, repetir a carga), use `sar zerar-desenvolvimento --confirmo` com
+`$env:SAR_AMBIENTE = "desenvolvimento"`. Ele apaga pacientes, documentos, cargas, sessões e a trilha (que recomeça
+vazia), esvazia o cofre e a quarentena de desenvolvimento e mantém a estrutura, os municípios, as escalas, as faixas
+etárias, os tipos de documento e os usuários. Com `--sem-usuarios`, apaga também os usuários. Fora do desenvolvimento,
+é recusado.
+
+**`sar reverter` recusa banco com dados.** Com pacientes, a reversão da 0002 parava no meio (eles apontam para os
+municípios), mas o MySQL não desfaz o que as reversões anteriores já tinham feito na estrutura: colunas sumiam sem a
+versão acompanhar, e o `sar migrar` seguinte não as recriava. Agora ele recusa antes de começar. Para a estrutura do
+zero, recrie o banco (perde tudo, inclusive os usuários):
 
 ```powershell
 docker compose exec -T mysql bash -c 'mysql -uroot -p"$(cat /run/secrets/mysql_root)" -e "DROP DATABASE sar; CREATE DATABASE sar CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;"'
@@ -422,9 +428,8 @@ python scripts\gerar_planilhas_sinteticas.py armazenamento\carga_sintetica --fic
 sar carga simular armazenamento\carga_sintetica --login ti.fulano
 ```
 
-Para repetir o ensaio da efetivação no banco de desenvolvimento, recrie o banco pela receita da seção 4 (o `DROP
-DATABASE`, não o `sar reverter base`, que para no meio quando há pacientes), porque a efetivação não se desfaz pela
-aplicação.
+Para repetir o ensaio da efetivação no banco de desenvolvimento, zere-o com `sar zerar-desenvolvimento --confirmo`
+(seção 4), porque a efetivação não se desfaz pela aplicação. Os usuários continuam; entre de novo pela tela.
 
 ---
 

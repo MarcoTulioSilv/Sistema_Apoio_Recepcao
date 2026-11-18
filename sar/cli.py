@@ -1,7 +1,8 @@
 """Linha de comando `sar` (DDS §12.1).
 
   sar migrar [alvo]          aplica as migrações até o alvo (padrão: head), como sar_migracao
-  sar reverter alvo          desfaz até o alvo; só antes do go-live (DD-60)
+  sar reverter alvo          desfaz até o alvo; só antes do go-live e com o banco sem dados (DD-60)
+  sar zerar-desenvolvimento  apaga os dados de uso e mantém estrutura, dados fixos e usuários; só em desenvolvimento
   sar criar-usuarios-banco   cria sar_web, sar_worker e sar_expurgo com as senhas dos segredos (DD-58)
   sar verificar-cadeia       verifica a trilha de auditoria como o job diário (§13.1), pelo usuário do worker
   sar criar-usuario-ti       primeiro TI da implantação, quando não há TI ativo (DD-85)
@@ -300,6 +301,32 @@ def carga(acao: str, pasta: str, login: str, definitiva: bool) -> int:
     return 0
 
 
+def zerar_desenvolvimento(confirmo: bool, sem_usuarios: bool) -> int:
+    """Para repetir um ensaio no banco de desenvolvimento sem quebrar a estrutura (o reverter não serve com dados)."""
+    if ambiente_atual() is not Ambiente.DESENVOLVIMENTO:
+        print("Recusado: só com SAR_AMBIENTE=desenvolvimento. Em produção, dado não se apaga assim.", file=sys.stderr)
+        return 1
+    if not confirmo:
+        print("Recusado: isto apaga todos os pacientes, documentos, cargas e a trilha do banco de desenvolvimento. "
+              "Repita com --confirmo.", file=sys.stderr)  # fmt: skip
+        return 1
+    apagadas = banco.zerar_desenvolvimento(manter_usuarios=not sem_usuarios)
+    arquivos = 0
+    pastas = pastas_do_ambiente()
+    for pasta in (pastas.cofre, pastas.quarentena):
+        for arquivo in (f for f in pasta.rglob("*") if f.is_file()) if pasta.is_dir() else ():
+            arquivo.unlink()
+            arquivos += 1
+    linhas = sum(apagadas.values())
+    print(f"Banco de desenvolvimento zerado: {linhas} linha(s) em {sum(1 for n in apagadas.values() if n)} tabela(s); "
+          f"{arquivos} arquivo(s) do cofre e da quarentena.")  # fmt: skip
+    print(
+        "Ficaram a estrutura, os municípios, as escalas, as faixas etárias, os tipos de documento"
+        + ("." if sem_usuarios else " e os usuários (entre de novo pela tela).")
+    )
+    return 0
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="sar", description="Linha de comando do SAR")
     sub = parser.add_subparsers(dest="comando", required=True)
@@ -310,6 +337,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     p = sub.add_parser("criar-usuarios-banco", help="cria os usuários por processo")
     p.add_argument("--admin", default="root", help="usuário com privilégio de criar usuários")
     p.add_argument("--segredo-admin", default="mysql_root", help="segredo com a senha do administrador")
+    p = sub.add_parser("zerar-desenvolvimento", help="apaga os dados de uso do banco de desenvolvimento")
+    p.add_argument("--confirmo", action="store_true", help="confirma que os dados serão apagados")
+    p.add_argument("--sem-usuarios", action="store_true", help="apaga também os usuários")
     sub.add_parser("verificar-cadeia", help="verifica a trilha de auditoria e registra a âncora")
     p = sub.add_parser("criar-usuario-ti", help="primeiro TI da implantação")
     p.add_argument("--nome", required=True)
@@ -354,7 +384,15 @@ def main(argv: Sequence[str] | None = None) -> int:
         if args.comando == "migrar":
             banco.migrar(args.alvo)
         elif args.comando == "reverter":
-            banco.reverter(args.alvo)
+            try:
+                banco.reverter(args.alvo)
+            except banco.BancoComDados:
+                print("Recusado: o banco tem dados. Reverter apagaria colunas que não voltam e pararia (DD-60). "
+                      "Para recomeçar em desenvolvimento: sar zerar-desenvolvimento --confirmo (comandos.md, seção 4).",
+                      file=sys.stderr)  # fmt: skip
+                return 1
+        elif args.comando == "zerar-desenvolvimento":
+            return zerar_desenvolvimento(args.confirmo, args.sem_usuarios)
         elif args.comando == "criar-usuarios-banco":
             banco.criar_usuarios_banco(args.admin, args.segredo_admin)
         elif args.comando == "criar-usuario-ti":
