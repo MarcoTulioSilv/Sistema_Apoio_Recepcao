@@ -1,15 +1,31 @@
-{# A ficha como estava na planilha (o lado esquerdo da conferência, §14.3) e as linhas da P4 e da P3 ligadas a ela. #}
+{# A ficha como estava na planilha (o lado esquerdo da conferência, §14.3) e as linhas da P4 e da P3 ligadas a ela. A
+   linha de rótulo que a carga não reconhece vem marcada, e o que a leitura não encaixou vem como "trechos" (18/11/2026). #}
 {% set colunas_p4 = {"PRONT": "Prontuário", "ENT": "Entrada", "PACIENTE": "Paciente", "CARTAOSUS": "Cartão SUS", "CPF": "CPF", "CIDADE": "Cidade", "CEP": "CEP", "PLANO": "Plano"} %}
+{% set campos_sobra = {"paciente": "Paciente", "endereco": "Endereço", "documentos": "Documentos", "telefone": "Telefone", "linha": "Linha estranha"} %}
 {% macro ficha_p1(original) %}
 <div class="subquadro">
   <table class="w-full border-collapse text-left">
     <caption class="rotulo mb-1 text-left">Ficha na planilha de endereços</caption>
     <tbody>
     {% for rotulo, valor in original.p1 %}
-      <tr class="border-t border-linha"><th scope="row" class="py-1.5 pr-3 align-top text-sm font-bold text-suave">{{ rotulo }}</th><td class="py-1.5 align-top break-words">{{ valor or "" }}</td></tr>
+      {% set desconhecido = loop.index0 in original.desconhecidos %}
+      <tr class="border-t border-linha{% if desconhecido %} bg-alta-fundo{% endif %}"{% if desconhecido %} data-estado="desconhecido"{% endif %}>
+        <th scope="row" class="py-1.5 pr-3 align-top text-sm font-bold text-suave">{{ rotulo }}{% if desconhecido %} <span class="etiqueta-a">não reconhecido</span>{% endif %}</th>
+        <td class="py-1.5 align-top break-words">{{ valor or "" }}</td>
+      </tr>
     {% endfor %}
     </tbody>
   </table>
+  {% if original.sobras %}
+  <div class="mt-3" data-sobre="sobras">
+    <p class="rotulo m-0">Trechos que não entraram em campo nenhum</p>
+    <ul class="m-0 list-none p-0">
+      {% for campo, trecho in original.sobras %}
+      <li class="flex flex-wrap gap-2 border-t border-linha py-1.5"><span class="w-24 text-sm font-bold text-suave">{{ campos_sobra.get(campo, campo) }}</span><span class="break-words">{{ trecho }}</span></li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% endif %}
 </div>
 {% endmacro %}
 {% macro ligadas(original) %}

@@ -37,7 +37,7 @@ def test_da_excecao_ao_aceite(
     entrar_no_navegador(page, endereco, "sistcarga_adm")
 
     page.get_by_role("navigation", name="Navegação principal").get_by_role("link", name="Carga inicial").click()
-    expect(page.get_by_role("heading", name="Exceções: fichas que não entraram")).to_be_visible()
+    expect(page.get_by_role("heading", name="Outras exceções: fichas que não entraram")).to_be_visible()
     sem_violacao(page)
 
     # Cada exceção, decidida pelo teclado: a escolha nas setas, o motivo e o Enter.

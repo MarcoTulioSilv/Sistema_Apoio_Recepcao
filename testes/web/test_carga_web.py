@@ -63,8 +63,14 @@ def test_relatorio_e_tratamento_das_excecoes(
     recepcao = cliente(engine_web, criar_usuario, "recepcao")
     html = get(recepcao, "/carga").get_data(as_text=True)
     saida = next(f for f in gerado.fichas if f.defeito == "evento_de_saida")
-    assert saida.nome in html and "Consta na planilha de eventos" in html
-    assert f"{gerado.esperados()['excecoes']} a tratar" in html
+    # Ajuste de 18/11/2026: as saídas num cartão próprio, com o evento ao lado do nome; o rótulo desconhecido marcado
+    # na ficha; os avisos por paciente.
+    saidas = html.split('id="saidas"')[1].split('id="outras"')[0]
+    assert saida.nome in saidas and "Transferência em 12/03/2026" in saidas
+    assert "Constam na planilha de eventos" in html and "Outras exceções: fichas que não entraram" in html
+    assert 'data-estado="desconhecido"' in html and "não reconhecido" in html
+    assert "data-paciente-aviso" in html and 'aria-label="Resumo por tipo"' in html
+    assert f"Exceções: 0 de {gerado.esperados()['excecoes']} tratadas" in html  # saídas e outras, somadas
     assert "/carga/" not in "".join(re.findall(r'href="([^"]*\?[^"]*)"', html))  # nenhum dado em URL
     linha = ids(html, r'action="/carga/excecoes/(\d+)"')[0]
     sem_motivo = post(recepcao, f"/carga/excecoes/{linha}", {"tratamento": "descartada", "motivo": ""})

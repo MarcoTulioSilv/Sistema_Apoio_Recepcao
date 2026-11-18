@@ -5,7 +5,7 @@ aqui não há botão para elas. Nenhum dado de paciente vai à URL: as rotas lev
 from __future__ import annotations
 
 import re
-from collections import defaultdict
+from collections import Counter
 from typing import Any
 
 from flask import Blueprint, current_app, redirect, render_template, request, url_for
@@ -15,7 +15,6 @@ from sar.modulo_01_acesso.contrato import PermissionGuard
 from sar.modulo_10_carga.contrato import (
     CAMPOS_CONFERIDOS,
     Amostra,
-    LinhaRelatorio,
     Modo,
     Original,
     Relatorio,
@@ -99,6 +98,20 @@ AVISOS: dict[str, tuple[str, str]] = {
     "p4.inicio_divergente": ("Início diferente na planilha de entradas", "Vale o da ficha; confira."),
     "p4.cpf_divergente": ("CPF diferente na planilha de entradas", "Vale o da ficha; confira no documento."),
     "p4.cns_divergente": ("CNS diferente na planilha de entradas", "Vale o da ficha; confira no cartão do paciente."),
+    "endereco.bairro_presumido": ("Bairro presumido pelo fim do endereço", "Sem SETOR ou JARDIM; confira o bairro."),
+    "telefone.nono_digito": ("Celular antigo: o 9 da frente foi acrescentado", "Confira o número com o paciente."),
+    "ibge.pelo_nome": ("Município achado pelo nome", "A ficha não trazia o código do IBGE; confira o município."),
+    "p1.rotulo_trocado": ("Rótulo repetido: o campo foi lido pela posição na ficha", "Confira o campo na ficha."),
+    "p1.prontuario_ambiguo": ("Mais de um número na linha do paciente: prontuário não lido", "Confira o prontuário."),
+    "p1.linha_nao_reconhecida": ("Linha que não é da ficha: ficou de fora", "Veja a linha marcada na ficha."),
+    "p1.linha_continuada": ("Linha sem rótulo juntada à de cima", "Confira o campo na ficha da planilha."),
+    "p1.telefone_fora_do_lugar": ("Telefone escrito na linha do convênio", "Entrou nos telefones; confira."),
+    "p1.cns_fora_do_lugar": ("CNS escrito noutra linha da ficha", "Entrou como CNS; confira no cartão."),
+    "p1.celula_fora_do_lugar": ("Data numa linha de texto: ficou de fora", "Veja a ficha da planilha."),
+    "p1.mae_com_prontuario": ("Linha da mãe com número de prontuário", "Confira o nome da mãe e o do paciente."),
+    "p1.sobra_endereco": ("Trecho do endereço que não entrou", "Veja o trecho na ficha da planilha."),
+    "p1.sobra_documentos": ("Trecho dos documentos que não entrou", "Veja o trecho na ficha da planilha."),
+    "p1.sobra_telefone": ("Texto do telefone que não entrou", "Veja o trecho na ficha da planilha."),
 }
 ERROS = {
     "carga.motivo": "Descreva o motivo do descarte, com pelo menos 5 caracteres.",
@@ -119,6 +132,12 @@ RESULTADOS = {
     "sorteados": "Mais pacientes sorteados para a conferência.",
     "aceita": "Carga aceita. A carga inicial está encerrada.",
 }
+SAIDA = "evento_saida"
+# A aba da P3 diz o tipo do evento; as grafias variam (perfilamento §2: TRANFERENCIA, sem o S).
+TIPOS_DE_SAIDA = (("OBITO", "Óbito"), ("ALTA", "Alta"), ("TRANSPLANTE", "Transplante"), ("TRANF", "Transferência"),
+                  ("TRANSF", "Transferência"), ("DESIST", "Desistência"))  # fmt: skip
+_DATA = re.compile(r"\d{1,2}/\d{1,2}/\d{2,4}")
+_SEM_ACENTO = str.maketrans("ÁÂÃÀÉÊÍÓÔÕÚÇ", "AAAAEEIOOOUC")
 _PRONTUARIO = re.compile(r"\s*N\s*[ºo°]?\s*\.?\s*PT\b.*$", re.IGNORECASE)
 
 
@@ -133,6 +152,18 @@ def nome_da_ficha(original: Original) -> str:
         if re.sub(r"[^A-Z]", "", rotulo.upper()) == "PACIENTE" and valor:
             return _PRONTUARIO.sub("", valor).strip() or valor
     return "Ficha sem nome"
+
+
+def evento_da_saida(original: Original) -> str:
+    """'Transferência em 12/03/2026': o tipo pela aba da P3 e a primeira data da linha (DD-114)."""
+    for evento in original.p3:
+        aba = re.sub(r"[^A-Z]", "", str(evento.get("aba", "")).upper().translate(_SEM_ACENTO))
+        tipo = next((nome for prefixo, nome in TIPOS_DE_SAIDA if aba.startswith(prefixo)), "Saída")
+        valores = evento.get("valores")
+        lista = valores if isinstance(valores, list | tuple) else ()
+        data = next((v for v in lista if isinstance(v, str) and _DATA.fullmatch(v.strip())), None)
+        return f"{tipo} em {data.strip()}" if data else tipo
+    return "Saída"
 
 
 def _passos(relatorio: Relatorio | None, amostra: Amostra) -> list[tuple[str, bool]]:
@@ -161,21 +192,22 @@ def _relatorio(contexto: Contexto, **dados: Any) -> str:
     relatorio = _servicos().carga.relatorio(contexto)
     amostra = _amostra(contexto, relatorio)
     linhas = relatorio.linhas if relatorio else ()
-    avisos: dict[str, list[LinhaRelatorio]] = defaultdict(list)
-    for linha in linhas:
-        if not linha.excecao:
-            for codigo in linha.avisos:
-                avisos[codigo].append(linha)
-    ordem = sorted(avisos, key=lambda c: (-len(avisos[c]), c))
+    excecoes = [li for li in linhas if li.excecao]
+    com_avisos = [li for li in linhas if not li.excecao and li.avisos]
+    resumo = Counter(codigo for li in com_avisos for codigo in set(li.avisos))
     return render_template(
         "carga_relatorio.html",
         rel=relatorio,
-        excecoes=[li for li in linhas if li.excecao],
-        avisos=[(codigo, avisos[codigo]) for codigo in ordem],
+        excecoes=excecoes,
+        saidas=[li for li in excecoes if li.excecao == SAIDA],
+        outras=[li for li in excecoes if li.excecao != SAIDA],
+        com_avisos=com_avisos,
+        resumo_avisos=sorted(resumo.items(), key=lambda par: (-par[1], par[0])),
         textos_excecao=EXCECOES,
         textos_aviso=AVISOS,
         passos=_passos(relatorio, amostra),
         nome_da_ficha=nome_da_ficha,
+        evento_da_saida=evento_da_saida,
         aba="relatorio",
         pode_tratar=GUARDA.pode(contexto, "carga.conferencia.registrar")
         and relatorio is not None
