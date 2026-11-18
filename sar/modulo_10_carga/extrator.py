@@ -17,13 +17,16 @@ from openpyxl import load_workbook
 
 from sar.modulo_10_carga.regras import (
     COLUNAS_P4,
+    ROTULOS,
     BlocoP1,
     CelulaP1,
     LinhaP3,
     LinhaP4,
     Valor,
+    campo_do_rotulo,
     classificar_linha_p3,
     coluna_do_nome_p3,
+    comeca_ficha,
     norm_rotulo,
 )
 from sar.nucleo.erros import RegraViolada
@@ -33,6 +36,7 @@ from sar.nucleo.erros import RegraViolada
 ARQUIVOS = {"p1": "p1_enderecos.xlsx", "p4": "p4_entradas.xlsx", "p3": "p3_eventos.xlsx"}
 TAMANHO_MAXIMO = 20 * 1024 * 1024  # as três planilhas reais somam poucas centenas de kB
 LINHAS_CABECALHO_P4 = 10  # a P4 tem um "2009" solto na linha 1 e o cabeçalho na 2
+MINIMO_ROTULOS = 3  # uma ficha tem 9; uma tabela com os mesmos nomes no cabeçalho tem no máximo 1 na coluna A
 
 
 @dataclass(frozen=True, slots=True)
@@ -56,6 +60,22 @@ def valor_da_celula(valor: Any) -> Valor:
     return texto if texto.strip() else None
 
 
+ESPACO_STRICT = (
+    b"purl.oclc.org/ooxml"  # o da "Planilha Strict Open XML"; o formato comum usa schemas.openxmlformats.org
+)
+
+
+def formato_strict(caminho: Path) -> bool:
+    """Visto no uso (17/11/2026): a P4 salva pelo Excel como "Planilha Strict Open XML" tem extensão .xlsx, mas o
+    OpenPyXL não entende esse formato e descarta todas as abas. Olha só o cabeçalho do índice das abas, nunca célula."""
+    with zipfile.ZipFile(caminho) as pacote:
+        try:
+            with pacote.open("xl/workbook.xml") as indice:
+                return ESPACO_STRICT in indice.read(4096)
+        except KeyError:
+            return False
+
+
 def _abrir(pasta: Path, chave: str) -> Any:
     caminho = pasta / ARQUIVOS[chave]
     if not caminho.is_file():
@@ -63,9 +83,17 @@ def _abrir(pasta: Path, chave: str) -> Any:
     if caminho.stat().st_size > TAMANHO_MAXIMO:
         raise RegraViolada("carga.planilha_grande", {"planilha": chave})
     try:
-        return load_workbook(caminho, read_only=True, data_only=True, keep_links=False)
+        if formato_strict(caminho):
+            raise RegraViolada("carga.planilha_strict", {"planilha": chave})
+        livro = load_workbook(caminho, read_only=True, data_only=True, keep_links=False)
     except OSError, ValueError, KeyError, zipfile.BadZipFile:
         raise RegraViolada("carga.planilha_ilegivel", {"planilha": chave}) from None
+    if not livro.worksheets:
+        # Visto no uso: um .xls convertido fora do Excel e do LibreOffice, com a definição da aba inválida; o OpenPyXL
+        # descarta a aba com um aviso e o livro abre vazio.
+        livro.close()
+        raise RegraViolada("carga.planilha_sem_aba", {"planilha": chave})
+    return livro
 
 
 def _linhas(folha: Any) -> Iterator[tuple[int, tuple[Valor, ...]]]:
@@ -73,22 +101,76 @@ def _linhas(folha: Any) -> Iterator[tuple[int, tuple[Valor, ...]]]:
         yield numero, tuple(valor_da_celula(v) for v in linha)
 
 
-def blocos_p1(linhas: Iterator[tuple[int, tuple[Valor, ...]]]) -> tuple[BlocoP1, ...]:
-    """Fichas separadas por linha inteiramente vazia; rótulo na coluna A, valor na B (perfilamento §2)."""
+def celula_preta(celula: Any) -> bool:
+    """Preenchimento sólido preto: a cor direta, "Preto, Texto 1" do tema ou o preto da paleta antiga."""
+    preenchimento = getattr(celula, "fill", None)
+    if preenchimento is None or preenchimento.fill_type != "solid":
+        return False
+    cor = preenchimento.fgColor
+    if cor.type == "rgb":
+        return isinstance(cor.rgb, str) and cor.rgb[-6:].upper() == "000000"
+    if cor.type == "theme":
+        return cor.theme == 1 and not cor.tint
+    return bool(cor.type == "indexed" and cor.indexed == 8)
+
+
+LinhaP1 = tuple[int, tuple[Valor, ...] | None]  # None: a faixa preta entre as fichas
+
+
+def linhas_p1(folha: Any) -> Iterator[LinhaP1]:
+    """As linhas da P1, com a faixa preta entre as fichas lida como separador mesmo que tenha texto (escondido, preto
+    no preto): a P1 real separa as fichas de 9 linhas por uma linha pintada de preto (visto no uso, 18/11/2026)."""
+    for numero, linha in enumerate(folha.iter_rows(), start=1):
+        if any(celula_preta(c) for c in linha[:2]):
+            yield numero, None
+        else:
+            yield numero, tuple(valor_da_celula(getattr(c, "value", None)) for c in linha)
+
+
+def blocos_p1(linhas: Iterator[LinhaP1]) -> tuple[BlocoP1, ...]:
+    """Rótulo na coluna A, valor na B (perfilamento §2). Uma ficha começa na linha de rótulo PACIENTE que vem depois da
+    faixa preta (DD-114, visto no uso em 18/11/2026); linha vazia não separa nada. A planilha é feita à mão, copiando
+    a ficha de cima: um PACIENTE no meio da ficha (na linha da cidade) não começa outra, e a faixa seguida de outra
+    coisa também não. O título no alto da aba fica num bloco só dele, que não tem rótulo de ficha (SEM_FICHA)."""
     blocos: list[BlocoP1] = []
     atual: list[CelulaP1] = []
+    depois_da_faixa = False
     for numero, valores in linhas:
+        if valores is None:
+            depois_da_faixa = True
+            continue
         a = valores[0] if valores else None
         b = valores[1] if len(valores) > 1 else None
         if a is None and b is None:
-            if atual:
-                blocos.append(BlocoP1(atual[0].linha, tuple(atual)))
-                atual = []
             continue
+        sem_ficha = not any(campo_do_rotulo(c.rotulo) for c in atual)
+        if atual and comeca_ficha(a) and (depois_da_faixa or sem_ficha):
+            blocos.append(BlocoP1(atual[0].linha, tuple(atual)))
+            atual = []
+        depois_da_faixa = False
         atual.append(CelulaP1(numero, str(a) if a is not None and not isinstance(a, date) else "", b))
     if atual:
         blocos.append(BlocoP1(atual[0].linha, tuple(atual)))
     return tuple(blocos)
+
+
+def aba_de_fichas(livro: Any) -> list[LinhaP1]:
+    """A aba da P1 que a carga lê (DD-114): a única aba visível com fichas, isto é, com rótulos da ficha na coluna A.
+    Visto no uso (17/11/2026): a P1 real tem, além da aba original, uma tentativa de tabela (um dado por coluna) e duas
+    abas ocultas. Aba oculta não conta: é o que a recepção não vê."""
+    escolhidas: list[list[LinhaP1]] = []
+    for folha in livro.worksheets:
+        if folha.sheet_state != "visible":
+            continue
+        linhas = list(linhas_p1(folha))
+        rotulos = sum(1 for _, valores in linhas if valores and norm_rotulo(valores[0]) in ROTULOS)
+        if rotulos >= MINIMO_ROTULOS:
+            escolhidas.append(linhas)
+    if not escolhidas:
+        raise RegraViolada("carga.p1_sem_fichas", {"planilha": "p1"})
+    if len(escolhidas) > 1:
+        raise RegraViolada("carga.p1_varias_abas", {"planilha": "p1"})
+    return escolhidas[0]
 
 
 def linhas_p4(linhas: Iterator[tuple[int, tuple[Valor, ...]]]) -> tuple[LinhaP4, ...]:
@@ -101,13 +183,13 @@ def linhas_p4(linhas: Iterator[tuple[int, tuple[Valor, ...]]]) -> tuple[LinhaP4,
             if "PRONT" in rotulos.values():
                 colunas = {i: r for i, r in rotulos.items() if r in COLUNAS_P4}
             elif numero >= LINHAS_CABECALHO_P4:
-                raise RegraViolada("carga.p4_cabecalho")
+                raise RegraViolada("carga.p4_cabecalho", {"planilha": "p4"})
             continue
         if all(v is None for v in valores):
             continue
         lidas.append(LinhaP4(numero, {r: valores[i] if i < len(valores) else None for i, r in colunas.items()}))
     if colunas is None:
-        raise RegraViolada("carga.p4_cabecalho")
+        raise RegraViolada("carga.p4_cabecalho", {"planilha": "p4"})
     return tuple(lidas)
 
 
@@ -129,12 +211,13 @@ def linhas_p3(aba: str, linhas: Iterator[tuple[int, tuple[Valor, ...]]]) -> tupl
 def ler(pasta: Path) -> Planilhas:
     p1 = _abrir(pasta, "p1")
     try:
-        blocos = blocos_p1(_linhas(p1.worksheets[0]))
+        blocos = blocos_p1(iter(aba_de_fichas(p1)))
     finally:
         p1.close()
     p4 = _abrir(pasta, "p4")
     try:
-        entradas = linhas_p4(_linhas(p4.worksheets[0]))
+        visiveis = [folha for folha in p4.worksheets if folha.sheet_state == "visible"]
+        entradas = linhas_p4(_linhas((visiveis or p4.worksheets)[0]))
     finally:
         p4.close()
     p3 = _abrir(pasta, "p3")

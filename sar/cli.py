@@ -244,6 +244,20 @@ def rotina_documentos(comando: str, depois_de: str | None, minutos: float | None
 
 
 ORIGEM_CARGA = "cli.carga"
+NOMES_PLANILHA = {"p1": "P1 (endereços e telefones)", "p4": "P4 (entradas)", "p3": "P3 (eventos)"}
+# Recusas da carga explicadas ao TI: só o código, a planilha e o que fazer; nada do conteúdo (DD-65).
+RECUSAS_CARGA = {
+    "carga.planilha_ausente": "não está na pasta, com o nome que a carga espera (comandos.md, seção 10).",
+    "carga.planilha_grande": "passa de 20 MB.",
+    "carga.planilha_ilegivel": "não abre como planilha .xlsx. Abra no Excel ou no LibreOffice e salve como .xlsx.",
+    "carga.planilha_sem_aba": "abriu sem nenhuma aba legível (a definição da aba no arquivo está inválida). Abra no "
+    "Excel ou no LibreOffice e use Salvar como .xlsx; um arquivo convertido por outra ferramenta costuma dar isso.",
+    "carga.planilha_strict": 'foi salva como "Planilha Strict Open XML", que o leitor não entende. No Excel, use '
+    'Salvar como e escolha "Pasta de Trabalho do Excel (*.xlsx)".',
+    "carga.p4_cabecalho": "não tem a coluna PRONT. nas primeiras linhas.",
+    "carga.p1_sem_fichas": "não tem nenhuma aba visível com fichas (rótulo na coluna A, valor na B).",
+    "carga.p1_varias_abas": "tem mais de uma aba visível com fichas. Deixe só a das fichas atuais ou oculte as outras.",
+}
 
 
 def _linhas_da_carga(resumo: ResumoCarga) -> list[str]:
@@ -252,8 +266,8 @@ def _linhas_da_carga(resumo: ResumoCarga) -> list[str]:
     p1, p4, p3 = c["p1"], c["p4"], c["p3"]
     linhas = [
         f"Carga em {resumo.modo.value} (lote {resumo.lote_id}). A conta fecha: {'sim' if c['fecha'] else 'NÃO'}.",
-        f"  P1 endereços e telefones: {p1['linhas']} ficha(s) = {p1['importados']} importada(s) + "
-        f"{p1['excecoes']} exceção(ões)",
+        f"  P1 endereços e telefones: {p1['linhas']} bloco(s) = {p1['importados']} importado(s) + "
+        f"{p1['excecoes']} exceção(ões) + {p1.get('sem_ficha', 0)} sem ficha (título ou nota)",
         f"  P4 entradas: {p4['linhas']} linha(s) = {p4['ligadas']} ligada(s) a uma ficha + {p4['fora_da_base']} fora "
         f"da base + {p4['sem_prontuario']} sem prontuário",
         f"  P3 eventos: {p3['linhas']} linha(s) = {p3['casadas']} casada(s) com uma ficha + "
@@ -294,6 +308,12 @@ def carga(acao: str, pasta: str, login: str, definitiva: bool) -> int:
         except AcessoNegado:
             print("Recusado: a carga é do perfil TI (DDS §4.9).", file=sys.stderr)
             return 1
+        except RegraViolada as erro:
+            planilha = erro.detalhe.get("planilha")
+            if planilha in NOMES_PLANILHA and erro.codigo in RECUSAS_CARGA:
+                print(f"Recusado: a planilha {NOMES_PLANILHA[planilha]} {RECUSAS_CARGA[erro.codigo]}", file=sys.stderr)
+                return 1
+            raise
     finally:
         engine.dispose()
     for linha in _linhas_da_carga(resumo):

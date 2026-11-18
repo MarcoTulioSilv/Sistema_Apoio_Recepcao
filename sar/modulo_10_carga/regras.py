@@ -18,7 +18,7 @@ import unicodedata
 from collections import Counter, defaultdict
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field, replace
-from datetime import date
+from datetime import date, timedelta
 
 Valor = str | date | None
 
@@ -52,6 +52,39 @@ def _digitos(texto: str) -> str:
 
 
 # ------------------------------------------------------------------ P1: rótulos (ND-49)
+# Quando o rótulo não está no dicionário, um trecho dele decide, na ordem (visto no perfil da P1 real, 18/11/2026:
+# "DATA DE NASCIMENTO", "DOC.PESSOAL", "CIDAE/CEP", "NASCIMENTO"). Rótulo longo é texto fora do lugar, não rótulo.
+ROTULOS_POR_TRECHO = (
+    ("MAE", "mae"), ("NOMEDA", "mae"), ("NASC", "nascimento"), ("INICIO", "inicio"), ("TRATAM", "inicio"),
+    ("DATADE", "nascimento"),
+    ("CEP", "cidade"), ("CIDADE", "cidade"), ("MUNIC", "cidade"), ("DOC", "documentos"), ("CPF", "documentos"),
+    ("CONV", "convenio"), ("CNS", "convenio"), ("FONE", "telefone"), ("TEL", "telefone"), ("CEL", "telefone"),
+    ("ENDER", "endereco"),
+)  # fmt: skip
+TAMANHO_MAXIMO_ROTULO = 24
+
+
+def comeca_ficha(rotulo: object) -> bool:
+    """A linha de rótulo iniciado por PACIENTE, logo depois da faixa preta, começa uma ficha (DD-114). O prontuário não
+    entra na regra: há fichas sem número (visto no uso, 18/11/2026)."""
+    return norm_rotulo(rotulo).startswith("PACIENTE")
+
+
+def campo_do_rotulo(rotulo: object) -> str | None:
+    """O campo da ficha a que o rótulo se refere: pelo dicionário e, se não estiver nele, por um trecho conhecido."""
+    normalizado = norm_rotulo(rotulo)
+    if normalizado in ROTULOS:
+        return ROTULOS[normalizado]
+    if not normalizado or len(normalizado) > TAMANHO_MAXIMO_ROTULO:
+        return None
+    if normalizado.startswith("END"):
+        return "endereco"
+    if normalizado.startswith("PACIENTE"):  # "PACIENTE NOME"; "CONTATO DO PACIENTE" não é (visto no uso)
+        return "paciente"
+    return next((campo for trecho, campo in ROTULOS_POR_TRECHO if trecho in normalizado), None)
+
+
+SEM_FICHA = "p1.sem_ficha"  # bloco sem nenhum rótulo de ficha: título ou nota, contado à parte
 ROTULOS = {
     "PACIENTE": "paciente",
     "NOMEDAMAE": "mae", "NOMEMAE": "mae",
@@ -114,10 +147,21 @@ class RegistroP1:
     cid_descartado: bool = False  # ND-45: o CID nunca é guardado; só contado
     avisos: tuple[str, ...] = ()
     excecao: str | None = None
+    # Trechos de uma célula que a leitura não encaixou em campo nenhum, por campo da ficha. Só vão ao conteúdo cifrado
+    # da linha, para a recepção ver na conferência; aos avisos vai só o código (p1.sobra_<campo>).
+    sobras: tuple[tuple[str, str], ...] = ()
+
+
+def _sobra(texto: str) -> str | None:
+    """O que restou de uma célula, se ainda tiver letra ou número: pontuação e espaço não contam."""
+    limpo = _espacos(re.sub(r"^[\s.,;:/()\-]+|[\s.,;:/()\-]+$", "", texto))
+    return limpo if re.search(r"[0-9A-Za-zÀ-ÿ]", limpo) else None
 
 
 # ------------------------------------------------------------------ datas (ND-55)
-_DATA = re.compile(r"(\d{1,2})[/.\-](\d{1,2})[/.\-](\d{2,4})")
+EPOCA_EXCEL = date(1899, 12, 30)  # o dia zero do Excel no Windows
+SERIAL_MINIMO, SERIAL_MAXIMO = 10000, 73050  # de 18/05/1927 a 31/12/2099; um ano solto ("2015") não é serial
+_DATA = re.compile(r"(\d{1,2})[/.\-]+(\d{1,2})[/.\-]+(\d{2,4})")
 
 
 def ler_data(valor: Valor) -> date | None:
@@ -126,6 +170,10 @@ def ler_data(valor: Valor) -> date | None:
         return valor
     if not valor:
         return None
+    serial = valor.strip().removesuffix(".0")
+    if serial.isdigit() and SERIAL_MINIMO <= int(serial) <= SERIAL_MAXIMO:
+        # Data gravada como número serial do Excel, numa célula sem formato de data (visto no uso: "43914").
+        return EPOCA_EXCEL + timedelta(days=int(serial))
     achado = _DATA.search(valor)
     if achado is None:
         return None
@@ -139,17 +187,28 @@ def ler_data(valor: Valor) -> date | None:
 
 
 # ------------------------------------------------------------------ células compostas
-_PRONTUARIO = re.compile(r"N\s*[ºo°]?\s*\.?\s*PT\s*[:.]?\s*(\d+)", re.I)
+_MARCA_DO_NUMERO = re.compile(r"(?:\bN\s*[º°]|\bN[º°o]?\s*\.?\s*PT\b|\bPT\b|\bN\.)\s*[:.]?", re.I)
+_PRONTUARIO = re.compile(r"(?:N\s*[ºo°]?\s*\.?\s*PT|(?<![A-Za-z])PT)\s*[:.]?\s*(\d+)", re.I)
 _IBGE = re.compile(r"C[ÓO]?D[.:]?\s*(?:IBGE)?\s*[.:]?\s*(\d{6,7})", re.I)
 _CEP = re.compile(r"CEP\s*[.:]?\s*([\d.\- ]{8,12})", re.I)
 _UF = re.compile(r"[\s\-]+([A-Z]{2})$")
 _CPF = re.compile(r"\b(\d{3}[.\s]?\d{3}[.\s]?\d{3}[-.\s]?\d{2})\b")
 _RG = re.compile(r"RG\s*[.:]?\s*([\d.\-]+)", re.I)
 _ORGAO = re.compile(r"(?:ORG[ÃÂA]?O?\.?\s*EXPEDIDOR\s*[.:]?)?\s*([A-Z]{2,6}\s*[-\s]?\s*[A-Z]{2})\s*$", re.I)
-_CNS = re.compile(r"CNS\s*[.:]?\s*([\d.\s]{15,25})", re.I)
+_CNS = re.compile(r"CNS\s*[.:;]?\s*([\d.\s]{15,25})", re.I)
+_CNS_SOLTO = re.compile(r"(?<!\d)\d[\d.\s]{13,24}\d(?!\d)")  # "SUS 999.9999.9999.9999", sem o rótulo
 _CID = re.compile(r"CID\s*[.:]?\s*N?[ºo°]?\s*[-:]?\s*([A-Z0-9.\-]*)", re.I)
 _FONE = re.compile(r"(?:\(\s*\d{2}\s*\)\s*)?\d[\d\s.\-]{6,}\d")
 _TIPOS_LOGRADOURO = r"(AV|AVENIDA|RUA|R|VIELA|TRAVESSA|TV|ALAMEDA|AL|PRACA|PRA[ÇC]A|ROD|RODOVIA)"
+# Pedaços do complemento, na ordem da ficha. CASA entrou no uso com a P1 real (18/11/2026).
+COMPLEMENTOS = (
+    ("QD", r"\bQD\s*[.:]?\s*(\w+)"),
+    ("LT", r"\bLT\s*[.:]?\s*(\w+)"),
+    ("CASA", r"\bCASA\s*[.:]?\s*(\w+)"),
+    ("AP", r"\bAP(?:TO)?\s*[.:]?\s*(\w+)"),
+    ("BLOCO", r"\bBL(?:OCO)?\s*[.:]?\s*(\w+)"),
+)
+_FIM_DO_BAIRRO = r"\b(?:QD|LT|CASA|APTO|AP|BLOCO|BL)\b"
 _BAIRRO = re.compile(r"\b(SETOR|CONJ\.?|CONJUNTO|RESIDENCIAL|JARDIM|BAIRRO|VILA)\b(.*)$", re.I)
 
 
@@ -159,16 +218,34 @@ class _Leitura:
     def __init__(self, numero_linha: int) -> None:
         self.campos: dict[str, object] = {"numero_linha": numero_linha}
         self.avisos: list[str] = []
+        self.sobras: list[tuple[str, str]] = []
 
     def aviso(self, codigo: str) -> None:
         self.avisos.append(codigo)
 
+    def sobrou(self, campo: str, texto: str | None) -> None:
+        if texto:
+            self.sobras.append((campo, texto))
+            self.aviso(f"p1.sobra_{campo}")
+
     def paciente(self, valor: str) -> None:
+        """Nome não tem dígito: o número da linha é o prontuário, com ou sem "Nº PT", "N°", "PT" ou "-" antes (visto
+        no uso, 18/11/2026: "NOME N° 0621", "NOME 782"). Com mais de um número, o rótulo PT decide; sem ele, nenhum
+        vale, o nome fica até o primeiro número e o resto vira sobra."""
         achado = _PRONTUARIO.search(valor)
         if achado:
             self.campos["prontuario"] = achado.group(1)
             valor = valor[: achado.start()]
-        self.campos["nome"] = _espacos(valor) or None
+        else:
+            numeros = list(re.finditer(r"\d+", valor))
+            if len(numeros) == 1:
+                self.campos["prontuario"] = numeros[0].group(0)
+                valor = valor[: numeros[0].start()] + valor[numeros[0].end() :]
+            elif numeros:
+                self.aviso("p1.prontuario_ambiguo")
+                self.sobrou("paciente", _sobra(valor[numeros[0].start() :]))
+                valor = valor[: numeros[0].start()]
+        self.campos["nome"] = _espacos(_MARCA_DO_NUMERO.sub(" ", valor)).strip(" -:/.,") or None
 
     def cidade(self, valor: str) -> None:
         achado = _IBGE.search(valor)
@@ -207,6 +284,9 @@ class _Leitura:
         orgao = _ORGAO.search(valor.strip())
         if orgao and self.campos.get("rg"):
             self.campos["rg_orgao"] = re.sub(r"\s+", "", orgao.group(1).upper())
+            valor = valor.strip()[: orgao.start()]
+        resto = re.sub(r"\b(?:CPF|RG|ORG[ÃÂA]?O?\.?\s*EXPEDIDOR)\b\s*[.:]?", " ", valor, flags=re.I)
+        self.sobrou("documentos", _sobra(resto))
         if self.campos.get("rg") and self.campos.get("rg") == self.campos.get("cpf"):  # ND-36: é a CIN
             self.campos.pop("rg")
             self.campos.pop("rg_orgao", None)
@@ -217,10 +297,34 @@ class _Leitura:
         if cns:
             self.campos["cns"] = _digitos(cns.group(1))
             valor = valor[: cns.start()] + valor[cns.end() :]
-        self.campos["convenio"] = re.sub(r"[\s/:]+", " ", valor).strip(" /:") or None
+        else:  # sem o rótulo: a sequência de 15 dígitos é o CNS (visto no uso)
+            solto = next((m for m in _CNS_SOLTO.finditer(valor) if len(_digitos(m.group(0))) == 15), None)
+            if solto:
+                self.campos["cns"] = _digitos(solto.group(0))
+                valor = valor[: solto.start()] + valor[solto.end() :]
+        fone = _FONE.search(valor)
+        if fone:  # "SUS CNS: … (64) 9… PACIENTE": um telefone fora do lugar (visto no uso)
+            self.telefone(valor[fone.start() :])
+            valor = valor[: fone.start()]
+            self.aviso("p1.telefone_fora_do_lugar")
+        nome = re.match(r"[\s/:;]*([A-Za-zÀ-ÿ][A-Za-zÀ-ÿ .]*)", valor)
+        self.campos["convenio"] = _espacos(nome.group(1)).strip(" .") if nome else None
+
+    def _cns_em(self, valor: str) -> str:
+        """O CNS escrito noutra célula (no início do tratamento, visto no uso): vale se a ficha ainda não tem."""
+        achado = _CNS.search(valor) or next(
+            (m for m in _CNS_SOLTO.finditer(valor) if len(_digitos(m.group(0))) == 15), None
+        )
+        if achado is None:
+            return valor
+        if not self.campos.get("cns"):
+            self.campos["cns"] = _digitos(achado.group(1) if achado.re is _CNS else achado.group(0))
+            self.aviso("p1.cns_fora_do_lugar")
+        return valor[: achado.start()] + valor[achado.end() :]
 
     def inicio(self, valor: Valor) -> None:
         if isinstance(valor, str):
+            valor = self._cns_em(valor)
             cid = _CID.search(valor)
             if cid:
                 self.campos["cid_descartado"] = True  # ND-45: descartado na extração
@@ -240,9 +344,9 @@ class _Leitura:
         achados = 0
         tipo = re.match(r"^\s*" + _TIPOS_LOGRADOURO + r"\s*[:.]?\s*", valor, re.I)
         resto = valor[tipo.end() :] if tipo else valor
-        quadra = re.search(r"\bQD\s*[.:]?\s*(\w+)", resto, re.I)
-        lote = re.search(r"\bLT\s*[.:]?\s*(\w+)", resto, re.I)
-        complemento = " ".join(f"{r} {m.group(1)}" for r, m in (("QD", quadra), ("LT", lote)) if m)
+        partes = [(rotulo, re.search(padrao, resto, re.I)) for rotulo, padrao in COMPLEMENTOS]
+        achadas = [(rotulo, m) for rotulo, m in partes if m]
+        complemento = " ".join(f"{r} {m.group(1)}" for r, m in achadas)
         if complemento:
             self.campos["complemento"] = complemento
             achados += 1
@@ -256,11 +360,11 @@ class _Leitura:
                 achados += 1
         bairro = _BAIRRO.search(resto)
         if bairro:
-            limpo = re.split(r"\b(?:QD|LT)\b", bairro.group(0), flags=re.I)[0]
+            limpo = re.split(_FIM_DO_BAIRRO, bairro.group(0), flags=re.I)[0]
             self.campos["bairro"] = _espacos(limpo).strip(" .:-") or None
             achados += 1
         corte = len(resto)
-        for padrao in (r"\bN[ºo°.]?\s*[:.]?\s*\d", r"\bS/?N\b", r"\bQD\b", r"\bLT\b",
+        for padrao in (r"\bN[ºo°.]?\s*[:.]?\s*\d", r"\bS/?N\b", *(c for _, c in COMPLEMENTOS),
                        r"\b(?:SETOR|CONJ|CONJUNTO|RESIDENCIAL|JARDIM|BAIRRO|VILA)\b"):  # fmt: skip
             marca = re.search(padrao, resto, re.I)
             if marca:
@@ -271,10 +375,25 @@ class _Leitura:
             achados += 1
         if achados < 3 or not nome:
             self.aviso("endereco.incompleto")  # perfilamento §5.2: 20% a 30% precisam de revisão
+        # O que ficou fora do logradouro, do número, da quadra, do lote e do bairro vai à conferência como sobra.
+        numero_achado = re.search(r"\bS/?N\b|\bN[ºo°.]?\s*[:.]?\s*\d+", resto, re.I)
+        usados = [(0, corte)] + [m.span() for _, m in achadas] + ([numero_achado.span()] if numero_achado else [])
+        if bairro:
+            sem_quadra = re.split(_FIM_DO_BAIRRO, bairro.group(0), flags=re.I)[0]
+            usados.append((bairro.start(), bairro.start() + len(sem_quadra)))
+        if not bairro and len(usados) > 1:
+            final = max(b for _, b in usados)
+            presumido = _sobra(resto[final:])
+            if presumido:
+                self.campos["bairro"] = presumido
+                self.aviso("endereco.bairro_presumido")
+                usados.append((final, len(resto)))
+        sobra = "".join(" " if any(a <= i < b for a, b in usados) else c for i, c in enumerate(resto))
+        self.sobrou("endereco", _sobra(sobra))
 
     def telefone(self, valor: str) -> None:
         telefones = list(self.campos.get("telefones", ()))  # type: ignore[call-overload]
-        telefones.extend(ler_telefones(valor, self.avisos))
+        telefones.extend(ler_telefones(valor, self.avisos, self.sobras))
         self.campos["telefones"] = tuple(telefones)
 
 
@@ -307,8 +426,17 @@ def _rotulo(texto: str) -> tuple[str | None, str | None, str | None, bool]:
     if entre:
         grau_texto = entre.group(1)
         texto = (texto[: entre.start()] + texto[entre.end() :]).strip(" /,;-")
+        dentro = grau_texto.split()
+        grau_dentro = next((p for p in dentro if parentesco(p) is not None), None)
+        if len(dentro) > 1 and grau_dentro is not None:  # "(MARIA ESPOSA)": nome e parentesco dentro
+            texto = texto or " ".join(p for p in dentro if p != grau_dentro)
+            grau_texto = grau_dentro
+        elif grau_dentro is None and not texto:  # "(MARIA-JOSE)" sozinho: é o nome
+            texto, grau_texto = grau_texto, None
     palavras = texto.split()
-    if grau_texto is None and palavras and parentesco(palavras[-1]) is not None:
+    if grau_texto is None and palavras and parentesco(palavras[0]) is not None:  # "ESPOSA NOME", visto no uso
+        grau_texto, palavras = palavras[0], palavras[1:]
+    elif grau_texto is None and palavras and parentesco(palavras[-1]) is not None:  # "NOME ESPOSA"
         grau_texto, palavras = palavras[-1], palavras[:-1]
     nome = " ".join(palavras).strip(" .:") or None
     if nome is not None and norm_rotulo(nome) in PROPRIOS:
@@ -316,13 +444,16 @@ def _rotulo(texto: str) -> tuple[str | None, str | None, str | None, bool]:
     grau = parentesco(grau_texto) if grau_texto else None
     aviso = "contato.parentesco_desconhecido" if grau_texto and grau is None and nome else None
     if nome is None and grau_texto:
-        return None, None, "contato.sem_nome", True  # quem atende, sem nome: recado no telefone do paciente
+        # "(64) 9... ESPOSA": o número é da esposa, sem o nome. Vira contato com o parentesco, chamado pelo que está
+        # escrito, e o aviso pede o nome à recepção (visto no uso).
+        return grau_texto.strip(" .:").upper(), grau, "contato.sem_nome", False
     return nome, grau, aviso, False
 
 
-def ler_telefones(valor: str, avisos: list[str]) -> list[TelefoneLido]:
-    """O rótulo de cada número é o texto que vem DEPOIS dele (perfilamento §5.1): a leitura pelo texto anterior
-    passou sem erro e trocou os contatos. Número curto demais é ignorado; DDD ausente é presumido, com aviso."""
+def ler_telefones(valor: str, avisos: list[str], sobras: list[tuple[str, str]] | None = None) -> list[TelefoneLido]:
+    """Em geral o rótulo de cada número é o texto que vem DEPOIS dele (perfilamento §5.1): a leitura pelo texto anterior
+    passou sem erro e trocou os contatos. Quando a célula começa com texto e termina num número, é o contrário. Número
+    curto demais é ignorado; DDD ausente é presumido, com aviso."""
     numeros: list[tuple[str, int, int]] = []
     for achado in _FONE.finditer(valor):
         digitos = _digitos(achado.group(0))
@@ -330,12 +461,25 @@ def ler_telefones(valor: str, avisos: list[str]) -> list[TelefoneLido]:
             numeros.append((digitos, achado.start(), achado.end()))
     if not numeros and valor.strip():
         avisos.append("telefone.nenhum")
+    antes = _sobra(valor[: numeros[0][1]]) if numeros else None
+    depois = _sobra(valor[numeros[-1][2] :]) if numeros else None
+    # A célula que começa com texto e termina num número tem o rótulo ANTES de cada número ("PACIENTE 64 9... FULANO
+    # IRMAO 64 9..."), visto no uso; nas outras, o rótulo vem depois (perfilamento §5.1).
+    rotulo_antes = bool(antes) and not depois
+    if antes and not rotulo_antes and norm_rotulo(antes) not in PROPRIOS and sobras is not None:
+        sobras.append(("telefone", antes))
+        avisos.append("p1.sobra_telefone")
     lidos: list[TelefoneLido] = []
-    for i, (digitos, _, fim) in enumerate(numeros):
-        proximo = numeros[i + 1][1] if i + 1 < len(numeros) else len(valor)
-        contato, grau, aviso, recado = _rotulo(valor[fim:proximo])
+    for i, (digitos, inicio, fim) in enumerate(numeros):
+        if rotulo_antes:
+            trecho = valor[numeros[i - 1][2] if i else 0 : inicio]
+        else:
+            trecho = valor[fim : numeros[i + 1][1] if i + 1 < len(numeros) else len(valor)]
+        contato, grau, aviso, recado = _rotulo(trecho)
         if aviso:
             avisos.append(aviso)
+        if digitos.startswith("0") and len(digitos) in (11, 12):  # "064 99999999": o zero da operadora antiga
+            digitos = digitos[1:]
         if len(digitos) in (8, 9):
             ddd, numero = DDD_PRESUMIDO, digitos
             avisos.append("telefone.ddd_presumido")
@@ -344,6 +488,9 @@ def ler_telefones(valor: str, avisos: list[str]) -> list[TelefoneLido]:
         else:
             avisos.append("telefone.numero")
             continue
+        if len(numero) == 8 and numero[0] in "6789":  # celular de antes do nono dígito: presumido, com aviso
+            numero = "9" + numero
+            avisos.append("telefone.nono_digito")
         tipo = "recado" if recado or contato else ("celular" if len(numero) == 9 else "fixo")
         lidos.append(TelefoneLido(ddd, numero, tipo, contato, grau))
     return lidos
@@ -352,17 +499,33 @@ def ler_telefones(valor: str, avisos: list[str]) -> list[TelefoneLido]:
 # ------------------------------------------------------------------ P1: ficha → registro
 def interpretar_p1(bloco: BlocoP1) -> RegistroP1:
     """Rótulo desconhecido ou repetido não é adivinhado: a ficha inteira vai às exceções (ND-49)."""
+    if not any(campo_do_rotulo(c.rotulo) for c in bloco.celulas):
+        # Um título ou uma nota entre as fichas (visto no uso): não é paciente nem exceção; é contado à parte (RNF-103).
+        return RegistroP1(bloco.numero_linha, excecao=SEM_FICHA)
     leitura = _Leitura(bloco.numero_linha)
     vistos: set[str] = set()
     reconhecidos = 0
-    for celula in bloco.celulas:
-        campo = ROTULOS.get(norm_rotulo(celula.rotulo))
+    celulas = _com_continuacoes(bloco.celulas, leitura)
+    rotulados = {campo_do_rotulo(c.rotulo) for c in celulas}
+    for posicao, celula in enumerate(celulas):
+        campo = campo_do_rotulo(celula.rotulo)
+        if campo is not None and campo in vistos and campo != "telefone":
+            # A planilha é feita à mão copiando a ficha de cima: o rótulo repetido ("PACIENTE:" na linha da cidade,
+            # "CONVENIO:" na do início; visto no uso, 18/11/2026) lê o campo que falta na ficha.
+            trocado = _campo_pela_posicao(posicao, rotulados, vistos, celula.valor)
+            if trocado is None:
+                return RegistroP1(bloco.numero_linha, excecao="p1.rotulo_repetido")
+            campo = trocado
+            leitura.aviso("p1.rotulo_trocado")
         if campo is None:
             if not norm_rotulo(celula.rotulo) and celula.valor in (None, ""):
                 continue
-            return RegistroP1(bloco.numero_linha, excecao="p1.rotulo_desconhecido")
-        if campo in vistos and campo != "telefone":
-            return RegistroP1(bloco.numero_linha, excecao="p1.rotulo_repetido")
+            # Linha que não é da ficha (um endereço solto na coluna do rótulo, visto no uso): não derruba a ficha.
+            # Fica à vista, como trecho que não entrou e com aviso, e marcada na conferência (ND-49: falha explícita).
+            estranha = " · ".join(str(v) for v in (celula.rotulo, celula.valor) if v not in (None, ""))
+            leitura.sobrou("linha", _sobra(estranha))
+            leitura.aviso("p1.linha_nao_reconhecida")
+            continue
         vistos.add(campo)
         reconhecidos += 1
         valor = celula.valor
@@ -371,16 +534,71 @@ def interpretar_p1(bloco: BlocoP1) -> RegistroP1:
             leitura.nascimento(valor if isinstance(valor, date) else texto or None)
         elif campo == "inicio":
             leitura.inicio(valor if isinstance(valor, date) else texto or None)
-        elif not isinstance(texto, str):  # data num campo de texto: célula fora do lugar
-            return RegistroP1(bloco.numero_linha, excecao="p1.celula_ilegivel")
+        elif not isinstance(texto, str):  # data num campo de texto: a célula fica de fora (visto no uso)
+            leitura.aviso("p1.celula_fora_do_lugar")
         elif campo == "mae":
             leitura.campos["nome_mae"] = texto or None
+            if texto and _PRONTUARIO.search(texto):  # o nome do paciente na linha da mãe? (visto no uso)
+                leitura.aviso("p1.mae_com_prontuario")
         elif texto:
             getattr(leitura, campo)(texto)
     if not reconhecidos:
         return RegistroP1(bloco.numero_linha, excecao="p1.ilegivel")
     registro = RegistroP1(**leitura.campos)  # type: ignore[arg-type]
-    return replace(registro, avisos=tuple(leitura.avisos))
+    registro = replace(registro, telefones=_do_proprio_paciente(registro.telefones, registro.nome))
+    return replace(registro, avisos=tuple(leitura.avisos), sobras=tuple(leitura.sobras))
+
+
+ORDEM_DA_FICHA = (
+    "paciente", "mae", "nascimento", "endereco", "cidade", "telefone", "documentos", "convenio", "inicio",
+)  # fmt: skip
+
+
+def _campo_pela_posicao(posicao: int, rotulados: set[str | None], vistos: set[str], valor: Valor) -> str | None:
+    """O campo de um rótulo repetido: o da posição no padrão de 9 linhas, se nenhum rótulo da ficha o tem; senão, o
+    único campo que falta. Campo de data só com data. Sem candidato, a ficha vai às exceções (ND-49)."""
+    faltam = [c for c in ORDEM_DA_FICHA if c not in rotulados and c not in vistos]
+    candidato = None
+    if posicao < len(ORDEM_DA_FICHA) and ORDEM_DA_FICHA[posicao] in faltam:
+        candidato = ORDEM_DA_FICHA[posicao]
+    elif len(faltam) == 1:
+        candidato = faltam[0]
+    if candidato in ("nascimento", "inicio") and ler_data(valor) is None:
+        return None
+    return candidato
+
+
+def _com_continuacoes(celulas: Sequence[CelulaP1], leitura: _Leitura) -> list[CelulaP1]:
+    """Linha sem rótulo e com texto continua a de cima (um nome ou endereço que quebrou de linha, visto no uso)."""
+    juntas: list[CelulaP1] = []
+    for celula in celulas:
+        anterior = juntas[-1] if juntas else None
+        if (
+            anterior is not None
+            and not norm_rotulo(celula.rotulo)
+            and isinstance(celula.valor, str)
+            and celula.valor.strip()
+            and isinstance(anterior.valor, str)
+        ):
+            juntas[-1] = replace(anterior, valor=f"{anterior.valor} {celula.valor}")
+            leitura.aviso("p1.linha_continuada")
+            continue
+        juntas.append(celula)
+    return juntas
+
+
+def _do_proprio_paciente(telefones: tuple[TelefoneLido, ...], nome: str | None) -> tuple[TelefoneLido, ...]:
+    """Um "contato" sem parentesco cujo nome é parte do nome do paciente ("(64) 9... FULANO" na ficha de FULANO DE
+    TAL) é o telefone do próprio paciente (visto no uso)."""
+    if not nome:
+        return telefones
+    palavras = set(norm_nome(nome).split())
+    corrigidos = []
+    for t in telefones:
+        if t.contato and not t.parentesco and set(norm_nome(t.contato).split()) <= palavras:
+            t = replace(t, contato=None, tipo="celular" if len(t.numero) == 9 else "fixo")
+        corrigidos.append(t)
+    return tuple(corrigidos)
 
 
 # ------------------------------------------------------------------ P4 e P3
@@ -437,8 +655,9 @@ def classificar_linha_p3(valores: Sequence[Valor], coluna_nome: int) -> tuple[st
         return "vazia", None
     if len(preenchidos) == 1:
         unico = str(preenchidos[0]).strip().removesuffix(".0")
-        if re.fullmatch(r"(19|20)\d{2}", unico):
-            return "ano", int(unico)
+        ano = re.fullmatch(r"(?:[A-Za-zÀ-ÿ]+\s*[:.-]?\s*)?((?:19|20)\d{2})", unico)
+        if ano:
+            return "ano", int(ano.group(1))
     primeiro = norm_nome(str(preenchidos[0]))
     if _SENTINELA.match(primeiro):
         return "sentinela", None
@@ -573,14 +792,20 @@ def contagens(lidas_p1: int, desfechos: Iterable[Desfecho], plano: Plano) -> dic
     """Só números, por planilha e por código (DD-65). 'fecha' é a conta da §14.2 em cada planilha."""
     lista = list(desfechos)
     importados = sum(1 for d in lista if d.importado)
-    excecoes = Counter(d.excecao for d in lista if not d.importado and d.excecao)
+    sem_ficha = sum(1 for d in lista if d.excecao == SEM_FICHA)
+    excecoes = Counter(d.excecao for d in lista if not d.importado and d.excecao and d.excecao != SEM_FICHA)
     sem_codigo = sum(1 for d in lista if not d.importado and not d.excecao)
     avisos = Counter(a for d in lista for a in d.avisos)
-    p1 = {"linhas": lidas_p1, "importados": importados, "excecoes": sum(excecoes.values()) + sem_codigo}
+    p1 = {
+        "linhas": lidas_p1,
+        "importados": importados,
+        "excecoes": sum(excecoes.values()) + sem_codigo,
+        "sem_ficha": sem_ficha,  # título ou nota entre as fichas: nem paciente nem exceção, mas à vista
+    }
     fecha = (
         len(lista) == lidas_p1
         and sem_codigo == 0
-        and p1["linhas"] == p1["importados"] + p1["excecoes"]
+        and p1["linhas"] == p1["importados"] + p1["excecoes"] + p1["sem_ficha"]
         and plano.contagens_p4["linhas"]
         == plano.contagens_p4["ligadas"] + plano.contagens_p4["fora_da_base"] + plano.contagens_p4["sem_prontuario"]
         and plano.contagens_p3["linhas"] == plano.contagens_p3["casadas"] + plano.contagens_p3["sem_correspondencia"]

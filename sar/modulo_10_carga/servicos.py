@@ -49,6 +49,7 @@ from sar.nucleo.uow import ExecutorDeOperacao, UnidadeDeTrabalho
 
 GUARDA = PermissionGuard()
 AMOSTRA = 15  # P-29: cerca de 10% da base
+UF_RESIDENCIA = "GO"  # §6.2: a residência é só em Goiás
 MOTIVO_MINIMO = 5  # descarte sem motivo de verdade não serve à revisão
 MOTIVO_MAXIMO = 300  # carga_linha.excecao_motivo
 # §4.9: a revisão (tratar exceções, conferir a amostra, sortear mais) é da recepção e da administração, pela mesma
@@ -86,6 +87,7 @@ def conteudo_original(bloco: regras.BlocoP1, item: regras.Planejado) -> bytes:
             "p1": [[c.rotulo, _texto(c.valor)] for c in bloco.celulas],
             "p4": [{k: _texto(v) for k, v in linha.valores.items()} for linha in item.p4],
             "p3": [{"aba": linha.aba, "ano": linha.ano, "valores": list(linha.valores)} for linha in item.p3],
+            "sobras": [list(sobra) for sobra in item.registro.sobras],  # o que a leitura não encaixou, por campo
         },
         ensure_ascii=False,
     ).encode()
@@ -218,9 +220,10 @@ class ServicoCarga:
         return _Resultado(bloco, item, desfecho, criado.paciente_id)
 
     def _municipio(self, uow: UnidadeDeTrabalho, registro: regras.RegistroP1, avisos: list[str]) -> Municipio | None:
-        """RF-1104 e DD-53: 6 dígitos pela tabela, nunca pelo cálculo do dígito; 7 dígitos conferidos na tabela."""
+        """RF-1104 e DD-53: 6 dígitos pela tabela, nunca pelo cálculo do dígito; 7 dígitos conferidos na tabela. Sem
+        código, o nome escrito, se for exatamente o de um município de Goiás (visto no uso: cidade só com o nome)."""
         if registro.ibge is None:
-            return None
+            return self._municipio_pelo_nome(uow, registro.municipio_nome, avisos)
         if len(registro.ibge) == 6:
             municipio = self._referencias.codigo_7_digitos(uow, registro.ibge)
         else:
@@ -230,6 +233,19 @@ class ServicoCarga:
         elif registro.municipio_nome and regras.norm_nome(municipio.nome) != regras.norm_nome(registro.municipio_nome):
             avisos.append("municipio.nome_divergente")  # o código prevalece; a conferência decide
         return municipio
+
+    def _municipio_pelo_nome(self, uow: UnidadeDeTrabalho, nome: str | None, avisos: list[str]) -> Municipio | None:
+        if not nome or len(nome) < 2:
+            return None
+        procurado = regras.norm_nome(nome)
+        candidatos = self._referencias.buscar_municipios(uow, regras.sem_acento(nome), UF_RESIDENCIA)
+        iguais = [m for m in candidatos if regras.norm_nome(m.nome) == procurado]
+        if len(iguais) != 1:
+            return None
+        if "ibge.ausente" in avisos:
+            avisos.remove("ibge.ausente")
+        avisos.append("ibge.pelo_nome")  # achado pelo nome, não pelo código: a conferência confere
+        return iguais[0]
 
     def _gravar(
         self,
@@ -247,6 +263,8 @@ class ServicoCarga:
         importadas: list[int] = []
         for resultado in resultados:
             desfecho = resultado.desfecho
+            if desfecho.excecao == regras.SEM_FICHA:
+                continue  # título ou nota: só contado (RNF-103), nada a guardar nem a tratar
             if modo is Modo.SIMULACAO and desfecho.importado and not desfecho.avisos:
                 continue
             numero = resultado.bloco.numero_linha
@@ -282,7 +300,13 @@ class ServicoCarga:
             associado(lote_id, linha.planilha, linha.numero_linha),
         )
         dados = json.loads(claro)
-        return Original(tuple((r, v) for r, v in dados["p1"]), tuple(dados["p4"]), tuple(dados["p3"]))
+        p1 = tuple((r, v) for r, v in dados["p1"])
+        desconhecidos = frozenset(
+            i for i, (rotulo, valor) in enumerate(p1)
+            if regras.campo_do_rotulo(rotulo) is None and (regras.norm_rotulo(rotulo) or valor)
+        )  # fmt: skip
+        sobras = tuple((campo, trecho) for campo, trecho in dados.get("sobras", ()))
+        return Original(p1, tuple(dados["p4"]), tuple(dados["p3"]), sobras, desconhecidos)
 
     def em_revisao(self, contexto: Contexto) -> bool:
         if not GUARDA.pode(contexto, VER):

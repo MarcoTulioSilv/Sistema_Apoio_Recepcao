@@ -37,7 +37,7 @@ DEFEITOS: dict[str, tuple[str, tuple[str, ...]]] = {
     "evento_de_saida": ("evento_saida", ()),
     "ibge_fora_da_regra": (IMPORTADO, ()),
     "cid_no_inicio": (IMPORTADO, ()),
-    "rotulo_desconhecido": ("p1.rotulo_desconhecido", ()),
+    "rotulo_desconhecido": (IMPORTADO, ("p1.linha_nao_reconhecida",)),  # a linha estranha não derruba a ficha
     "sem_prontuario": ("P-03.minimo", ()),
     "cep_generico": (IMPORTADO, ("cep.generico",)),
     "telefone_sem_ddd": (IMPORTADO, ("telefone.ddd_presumido",)),
@@ -94,7 +94,12 @@ class Sinteticas:
 
     def esperados(self) -> dict[str, int]:
         importados = sum(1 for f in self.fichas if f.esperado == IMPORTADO)
-        return {"linhas": len(self.fichas), "importados": importados, "excecoes": len(self.fichas) - importados}
+        return {
+            "linhas": len(self.fichas) + 1,
+            "importados": importados,
+            "excecoes": len(self.fichas) - importados,
+            "sem_ficha": 1,
+        }  # o título no topo da P1
 
 
 def _cpf_formatado(cpf: str, aleatorio: random.Random) -> str:
@@ -129,12 +134,16 @@ class _Gerador:
         a = self.aleatorio
         celular = self.celular()
         formatos = (f"(64) {celular[:5]}.{celular[5:]}", f"(64){celular[:5]}-{celular[5:]}", f"64{celular}")
-        ficha.telefones.append((a.choice(formatos), a.choice(("PACIENTE", "", "RESIDENCIA"))))
+        # O do paciente vem às vezes com o primeiro nome dele, como na P1 real (visto no uso, 18/11/2026).
+        proprio = ("PACIENTE", "", "RESIDENCIA", ficha.nome.split()[0])
+        ficha.telefones.append((a.choice(formatos), a.choice(proprio)))
         for _ in range(a.randrange(0, 3)):
             numero = self.celular() if a.random() < 0.7 else self.fixo()
             grau = a.choice(("esposa", "filha", "filho", "mãe", "irmã", "neta", "padrasto", "esposo"))
             formatado = f"(64) {numero[:-4]}.{numero[-4:]}"
-            ficha.telefones.append((formatado, f"{self.primeiro_nome()} ({grau})"))
+            nome = self.primeiro_nome()
+            # Os dois jeitos da planilha: "NOME (parentesco)" e "PARENTESCO NOME" (visto no uso, 18/11/2026).
+            ficha.telefones.append((formatado, a.choice((f"{nome} ({grau})", f"{grau.upper()} {nome}"))))
 
     def ficha(self, i: int, prontuario: str, municipio: Municipio) -> Ficha:
         paciente = self.fabrica.paciente()
@@ -179,7 +188,9 @@ def _p1(fichas: list[Ficha], gerador: _Gerador) -> bytes:
     livro = xlsxwriter.Workbook(saida, {"in_memory": True})
     folha = livro.add_worksheet("Plan1")
     formato_data = livro.add_format({"num_format": "dd/mm/yyyy"})
-    linha = 0
+    preto = livro.add_format({"bg_color": "#000000", "pattern": 1})
+    folha.write_string(0, 0, "ENDEREÇOS E TELEFONES DOS PACIENTES")  # o título, que não é ficha (visto no uso)
+    linha = 2
     for ficha in fichas:
         ficha.linha = linha + 1
         pt = f"   {a.choice(('Nº PT:', 'NºPT:', 'NºPT ', 'Nº PT: '))} {ficha.prontuario}" if ficha.prontuario else ""
@@ -203,7 +214,7 @@ def _p1(fichas: list[Ficha], gerador: _Gerador) -> bytes:
             (a.choice(("NOME DA MÃE:", "NOME MÃE:")), ficha.nome_mae),
             (nascimento_rotulo, ficha.nascimento),
             ("ENDEREÇO:", endereco),
-            (a.choice(("CIDADE/CEP:", "CIDADE /CEP:", "CIDADE:")), cidade),
+            (a.choice(("CIDADE/CEP:", "CIDADE /CEP:", "CIDADE:", "PACIENTE:")), cidade),
             (a.choice(("TELEFONE:", "TELEFONE")), telefones),
             (a.choice(("DOC.PESSOAIS:", "DOC.PESSOAIS: ")), documentos),
             (a.choice(("CONVÊNIO:", "CONVENIO:", "CONVÊNIO: ")), convenio),
@@ -212,22 +223,56 @@ def _p1(fichas: list[Ficha], gerador: _Gerador) -> bytes:
             if ficha.defeito == "cid_no_inicio":
                 inicio: object = f"{ficha.inicio.day}/{ficha.inicio.month}/{ficha.inicio.year}   CID N-000"
             else:
-                inicio = ficha.inicio if a.random() < 0.5 else ficha.inicio.strftime("%d/%m/%Y")
+                # data, texto ou o número serial do Excel numa célula sem formato de data (visto no uso)
+                inicio = a.choice(
+                    (ficha.inicio, ficha.inicio.strftime("%d/%m/%Y"), str((ficha.inicio - date(1899, 12, 30)).days))
+                )
             celulas.append((a.choice(("INICIO TRATAM:", "INICIO TRATAM: ")), inicio))
         if ficha.defeito == "rotulo_desconhecido":
             celulas.append(("OBSERVAÇÃO:", "texto livre"))
         if a.random() < 0.1:  # 1 em 10 traz o endereço na última linha (perfilamento §2)
             celulas.append(celulas.pop(3))
+        if ficha is fichas[3]:
+            celulas.insert(4, ("", ""))  # uma linha vazia no meio da ficha, que não a separa (visto no uso)
         for rotulo, valor in celulas:
+            if not rotulo:
+                linha += 1
+                continue
             folha.write_string(linha, 0, rotulo)
             if isinstance(valor, date):
                 folha.write_datetime(linha, 1, valor, formato_data)  # type: ignore[arg-type]
             else:
                 folha.write_string(linha, 1, str(valor))
             linha += 1
-        linha += 1  # a linha vazia que separa as fichas
+        # A faixa preta que separa as fichas na P1 real (visto no uso, 18/11/2026); a terceira esconde um texto.
+        folha.write_string(linha, 0, "", preto)
+        folha.write_string(linha, 1, "RUA ESCONDIDA QD 1 LT 1" if ficha is fichas[2] else "", preto)
+        linha += 1
+    _abas_extras_p1(livro, fichas, gerador)
     livro.close()
     return saida.getvalue()
+
+
+def _abas_extras_p1(livro: xlsxwriter.Workbook, fichas: list[Ficha], gerador: _Gerador) -> None:
+    """Como na P1 real (17/11/2026): uma tentativa de tabela, visível, com um dado por coluna, e uma aba oculta com
+    fichas antigas. A carga lê só a aba visível com fichas (extrator.aba_de_fichas)."""
+    tabela = livro.add_worksheet("Estruturada")
+    for coluna, titulo in enumerate(("PACIENTE", "NOME DA MÃE", "DATA DE NASC", "CPF", "CNS", "CIDADE")):
+        tabela.write_string(0, coluna, titulo)
+    for i, ficha in enumerate(fichas[:5], start=1):
+        for coluna, valor in enumerate((ficha.nome, ficha.nome_mae, ficha.nascimento.strftime("%d/%m/%Y"), ficha.cpf,
+                                        ficha.cns, ficha.municipio.nome.upper())):  # fmt: skip
+            tabela.write_string(i, coluna, valor)
+    antiga = livro.add_worksheet("Antigos")
+    for i in range(3):
+        nome = _sensivel(gerador.fabrica.nome().upper())
+        antiga.write_string(i * 4, 0, "PACIENTE:")
+        antiga.write_string(i * 4, 1, f"{nome}   Nº PT: {9000 + i}")
+        antiga.write_string(i * 4 + 1, 0, "NOME DA MÃE:")
+        antiga.write_string(i * 4 + 1, 1, _sensivel(gerador.fabrica.nome().upper()))
+        antiga.write_string(i * 4 + 2, 0, "INICIO TRATAM:")
+        antiga.write_string(i * 4 + 2, 1, "01/02/2012")
+    antiga.hide()
 
 
 def _p4(fichas: list[Ficha], gerador: _Gerador, historicos: int) -> tuple[bytes, int, int]:

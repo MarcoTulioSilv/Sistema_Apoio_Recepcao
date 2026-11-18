@@ -230,7 +230,7 @@ def test_terminal_do_ti_mostra_so_contagens(
     saida = capsys.readouterr()
     texto = saida.out + saida.err
     assert "A conta fecha: sim" in texto
-    assert f"{gerado.esperados()['importados']} importada(s)" in texto
+    assert f"{gerado.esperados()['importados']} importado(s)" in texto and "1 sem ficha" in texto
     assert "evento_saida" in texto  # o código, não quem é
     vazados = [v for v in VALORES_SENSIVEIS if len(v) >= 6 and v in texto]
     assert not vazados, "CT-MIG-05: dado de paciente no terminal do TI"
@@ -253,3 +253,32 @@ def test_terminal_recusa_efetivar_sem_confirmar_e_senha_errada(
     assert main(["carga", "efetivar", str(pasta), "--login", "ti_da_carga_2", "--definitiva"]) == 1
     assert "não conferem" in capsys.readouterr().err
     assert contar(engine_web, "SELECT COUNT(*) FROM carga_lote") == 0
+
+
+@pytest.mark.requisito("DD-65", "RF-1004")
+def test_terminal_explica_a_planilha_recusada_sem_mostrar_o_conteudo(
+    carga: dict[str, int],
+    criar_usuario: CriarUsuario,
+    sinteticas: tuple[planilhas.Sinteticas, Path],
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    _, pasta = sinteticas
+    (pasta / "p4_entradas.xlsx").write_bytes(b"isto nao e um xlsx")
+    criar_usuario("ti_da_carga_3", perfil="ti")
+    monkeypatch.setattr("getpass.getpass", lambda _prompt="": SENHA)
+    assert main(["carga", "simular", str(pasta), "--login", "ti_da_carga_3"]) == 1
+    erro = capsys.readouterr().err
+    assert "Recusado: a planilha P4 (entradas) não abre como planilha .xlsx" in erro
+
+
+@pytest.mark.requisito("RF-1104", "DD-53")
+def test_municipio_so_com_o_nome_e_achado_na_tabela(carga: dict[str, int], engine_web: Engine) -> None:
+    """Visto no perfil da P1 real (18/11/2026): cidade só com o nome, sem CEP nem código do IBGE."""
+    carga_ = servico(engine_web)
+    executar = montar(engine_web).executar
+    avisos = ["ibge.ausente"]
+    achado = executar(lambda uow: carga_._municipio_pelo_nome(uow, "Jatai", avisos))
+    assert achado is not None and (achado.codigo, achado.uf) == ("5211909", "GO")
+    assert avisos == ["ibge.pelo_nome"]
+    assert executar(lambda uow: carga_._municipio_pelo_nome(uow, "Cidade Inexistente", [])) is None

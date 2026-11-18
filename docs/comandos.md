@@ -403,11 +403,13 @@ com as linhas fica na aplicação, para a recepção e a administração. O TI e
 sem eco, sem abrir sessão: a sessão dele na tela continua (DD-113).
 
 Preparar a pasta (protegida, fora do repositório) com as três planilhas, salvas como `.xlsx` e com estes nomes. A P4
-da clínica é `.xls`: abra no Excel ou no LibreOffice e salve como `.xlsx` antes.
+da clínica é `.xls`: abra no Excel ou no LibreOffice e salve como `.xlsx` antes. No Excel, escolha
+**"Pasta de Trabalho do Excel (*.xlsx)"**, e não "Planilha Strict Open XML", que também é `.xlsx` mas o leitor não
+entende (a carga recusa com o aviso de formato Strict).
 
 | Arquivo na pasta | Planilha |
 |---|---|
-| `p1_enderecos.xlsx` | P1, endereços e telefones (a base) |
+| `p1_enderecos.xlsx` | P1, endereços e telefones (a base). A carga lê a única aba visível com fichas; abas ocultas e a tentativa de tabela ficam de fora |
 | `p4_entradas.xlsx` | P4, entradas (só completa e confere) |
 | `p3_eventos.xlsx` | P3, eventos (só conferida) |
 

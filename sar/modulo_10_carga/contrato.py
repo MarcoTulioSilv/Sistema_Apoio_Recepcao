@@ -64,6 +64,8 @@ class Original:
     p1: tuple[tuple[str, str | None], ...]  # (rótulo, valor), na ordem da planilha
     p4: tuple[dict[str, str | None], ...]
     p3: tuple[dict[str, object], ...]
+    sobras: tuple[tuple[str, str], ...] = ()  # (campo da ficha, trecho que a leitura não encaixou)
+    desconhecidos: frozenset[int] = frozenset()  # posições em p1 cujo rótulo a carga não reconhece
 
 
 @dataclass(frozen=True, slots=True)
