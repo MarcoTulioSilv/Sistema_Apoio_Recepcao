@@ -172,6 +172,12 @@ def verificar_inicio(inicio: date, nascimento: date | None) -> None:
         raise RegraViolada("inicio.antes_do_nascimento")
 
 
+def cep_generico(cep: str | None) -> bool:
+    """CEP único do município (final 000): a cidade pequena não tem CEP por rua (DD-116). O serviço de CEP só diz que o
+    número existe; quem confirma que o paciente mora lá é a recepção, com ele."""
+    return cep is not None and len(cep) == 8 and cep.isdigit() and cep.endswith("000")
+
+
 def pendencias(dados: DadosPaciente, cep_verificado: bool) -> tuple[str, ...]:
     """Campos faltantes, na ordem da ficha, e o CEP não verificado (RF-102, RF-109, QAS-03)."""
     faltantes = tuple(campo for campo in CAMPOS_DE_PENDENCIA if getattr(dados, campo) is None)

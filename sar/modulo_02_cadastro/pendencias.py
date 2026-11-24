@@ -10,7 +10,7 @@ from collections import defaultdict
 from collections.abc import Sequence
 from datetime import UTC, date, datetime, time
 
-from sar.modulo_02_cadastro.regras import CEP_NAO_VERIFICADO, chave_triade, pendencias
+from sar.modulo_02_cadastro.regras import CEP_NAO_VERIFICADO, cep_generico, chave_triade, pendencias
 from sar.modulo_02_cadastro.servicos import dados_de
 from sar.modulo_08_dados.interfaces.pacientes import (
     PacienteGravado,
@@ -86,8 +86,9 @@ class FonteCadastroIncompleto(_Fonte):
                 continue
             campos = [ROTULOS_CAMPOS[f] for f in faltas if f != CEP_NAO_VERIFICADO]
             partes = [f"Faltam: {', '.join(campos)}"] if campos else []
-            if CEP_NAO_VERIFICADO in faltas:
-                partes.append("CEP não verificado")
+            if CEP_NAO_VERIFICADO in faltas:  # o genérico a recepção confirma com o paciente (DD-116)
+                generico = cep_generico(paciente.campos.cep)
+                partes.append("CEP do município a confirmar com o paciente" if generico else "CEP não verificado")
             itens.append(self._item(paciente.criado_em, "; ".join(partes), paciente.id))
         return itens
 

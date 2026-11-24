@@ -33,6 +33,7 @@ from sar.modulo_02_cadastro.contrato import (
 )
 from sar.modulo_02_cadastro.regras import (
     campos_alterados,
+    cep_generico,
     chave_triade,
     digitos,
     idade,
@@ -587,6 +588,27 @@ class ServicoPacientes:
         self._executar(operacao)
         return existe
 
+    def confirmar_cep_generico(self, contexto: Contexto, paciente_id: int) -> None:
+        GUARDA.exigir(contexto, "cadastro.paciente.atualizar")
+
+        def operacao(uow: UnidadeDeTrabalho) -> None:
+            repositorio = uow.repositorio(RepositorioPaciente)
+            atual = _paciente_vivo(repositorio, paciente_id)
+            cep = atual.campos.cep
+            if cep is None:
+                raise RegraViolada("cep.ausente")
+            if not cep_generico(cep):
+                raise RegraViolada("cep.nao_generico")
+            if atual.cep_verificado:
+                return
+            repositorio.definir_cep_verificado(paciente_id, True)
+            self._auditoria.registrar(
+                uow, contexto, "cadastro.paciente.atualizar", "paciente", str(paciente_id),
+                {"cep_verificado": (False, True), "cep_confirmado_com_paciente": (False, True)},
+            )  # fmt: skip
+
+        self._executar(operacao)
+
     def descartar_duplicidade(self, contexto: Contexto, paciente_id: int, outro_id: int) -> None:
         GUARDA.exigir(contexto, "cadastro.paciente.descartar_duplicidade")
         usuario_id = contexto.usuario_id
@@ -700,6 +722,7 @@ class ServicoPacientes:
                 versao=paciente.versao,
                 dados=dados,
                 cep_verificado=paciente.cep_verificado,
+                cep_generico=cep_generico(dados.cep),
                 idade=idade(dados.data_nascimento, hoje) if dados.data_nascimento else None,
                 situacao=situacao([_evento(p) for p in periodos], alocado=self._alocado(uow, paciente_id, hoje)),
                 pendencias=pendencias(dados, paciente.cep_verificado),

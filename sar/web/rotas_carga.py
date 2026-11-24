@@ -60,7 +60,10 @@ AVISOS: dict[str, tuple[str, str]] = {
         "Convênio não cadastrado: ficou sem cobertura",
         "Cadastre o convênio em Convênios e registre a cobertura na ficha.",
     ),
-    "cep.generico": ("CEP genérico do município (termina em 000)", "Entra como pendência; confirme com o paciente."),
+    "cep.generico": (
+        "CEP genérico do município (termina em 000)",
+        "Entra como pendência; confirme com o paciente pela ficha.",
+    ),
     "cep.invalido": ("CEP malformado: ficou vazio", "Vira pendência do cadastro."),
     "cep.ausente": ("Sem CEP na ficha", "Vira pendência do cadastro."),
     "cpf.invalido": ("CPF com dígito inválido: ficou vazio", "Vira pendência do cadastro."),

@@ -45,6 +45,7 @@ ERROS_FICHA = {
     "evento.depois_do_periodo_seguinte": "A data passaria do início do período seguinte.",
     "duplicidade.sem_coincidencia": "Os dois cadastros não têm a mesma tríade.",
     "cep.ausente": "O cadastro não tem CEP.",
+    "cep.nao_generico": "Este CEP é de rua: confirme pelo serviço de CEP, com Verificar o CEP de novo.",
     "telefone.ddd": "DDD inválido.",
     "telefone.numero": "Celular tem 9 dígitos começando por 9; fixo tem 8, começando de 2 a 5.",
     "telefone.repetido": "Este número já está cadastrado para o mesmo dono.",

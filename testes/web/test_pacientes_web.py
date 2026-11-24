@@ -197,13 +197,13 @@ def test_cep_verificado_de_novo_e_duplicidade_descartada_pela_ficha(
     provedor = ProvedorCepFalso()
     recepcao = cliente(engine_web, criar_usuario, "recepcao", provedor)
     triade = {"nascimento": "1950-05-01", "mae": fabrica.nome()}
-    pid, dados = novo_paciente(recepcao, fabrica, cep="75800-000", **triade)
+    pid, dados = novo_paciente(recepcao, fabrica, cep="75803-120", **triade)
     ficha = get(recepcao, f"/pacientes/{pid}").get_data(as_text=True)
     assert "CEP não verificado" in ficha
     fora = post(recepcao, f"/pacientes/{pid}/cep", {}).get_data(as_text=True)
     assert "Consulta de CEP fora do ar" in fora
     provedor.fora_do_ar = False
-    provedor.enderecos["75800000"] = EnderecoCep("75800000", None, None, "5211909", "GO", "Jataí")
+    provedor.enderecos["75803120"] = EnderecoCep("75803120", None, None, "5211909", "GO", "Jataí")
     verificado = post(recepcao, f"/pacientes/{pid}/cep", {})
     assert "CEP não verificado" not in get(recepcao, verificado.headers["Location"]).get_data(as_text=True)
 
@@ -211,6 +211,25 @@ def test_cep_verificado_de_novo_e_duplicidade_descartada_pela_ficha(
     assert "Possível duplicidade" in get(recepcao, f"/pacientes/{outro}").get_data(as_text=True)
     descarte = post(recepcao, f"/pacientes/{outro}/duplicidade/{pid}", {})
     assert "Possível duplicidade" not in get(recepcao, descarte.headers["Location"]).get_data(as_text=True)
+
+
+@pytest.mark.requisito("DD-116", "RF-109")
+def test_cep_do_municipio_confirmado_pela_ficha(
+    criar_usuario: CriarUsuario, cadastro_zerado: dict[str, int], engine_web: Engine, fabrica: Fabrica
+) -> None:
+    """Pedido do uso (18/11/2026): a cidade pequena tem um CEP só, e quem confirma é o paciente."""
+    recepcao = cliente(engine_web, criar_usuario, "recepcao", ProvedorCepFalso())
+    pid, _ = novo_paciente(recepcao, fabrica, cep="75850-000")
+    ficha = get(recepcao, f"/pacientes/{pid}").get_data(as_text=True)
+    assert 'data-sobre="cep-municipio"' in ficha and "Confirmar com o paciente" in ficha
+    assert "Verificar o CEP de novo" not in ficha
+    confirmado = post(recepcao, f"/pacientes/{pid}/cep/confirmar", {})
+    depois = get(recepcao, confirmado.headers["Location"]).get_data(as_text=True)
+    assert "CEP do município confirmado com o paciente." in depois and "cep-municipio" not in depois
+
+    rua, _ = novo_paciente(recepcao, fabrica, cep="75803-120")
+    recusado = post(recepcao, f"/pacientes/{rua}/cep/confirmar", {}).get_data(as_text=True)
+    assert "Este CEP é de rua" in recusado and "cep-municipio" not in recusado
 
 
 @pytest.mark.requisito("RF-201", "RF-202", "INV-12", "RNF-605", "DD-102")

@@ -49,6 +49,7 @@ RESULTADOS = {
     "criado": "Paciente cadastrado.",
     "atualizado": "Dados do paciente atualizados.",
     "cep_verificado": "CEP verificado.",
+    "cep_confirmado": "CEP do município confirmado com o paciente.",
     "cep_desconhecido": "O CEP não foi encontrado na base. Confira o número e corrija nos dados do paciente.",
     "duplicidade": "Registrado: não é a mesma pessoa.",
     "telefone": "Telefone incluído.",
@@ -328,6 +329,17 @@ def editar_enviar(paciente_id: int) -> Response | str:
 def verificar_cep(paciente_id: int) -> Response | str:
     def acao(c: Contexto) -> str:
         return "cep_verificado" if _servicos().pacientes.verificar_cep(c, paciente_id) else "cep_desconhecido"
+
+    return _acao(paciente_id, acao)
+
+
+@bp.post("/<int:paciente_id>/cep/confirmar")
+def confirmar_cep_generico(paciente_id: int) -> Response | str:
+    """CEP único do município: a recepção confirmou com o paciente (DD-116)."""
+
+    def acao(c: Contexto) -> str:
+        _servicos().pacientes.confirmar_cep_generico(c, paciente_id)
+        return "cep_confirmado"
 
     return _acao(paciente_id, acao)
 

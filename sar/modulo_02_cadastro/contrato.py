@@ -175,6 +175,7 @@ class Ficha:
     versao: int
     dados: DadosPaciente
     cep_verificado: bool
+    cep_generico: bool  # CEP único do município: a recepção pode confirmar com o paciente (DD-116)
     idade: int | None
     situacao: Situacao
     pendencias: tuple[str, ...]  # campos faltantes e CEP não verificado (RF-102, RF-109)
@@ -267,6 +268,12 @@ class PacienteService(Protocol):
     def verificar_cep(self, contexto: Contexto, paciente_id: int) -> bool:
         """Resolução da pendência de CEP não verificado: consulta de novo e grava o resultado. RegraViolada
         ("cep.ausente"); IndisponivelExterno se as fontes continuam fora do ar."""
+        ...
+
+    def confirmar_cep_generico(self, contexto: Contexto, paciente_id: int) -> None:
+        """Resolução da pendência de CEP para o CEP único do município (DD-116): a recepção confirmou com o paciente.
+        RegraViolada("cep.ausente") sem CEP; RegraViolada("cep.nao_generico") se o CEP é de rua, que se verifica pelo
+        serviço de CEP. Já verificado: nada muda."""
         ...
 
     def descartar_duplicidade(self, contexto: Contexto, paciente_id: int, outro_id: int) -> None:
