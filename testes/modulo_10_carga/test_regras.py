@@ -545,3 +545,15 @@ def test_leitura_para_o_cadastro_tolera_o_rotulo_repetido_e_completa_pela_p4() -
     assert r.inicio == date(2019, 5, 5) and "p4.completou_inicio" in r.avisos
     assert ("linha", "NOME DA MÃE: · OUTRA FICTICIA") in r.sobras
     assert regras.ler_para_cadastro(1, [("TITULO SEM FICHA", None)], [], HOJE) == regras.RegistroP1(1)
+
+
+@pytest.mark.requisito("DD-119")
+def test_triade_da_ficha_contra_a_do_cadastro() -> None:
+    ficha = regras.RegistroP1(1, nome="João da Silva Fictício", nascimento=date(1960, 4, 2), nome_mae="MARIA FICTICIA")
+    assert regras.triade_divergente(ficha, "JOAO  DA SILVA FICTICIO", date(1960, 4, 2), "Maria Fictícia") == ()
+    assert regras.triade_divergente(ficha, "JOAO DA SILVA FICTICIO", date(1960, 4, 3), None) == (
+        "nascimento", "nome_mae",
+    )  # fmt: skip
+    so_nome = regras.RegistroP1(1, nome="JOAO DA SILVA FICTICIO")  # item vazio na ficha não é comparado
+    assert regras.triade_divergente(so_nome, "JOAO DA SILVA FICTICIO", date(1999, 1, 1), "QUALQUER") == ()
+    assert regras.triade_divergente(regras.RegistroP1(1), "JOAO", None, None) is None  # nada a conferir

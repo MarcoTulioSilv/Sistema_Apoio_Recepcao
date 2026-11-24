@@ -19,6 +19,7 @@ from sar.modulo_02_cadastro.contrato import (
     DadosPaciente,
     DadosTelefone,
     Ficha,
+    Identificacao,
     LeituraCadastro,
     PacienteService,
     TipoCobertura,
@@ -343,18 +344,17 @@ class ServicoCarga:
         motivo = " ".join((motivo or "").split()) or None
         if motivo is not None and len(motivo) > MOTIVO_MAXIMO:
             raise RegraViolada("carga.motivo", {"maximo": MOTIVO_MAXIMO})
-        paciente_id: int | None = None
         if tratamento is Tratamento.DESCARTADA:
             if motivo is None or len(motivo) < MOTIVO_MINIMO:
                 raise RegraViolada("carga.motivo", {"minimo": MOTIVO_MINIMO})
-        else:
-            numero = " ".join((prontuario or "").split())
-            achados = [p for p in self._pacientes.buscar(contexto, numero) if p.prontuario == numero] if numero else []
-            if not achados:
-                raise RegraViolada("carga.paciente_nao_encontrado")
-            paciente_id = achados[0].paciente_id
-
-        self._tratar(contexto, linha_id, tratamento, motivo, paciente_id)
+            self._tratar(contexto, linha_id, tratamento, motivo, None)
+            return
+        # Cadastrei pela tela: vale só o prontuário; o motivo, se veio, não é guardado.
+        numero = " ".join((prontuario or "").split())
+        achados = [p for p in self._pacientes.buscar(contexto, numero) if p.prontuario == numero] if numero else []
+        if not achados:
+            raise RegraViolada("carga.paciente_nao_encontrado")
+        self._tratar(contexto, linha_id, tratamento, None, achados[0].paciente_id, conferir=achados[0])
 
     def cadastrada_pela_tela(self, contexto: Contexto, linha_id: int, paciente_id: int) -> None:
         GUARDA.exigir(contexto, CONFERIR)
@@ -367,10 +367,13 @@ class ServicoCarga:
         tratamento: Tratamento,
         motivo: str | None,
         paciente_id: int | None,
+        conferir: Identificacao | None = None,
         pelo_botao: bool = False,
     ) -> None:
-        """pelo_botao: a baixa do cadastro aberto pela exceção (DD-118), que só vale para a exceção que se cadastra pelo
-        botão e ainda não foi decidida; a linha vem do formulário, e o servidor não confia nela."""
+        """conferir: o cadastro indicado pelo prontuário, cuja tríade tem de bater com a da ficha (DD-119). pelo_botao:
+        a baixa do cadastro aberto pela exceção (DD-118), que dispensa a tríade e por isso só vale para a exceção que se
+        cadastra pelo botão e ainda não foi decidida; a linha vem do formulário, e o servidor não confia nela."""
+        hoje = contexto.instante.astimezone(FUSO_CLINICA).date()
 
         def operacao(uow: UnidadeDeTrabalho) -> None:
             repositorio = uow.repositorio(RepositorioCarga)
@@ -386,6 +389,16 @@ class ServicoCarga:
                 outra = repositorio.ligada_a(paciente_id)
                 if outra is not None and outra.id != linha.id:
                     raise RegraViolada("carga.paciente_ja_ligado")
+            if conferir is not None:
+                original = self._original(lote.id, linha)
+                ficha = regras.ler_para_cadastro(linha.numero_linha, original.p1, original.p4, hoje)
+                divergentes = regras.triade_divergente(
+                    ficha, conferir.nome, conferir.data_nascimento, conferir.nome_mae
+                )
+                if divergentes is None:
+                    raise RegraViolada("carga.triade_sem_dados")
+                if divergentes:
+                    raise RegraViolada("carga.triade_nao_confere", {"itens": list(divergentes)})
             repositorio.tratar(linha.id, tratamento.value, motivo or "", paciente_id)
             self._auditoria.registrar(
                 uow, contexto, CONFERIR, "carga_linha", str(linha.id),

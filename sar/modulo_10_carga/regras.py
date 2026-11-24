@@ -806,6 +806,29 @@ def ler_para_cadastro(
     return _completar_com_p4(_inicio_plausivel(registro, hoje), linhas)
 
 
+def triade_divergente(
+    ficha: RegistroP1, nome: str | None, nascimento: date | None, nome_mae: str | None
+) -> tuple[str, ...] | None:
+    """DD-119: os itens da tríade (nome, nascimento, nome da mãe) da ficha que não batem com os do cadastro; vazio,
+    tudo confere. Nomes sem acento, caixa nem espaço a mais. Item vazio na ficha não é comparado; presente na ficha e
+    vazio no cadastro diverge. None se a ficha não tem nenhum dos três: não há o que conferir."""
+    pares: tuple[tuple[str, str | date | None, str | date | None], ...] = (
+        ("nome", ficha.nome, nome),
+        ("nascimento", ficha.nascimento, nascimento),
+        ("nome_mae", ficha.nome_mae, nome_mae),
+    )
+    presentes = [(item, da_ficha, do_cadastro) for item, da_ficha, do_cadastro in pares if da_ficha]
+    if not presentes:
+        return None
+
+    def igual(da_ficha: str | date, do_cadastro: str | date | None) -> bool:
+        if isinstance(da_ficha, str):
+            return isinstance(do_cadastro, str) and norm_nome(da_ficha) == norm_nome(do_cadastro)
+        return da_ficha == do_cadastro
+
+    return tuple(item for item, da_ficha, do_cadastro in presentes if not igual(da_ficha, do_cadastro))
+
+
 def _inicio_plausivel(registro: RegistroP1, hoje: date) -> RegistroP1:
     if registro.inicio is not None and not INICIO_MINIMO <= registro.inicio <= hoje:
         return replace(registro, inicio=None, avisos=(*registro.avisos, "inicio.invalido"))

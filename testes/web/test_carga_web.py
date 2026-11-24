@@ -12,6 +12,7 @@ from flask.testing import FlaskClient
 from sqlalchemy import Engine
 
 from sar.modulo_10_carga.contrato import CAMPOS_CONFERIDOS
+from sar.web.rotas_carga import triade_nao_confere
 from testes.apoio import planilhas
 from testes.apoio.acesso import CriarUsuario
 from testes.apoio.cadastro import pessoa
@@ -219,3 +220,12 @@ def test_rascunho_de_outro_cadastro_so_e_substituido_com_confirmacao(
     assert escape(ficha.nome) not in get(recepcao, "/cadastro/novo").get_data(as_text=True)
     relatorio = get(recepcao, "/carga").get_data(as_text=True)
     assert f'action="/carga/excecoes/{linha}/cadastrar"' in relatorio  # a exceção continua a tratar
+
+
+@pytest.mark.requisito("DD-119")
+def test_triade_que_nao_confere_recusa_e_diz_o_que_difere() -> None:
+    assert triade_nao_confere("0917", ["nascimento", "nome_mae"]) == (
+        "O cadastro do prontuário 0917 não confere com esta ficha: o nascimento e o nome da mãe são diferentes. "
+        "Confira o prontuário; se a ficha for de outra pessoa, cadastre-a pela tela."
+    )
+    assert "o nome é diferente" in triade_nao_confere("1", ["nome"])

@@ -197,10 +197,12 @@ class CargaService(Protocol):
     def tratar_excecao(
         self, contexto: Contexto, linha_id: int, tratamento: Tratamento, motivo: str | None, prontuario: str | None
     ) -> None:
-        """Importada à mão: o prontuário do cadastro que a recepção fez pela tela, que fica ligado à linha. Descartada:
-        motivo obrigatório. Pode ser refeito até o aceite. RegraViolada: "carga.sem_efetivacao", "carga.aceita",
-        "carga.linha_sem_excecao", "carga.motivo", "carga.paciente_nao_encontrado", "carga.paciente_ja_ligado".
-        NaoEncontrado se a linha não existe."""
+        """Importada à mão: o prontuário do cadastro que a recepção fez pela tela, que fica ligado à linha se a tríade
+        do cadastro bater com a da ficha (DD-119); o motivo é ignorado. Descartada: motivo obrigatório; o prontuário é
+        ignorado. Pode ser refeito até o aceite. RegraViolada: "carga.sem_efetivacao", "carga.aceita",
+        "carga.linha_sem_excecao", "carga.motivo", "carga.paciente_nao_encontrado", "carga.paciente_ja_ligado",
+        "carga.triade_nao_confere" ({"itens": [...]}, entre "nome", "nascimento" e "nome_mae") e
+        "carga.triade_sem_dados" (a ficha não tem nenhum dos três). NaoEncontrado se a linha não existe."""
         ...
 
     def ficha_para_cadastro(self, contexto: Contexto, linha_id: int) -> FichaParaCadastro:
@@ -210,9 +212,10 @@ class CargaService(Protocol):
         ...
 
     def cadastrada_pela_tela(self, contexto: Contexto, linha_id: int, paciente_id: int) -> None:
-        """DD-118: o cadastro aberto pela exceção foi salvo; a linha fica importada à mão, ligada a ele. Só vale para a
-        exceção que se cadastra pelo botão e ainda não foi decidida ("carga.nao_cadastravel"). Os mesmos erros de
-        tratar_excecao."""
+        """DD-118: o cadastro aberto pela exceção foi salvo; a linha fica importada à mão, ligada a ele, sem conferir a
+        tríade (DD-119: o cadastro nasceu da ficha, e a mudança foi correção da recepção). Por isso só vale para a
+        exceção que se cadastra pelo botão e ainda não foi decidida ("carga.nao_cadastravel"). Os erros de
+        tratar_excecao, menos os da tríade."""
         ...
 
     def amostra(self, contexto: Contexto) -> Amostra:

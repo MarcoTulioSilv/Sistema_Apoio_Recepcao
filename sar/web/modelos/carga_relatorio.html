@@ -5,8 +5,9 @@
    exceção que se cadastra a partir da ficha tem o botão que abre o Novo cadastro preenchido (DD-118). #}
 {% from "_carga_original.html" import ficha_p1, ligadas %}
 {% macro decisao(li, d, cadastravel=false) %}
-<form class="mt-1 flex flex-col gap-3" method="post" action="{{ url_for('carga.tratar', linha_id=li.linha_id) }}">
+<form class="group/decisao mt-1 flex flex-col gap-3" method="post" action="{{ url_for('carga.tratar', linha_id=li.linha_id) }}">
   {% if erro_linha == li.linha_id %}<p class="m-0 rounded-lg border border-urgencia-borda bg-urgencia-fundo p-3 font-bold text-urgencia" role="alert">{{ erro }}</p>{% endif %}
+  <div class="flex flex-col gap-3 xl:flex-row xl:items-end">
   <fieldset class="m-0 flex flex-col gap-2 border-0 p-0">
     <legend class="mb-1 p-0 font-bold">{{ "Ou registre o que já foi feito" if cadastravel else "O que foi feito" }}</legend>
     <div class="flex flex-wrap gap-3">
@@ -16,11 +17,21 @@
         <input class="sr-only" type="radio" name="tratamento" value="descartada"{% if d.get("tratamento") == "descartada" %} checked{% endif %}> Descartar</label>
     </div>
   </fieldset>
-  <div class="flex flex-wrap items-end gap-3">
-    <label class="campo w-44"><span class="rotulo">Prontuário do cadastro</span><input class="entrada numero" name="prontuario" autocomplete="off" value="{{ d.get('prontuario', '') }}"></label>
-    <label class="campo min-w-60 grow"><span class="rotulo">Motivo <span class="font-normal text-suave">(obrigatório para descartar)</span></span><input class="entrada" name="motivo" maxlength="300" autocomplete="off" value="{{ d.get('motivo', '') }}"></label>
+  {# Seletor de duas posições (DD-119): só o campo da opção marcada aparece, pelo CSS (:has), sem script (DD-09). O
+     sublinhado escapado é do Tailwind: sem a barra, ele vira espaço no seletor. #}
+  <div class="hidden flex-wrap items-end gap-3 group-has-checked/decisao:flex xl:grow xl:flex-nowrap">
+    <div class="hidden min-w-52 grow group-has-[[value=importada\_manual]:checked]/decisao:block">
+      <label class="campo"><span class="rotulo">Prontuário do cadastro</span><input class="entrada numero" name="prontuario" autocomplete="off" value="{{ d.get('prontuario', '') }}" aria-describedby="pront-ajuda-{{ li.linha_id }}"></label>
+    </div>
+    <div class="hidden min-w-60 grow group-has-[[value=descartada]:checked]/decisao:block">
+      <label class="campo"><span class="rotulo">Motivo do descarte</span><input class="entrada" name="motivo" maxlength="300" autocomplete="off" value="{{ d.get('motivo', '') }}" aria-describedby="motivo-ajuda-{{ li.linha_id }}"></label>
+    </div>
     <button class="{{ 'btn-secundario' if cadastravel else 'btn-primario' }}" type="submit">Registrar<span class="sr-only">: {{ nome_da_ficha(li.original) }}</span></button>
   </div>
+  </div>
+  <p class="m-0 text-sm text-suave group-has-checked/decisao:hidden">Escolha uma das duas para continuar.</p>
+  <p class="m-0 hidden text-sm text-suave group-has-[[value=importada\_manual]:checked]/decisao:block" id="pront-ajuda-{{ li.linha_id }}">O sistema confere se o nome, o nascimento e o nome da mãe do cadastro batem com os da ficha.</p>
+  <p class="m-0 hidden text-sm text-suave group-has-[[value=descartada]:checked]/decisao:block" id="motivo-ajuda-{{ li.linha_id }}">Por que a ficha não entra, com pelo menos 5 caracteres.</p>
 </form>
 {% endmacro %}
 {% macro excecao(li, primeira, saida) %}
@@ -84,7 +95,7 @@
 {% block titulo_pagina %}Carga inicial{% endblock %}
 {% block subtitulo %}{% if not rel %}Nenhuma carga ainda. O TI roda a simulação no servidor.{% elif rel.aceito_em %}Aceita em {{ rel.aceito_em | data_hora }}. A carga inicial está encerrada.{% elif rel.modo.value == "simulacao" %}Simulada em {{ rel.concluido_em | data_hora }} pelo TI. Corrija as planilhas e peça nova simulação; as decisões vêm depois da efetivação.{% else %}Efetivada em {{ rel.concluido_em | data_hora }} pelo TI. {{ rel.contagens.p1.importados }} pacientes importados.{% endif %}{% endblock %}
 {% block conteudo %}
-<div class="flex max-w-6xl flex-col gap-5">
+<div class="flex flex-col gap-5">
   {% include "_carga_topo.html" %}
   {% if not erro_linha %}{% include "_avisos.html" %}{% endif %}
   {% if rel %}

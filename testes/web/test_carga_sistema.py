@@ -22,7 +22,7 @@ from testes.web.test_pendencias_sistema import vigiar_erros
 pytestmark = pytest.mark.sistema
 
 
-@pytest.mark.requisito("RF-1106", "P-29", "DD-69", "DD-114", "RNF-406")
+@pytest.mark.requisito("RF-1106", "P-29", "DD-69", "DD-114", "DD-119", "RNF-406")
 def test_da_excecao_ao_aceite(
     carga: dict[str, int],
     criar_usuario: CriarUsuario,
@@ -43,8 +43,12 @@ def test_da_excecao_ao_aceite(
 
     # Cada exceção, decidida pelo teclado: a escolha nas setas, o motivo e o Enter.
     while (pendente := page.locator('[data-estado="a"]').first).count():
+        # DD-119: só o campo da opção marcada aparece; antes da escolha, nenhum.
+        expect(pendente.get_by_label("Motivo do descarte")).to_be_hidden()
+        expect(pendente.get_by_label("Prontuário do cadastro")).to_be_hidden()
         pendente.get_by_role("radio", name="Descartar").focus()
         page.keyboard.press("Space")
+        expect(pendente.get_by_label("Prontuário do cadastro")).to_be_hidden()
         pendente.get_by_label(re.compile("^Motivo")).fill("conferido com a recepção")
         page.keyboard.press("Enter")
         expect(page.get_by_role("status")).to_have_text("Decisão registrada.")

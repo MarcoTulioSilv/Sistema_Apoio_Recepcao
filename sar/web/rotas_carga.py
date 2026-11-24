@@ -143,6 +143,8 @@ ERROS = {
     "carga.excecao_sem_tratamento": "Ainda há exceção sem decisão.",
     "carga.ativos_confirmados": "Informe quantos pacientes estão em tratamento hoje.",
     "carga.campo": "Campo desconhecido.",
+    "carga.triade_sem_dados": "A ficha não tem nome, nascimento nem nome da mãe para conferir com o cadastro: "
+    "descarte-a com o motivo.",
     "carga.nao_cadastravel": "Esta ficha não se cadastra a partir da carga: registre a decisão abaixo.",
     "rascunho.conteudo": "A ficha passou do tamanho do rascunho: cadastre pelo Novo cadastro.",
 }
@@ -162,6 +164,20 @@ TIPOS_DE_SAIDA = (("OBITO", "Óbito"), ("ALTA", "Alta"), ("TRANSPLANTE", "Transp
 _DATA = re.compile(r"\d{1,2}/\d{1,2}/\d{2,4}")
 _SEM_ACENTO = str.maketrans("ÁÂÃÀÉÊÍÓÔÕÚÇ", "AAAAEEIOOOUC")
 _PRONTUARIO = re.compile(r"\s*N\s*[ºo°]?\s*\.?\s*PT\b.*$", re.IGNORECASE)
+
+
+ITENS_DA_TRIADE = {"nome": "o nome", "nascimento": "o nascimento", "nome_mae": "o nome da mãe"}
+
+
+def triade_nao_confere(prontuario: str, itens: list[str]) -> str:
+    """DD-119: diz quais itens não batem, nunca os valores do cadastro."""
+    nomes = [ITENS_DA_TRIADE.get(item, item) for item in itens]
+    lista = nomes[0] if len(nomes) == 1 else f"{', '.join(nomes[:-1])} e {nomes[-1]}"
+    verbo = "é diferente" if len(nomes) == 1 else "são diferentes"
+    return (
+        f"O cadastro do prontuário {prontuario} não confere com esta ficha: {lista} {verbo}. Confira o prontuário; "
+        "se a ficha for de outra pessoa, cadastre-a pela tela."
+    )
 
 
 def _servicos() -> ServicosWeb:
@@ -267,10 +283,15 @@ def tratar(linha_id: int) -> RespostaWerkzeug | tuple[str, int]:
     try:
         _servicos().carga.tratar_excecao(contexto, linha_id, Tratamento(escolha), motivo, prontuario)
     except RegraViolada as erro:
+        mensagem = (
+            triade_nao_confere(" ".join(prontuario.split()), list(erro.detalhe.get("itens", [])))
+            if erro.codigo == "carga.triade_nao_confere"
+            else ERROS.get(erro.codigo, "Confira os dados.")
+        )
         return _relatorio(
             contexto,
             erro_linha=linha_id,
-            erro=ERROS.get(erro.codigo, "Confira os dados."),
+            erro=mensagem,
             digitado={"motivo": motivo, "prontuario": prontuario, "tratamento": escolha},
         ), 422
     return redirect(url_for("carga.relatorio", resultado="tratada", _anchor=f"linha-{linha_id}"))

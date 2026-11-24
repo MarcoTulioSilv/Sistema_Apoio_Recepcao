@@ -88,11 +88,11 @@ def test_relatorio_da_simulacao_antes_da_efetivacao(
 
 
 # ------------------------------------------------------------------ tratamento das exceções (§14.3, item 4)
-@pytest.mark.requisito("RF-1106", "P-28", "DD-114")
+@pytest.mark.requisito("RF-1106", "P-28", "DD-114", "DD-119")
 def test_excecao_importada_a_mao_ou_descartada_com_motivo(
     efetivada: tuple[ServicoCarga, planilhas.Sinteticas, dict[str, int]], engine_web: Engine, fabrica: Fabrica
 ) -> None:
-    carga_, _, usuarios = efetivada
+    carga_, gerado, usuarios = efetivada
     recepcao = pessoa(usuarios)
     relatorio = carga_.relatorio(recepcao)
     assert relatorio is not None
@@ -103,14 +103,25 @@ def test_excecao_importada_a_mao_ou_descartada_com_motivo(
     assert erro.value.codigo == "carga.motivo"
     carga_.tratar_excecao(recepcao, primeira.linha_id, Tratamento.DESCARTADA, "paciente já saiu", None)
 
-    # P-28: a recepção cadastra pela tela e liga o cadastro à linha.
-    dados = dados_completos(fabrica)
+    # DD-119: o cadastro de outra pessoa não resolve a exceção, e a recusa diz o que não bate.
+    ficha = next(f for f in gerado.fichas if f.linha == segunda.numero_linha)
+    outro = dados_completos(fabrica)
+    montar(engine_web).pacientes.criar(recepcao, outro, INICIO)
+    with pytest.raises(RegraViolada) as erro:
+        carga_.tratar_excecao(recepcao, segunda.linha_id, Tratamento.IMPORTADA_MANUAL, None, outro.prontuario)
+    assert erro.value.codigo == "carga.triade_nao_confere"
+    assert erro.value.detalhe["itens"] == ["nome", "nascimento", "nome_mae"]
+
+    # P-28: a recepção cadastra pela tela e liga o cadastro à linha; a tríade bate, com outra grafia do nome.
+    dados = replace(dados_completos(fabrica), nome=ficha.nome.lower(), data_nascimento=ficha.nascimento,
+                    nome_mae=ficha.nome_mae)  # fmt: skip
     montar(engine_web).pacientes.criar(recepcao, dados, INICIO)
-    carga_.tratar_excecao(recepcao, segunda.linha_id, Tratamento.IMPORTADA_MANUAL, None, dados.prontuario)
+    carga_.tratar_excecao(recepcao, segunda.linha_id, Tratamento.IMPORTADA_MANUAL, "ignorado", dados.prontuario)
     tratadas = {li.linha_id: li for li in (carga_.relatorio(recepcao) or relatorio).linhas}
     assert tratadas[primeira.linha_id].tratamento is Tratamento.DESCARTADA
     assert tratadas[segunda.linha_id].tratamento is Tratamento.IMPORTADA_MANUAL
     assert tratadas[segunda.linha_id].paciente_id is not None
+    assert tratadas[segunda.linha_id].motivo in (None, "")  # o motivo da outra opção não é guardado
 
     with pytest.raises(RegraViolada) as erro:  # o mesmo cadastro não serve a duas linhas
         carga_.tratar_excecao(recepcao, primeira.linha_id, Tratamento.IMPORTADA_MANUAL, None, dados.prontuario)

@@ -111,7 +111,10 @@ branch `incremento-7`, à espera do PR. Próximo: **Incremento 8** (homologaçã
   planilhas sintéticas com os defeitos reais (`scripts/gerar_planilhas_sinteticas.py`). Ensaio em desenvolvimento: 146
   fichas simuladas em 2,7 s, numa transação, com a conta fechando. Decisões do incremento: DD-113 (TI identificado no
   terminal, sem sessão) e DD-114 (papel de cada planilha, exceção de linha e aviso de campo); no uso, DD-115
-  (metadados da imagem fora da busca de outros formatos no logotipo).
+  (metadados da imagem fora da busca de outros formatos no logotipo) DD-116 (CEP único do município confirmado
+  pela recepção), DD-117 (cruzamento da P1 com a P4 pelo CPF, pelo CNS e pelo nome, completando todo campo vazio) e
+  DD-118 (cadastro pela tela a partir da exceção da carga, já preenchido, com baixa automática ao salvar) e DD-119
+  (solução da exceção por seletor, com a tríade do cadastro conferida com a da ficha).
 
 - **Incremento 6:** CT-PEN-01 a 05 e CT-JOB-01 a 07 passando (PT §4.10). MOD-07 com a matriz única igual à da ERS
   (DD-55), as 19 fontes ligadas, a tela de pendências, a contagem no início e as pendências de cada paciente nos
@@ -179,6 +182,34 @@ referência. Um chat no Projeto continua útil para decisões e revisões.
   se preciso.
 - Cadastrar os convênios (IPASGO e outros) antes da efetivação, para a cobertura entrar; os não cadastrados viram aviso.
 
+**Próxima rodada (planejada em 24/11/2026, no início do Incremento 8)**
+
+Duas entregas na mesma branch, separadas por commit:
+
+1. **Histórico de saídas anterior ao sistema.** A planilha de eventos (P3) é o único registro das saídas de antes da
+   implantação, e hoje a carga só a usa para conferir (DD-114) e a apaga no aceite (DD-69). As saídas novas já ficam
+   no sistema, como evento do período de tratamento. Etapas, cada uma parando para aprovação:
+   1. Perfilamento da P3 pelo usuário, mascarado: só abas, rótulos, posições das colunas e contagens, sem valor.
+   2. Decisão e requisito: emenda à ERS (RF novo de consulta do histórico) e DD-120, que revê a DD-114 só para o
+      histórico. Define o que é guardado, a retenção, a cifragem, a linha na matriz (administração; recepção se o
+      usuário quiser; TI nunca) e a auditoria da consulta.
+   3. Dados: migração 0010 com a tabela do histórico, carregada da P3 uma vez só (na efetivação da carga ou por
+      comando próprio do TI), sem criar nem tocar paciente.
+   4. Tela, com maquete antes: lista com busca por nome (POST), filtro por tipo de saída e por ano, contagem por ano e
+      tipo; só leitura.
+   5. Testes (planilhas sintéticas com as abas da P3, permissões pela matriz, TI recusado, auditoria) e fechamento.
+
+   Perguntas para o usuário antes da etapa 2: para que a administração consulta (achar uma pessoa, contar saídas por
+   ano e tipo, responder a pedido externo); por quanto tempo o histórico fica; quais colunas importam em cada aba;
+   e se não basta manter a planilha como fonte do histórico, com o sistema mostrando só as saídas registradas daqui
+   para frente.
+
+2. **Telas na largura total.** Toda tela preenche a largura disponível (CLAUDE.md, Interface). As da carga já foram
+   ajustadas; ainda têm limite de largura no contêiner, com maquete antes de cada uma: autorização, conferência de
+   documento, ver documento, fila de conferência de documentos, digitalizar, foto, aviso de emissão, escalas do
+   paciente, dados da clínica (instituição), integridade, anular paciente, pedido do titular (novo e acompanhamento)
+   e usuário. Os formulários curtos pedem arranjo novo, para os campos não ficarem esticados demais.
+
 **Técnicas**
 
 - Teste da aplicação do SCE contra o MySQL LTS novo antes da migração (R-35).
@@ -219,7 +250,7 @@ confirmado (Brother DCP-1610NW); webcam disponível na estação (USB, 1280×720
 |---|---|---|---|
 | RF | RF-1011 (e RF-922; RF-303, RF-806 e RF-807 removidos) | DEC | DEC-76 |
 | RNF | RNF-628 | AD | AD-27 |
-| SEG | SEG-31 | DD | DD-115 |
+| SEG | SEG-31 | DD | DD-119 |
 | QAS | QAS-15 | P (pontos validados) | P-29 |
 | INV | INV-15 | R (riscos) | R-43 |
 | MOD | MOD-11 | DOC | DOC-07 |

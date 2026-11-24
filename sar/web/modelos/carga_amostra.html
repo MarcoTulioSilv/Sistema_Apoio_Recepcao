@@ -19,7 +19,7 @@
 {% block titulo_pagina %}Carga inicial{% endblock %}
 {% block subtitulo %}{% if amostra.completa %}Tudo conferido. Falta o aceite da administração.{% elif amostra.pacientes %}Conferência amostral: {{ amostra.pacientes | selectattr("completo") | list | length }} de {{ amostra.pacientes | length }} pacientes conferidos.{% else %}A conferência amostral começa depois da efetivação.{% endif %}{% endblock %}
 {% block conteudo %}
-<div class="flex max-w-6xl flex-col gap-5">
+<div class="flex flex-col gap-5">
   {% include "_carga_topo.html" %}
   {% include "_avisos.html" %}
   {% if amostra.pacientes %}
