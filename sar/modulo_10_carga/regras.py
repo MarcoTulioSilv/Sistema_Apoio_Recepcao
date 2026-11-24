@@ -7,7 +7,8 @@ porque o relatório chega ao terminal do TI só como contagem (DD-65, RNF-624).
 
 Planilhas (docs/fase1-especificacao-migracao.md):
 - P1, endereços e telefones: a base (RN-04). Fichas de 9 linhas, rótulo na coluna A e valor na B.
-- P4, entradas: só completa o que falta na P1 e confere CPF e CNS, pelo prontuário (RF-1102, DD-114).
+- P4, entradas: só completa o que falta na P1 e confere CPF e CNS, pelo prontuário (RF-1102, DD-114); a ficha sem
+  prontuário se liga pelo CPF ou pelo nome, se apontarem um prontuário só (DD-117).
 - P3, eventos: só conferida, pelo nome (RF-1103); nenhum evento é gravado (RN-05).
 """
 
@@ -16,7 +17,7 @@ from __future__ import annotations
 import re
 import unicodedata
 from collections import Counter, defaultdict
-from collections.abc import Iterable, Sequence
+from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass, field, replace
 from datetime import date, timedelta
 
@@ -622,7 +623,27 @@ class LinhaP4:
         texto = str(valor)
         if texto.endswith(".0"):
             texto = texto[:-2]
-        return _digitos(texto) or None
+        digitos = _digitos(texto)
+        if coluna == "CPF" and isinstance(valor, int | float) and 9 <= len(digitos) < 11:
+            digitos = digitos.zfill(11)  # CPF gravado como número no Excel: os zeros à esquerda somem (DD-117)
+        return digitos or None
+
+    def texto(self, coluna: str) -> str | None:
+        valor = self.valores.get(coluna)
+        return (_espacos(valor).strip(" .:-/") or None) if isinstance(valor, str) else None
+
+    def nome(self) -> str | None:
+        texto = self.texto("PACIENTE")
+        return norm_nome(texto) if texto else None
+
+    def texto_do_nome(self) -> str | None:
+        return self.texto("PACIENTE")
+
+    def cidade(self) -> str | None:
+        texto = self.texto("CIDADE")
+        if texto and (uf := _UF.search(texto)):
+            texto = texto[: uf.start()].strip(" -/") or None
+        return texto
 
     def entrada(self) -> date | None:
         return ler_data(self.valores.get("ENT"))
@@ -693,18 +714,37 @@ class Plano:
 
 
 def _completar_com_p4(registro: RegistroP1, linhas: Sequence[LinhaP4]) -> RegistroP1:
-    """DD-114: a P1 prevalece. A P4 preenche só o que está vazio e confere o que já existe."""
+    """DD-114: a P1 prevalece. A P4 preenche só o que está vazio e confere o que já existe. Com várias entradas do
+    mesmo paciente, cada campo vem da mais recente que o tem (DD-117: o CPF de uma entrada antiga se perdia)."""
     avisos = list(registro.avisos)
     if not linhas:
         avisos.append("p4.sem_linha")
         return replace(registro, avisos=tuple(avisos))
     if len(linhas) > 1:
-        avisos.append("p4.varias_linhas")  # especificação §4: a de entrada mais recente
-    linha = max(linhas, key=lambda li: (li.entrada() or date.min, li.numero_linha))
+        avisos.append("p4.varias_linhas")
+    recentes = sorted(linhas, key=lambda li: (li.entrada() or date.min, li.numero_linha), reverse=True)
+
+    def mais_recente[T](ler: Callable[[LinhaP4], T | None]) -> T | None:
+        return next((v for v in map(ler, recentes) if v is not None), None)
+
     mudancas: dict[str, object] = {}
-    entrada, cpf, cns, cep = linha.entrada(), linha.digitos("CPF"), linha.digitos("CARTAOSUS"), linha.digitos("CEP")
-    if entrada is not None and entrada < INICIO_MINIMO:
-        entrada = None
+    entrada = mais_recente(lambda li: e if (e := li.entrada()) is not None and e >= INICIO_MINIMO else None)
+    cpf = mais_recente(lambda li: li.digitos("CPF"))
+    cns = mais_recente(lambda li: li.digitos("CARTAOSUS"))
+    cep = mais_recente(lambda li: c if (c := li.digitos("CEP")) is not None and len(c) == 8 else None)
+    numero_p4 = mais_recente(LinhaP4.prontuario)
+    if registro.prontuario is None and numero_p4 is not None:
+        mudancas["prontuario"] = str(numero_p4)
+        avisos.append("p4.completou_prontuario")
+    # Campo vazio na ficha vem da P4, quando a P4 o tem (DD-117): nome e cidade só completam, nunca conferem, porque
+    # a grafia varia de uma planilha para a outra.
+    for campo_texto, texto, codigo_texto in (
+        ("nome", mais_recente(LinhaP4.texto_do_nome), "nome"),
+        ("municipio_nome", mais_recente(LinhaP4.cidade), "cidade"),
+    ):
+        if getattr(registro, campo_texto) is None and texto is not None:
+            mudancas[campo_texto] = texto
+            avisos.append(f"p4.completou_{codigo_texto}")
     for campo, valor, codigo in (("inicio", entrada, "inicio"), ("cpf", cpf, "cpf"), ("cns", cns, "cns")):
         atual = getattr(registro, campo)
         if atual is None and valor is not None:
@@ -712,10 +752,36 @@ def _completar_com_p4(registro: RegistroP1, linhas: Sequence[LinhaP4]) -> Regist
             avisos.append(f"p4.completou_{codigo}")
         elif atual is not None and valor is not None and atual != valor:
             avisos.append(f"p4.{codigo}_divergente")
-    if registro.cep is None and cep is not None and len(cep) == 8:
+    if registro.cep is None and cep is not None:
         mudancas["cep"] = cep
         avisos.append("p4.completou_cep")
     return replace(registro, avisos=tuple(avisos), **mudancas)  # type: ignore[arg-type]
+
+
+def _prontuario_pela_p4(registro: RegistroP1, livres: dict[int, list[LinhaP4]]) -> tuple[int | None, str | None]:
+    """DD-117: o prontuário das linhas livres da P4 com o mesmo CPF, o mesmo CNS ou o mesmo nome. Vale se for um só;
+    mais de um fica sem ligação, com aviso. CPF ou CNS diferentes do da ficha desfazem o candidato."""
+    nome = norm_nome(registro.nome) if registro.nome else None
+    candidatos: dict[int, str] = {}
+    for numero, linhas in livres.items():
+        pelo_cpf = registro.cpf is not None and any(li.digitos("CPF") == registro.cpf for li in linhas)
+        pelo_cns = registro.cns is not None and any(li.digitos("CARTAOSUS") == registro.cns for li in linhas)
+        pelo_nome = nome is not None and any(li.nome() == nome for li in linhas)
+        if not (pelo_cpf or pelo_cns or pelo_nome):
+            continue
+        cpfs = {c for li in linhas if (c := li.digitos("CPF"))}
+        cnss = {c for li in linhas if (c := li.digitos("CARTAOSUS"))}
+        if (registro.cpf and cpfs and registro.cpf not in cpfs) or (registro.cns and cnss and registro.cns not in cnss):
+            continue
+        candidatos[numero] = (
+            "p4.ligada_por_cpf" if pelo_cpf else "p4.ligada_por_cns" if pelo_cns else "p4.ligada_pelo_nome"
+        )
+    if len(candidatos) > 1:
+        return None, "p4.ligacao_ambigua"
+    if not candidatos:
+        return None, None
+    [(numero, aviso)] = candidatos.items()
+    return numero, aviso
 
 
 def _inicio_plausivel(registro: RegistroP1, hoje: date) -> RegistroP1:
@@ -741,16 +807,32 @@ def planejar(
     for linha3 in linhas_p3:
         por_nome[norm_nome(linha3.nome)].append(linha3)
 
+    registros = [_inicio_plausivel(interpretar_p1(bloco), hoje) for bloco in blocos]
+    # Primeira passada: pelo prontuário (DD-114). Os prontuários da P1 ficam reservados, mesmo sem linha na P4.
+    da_p1 = {int(r.prontuario) for r in registros if r.excecao is None and r.prontuario}
+    ligacoes: dict[int, tuple[LinhaP4, ...]] = {
+        i: tuple(por_prontuario.get(int(r.prontuario), ()))
+        for i, r in enumerate(registros)
+        if r.excecao is None and r.prontuario
+    }
+    # Segunda passada (DD-117): a ficha sem prontuário, pelo CPF ou pelo nome, nas linhas que sobraram.
+    livres = {n: linhas for n, linhas in por_prontuario.items() if n not in da_p1}
+    for i, registro in enumerate(registros):
+        if registro.excecao is None and not registro.prontuario:
+            numero, aviso = _prontuario_pela_p4(registro, livres)
+            if aviso:
+                registros[i] = replace(registro, avisos=(*registro.avisos, aviso))
+            if numero is not None:
+                ligacoes[i] = tuple(livres.pop(numero))
+
     itens: list[Planejado] = []
     ligadas: set[int] = set()
     casadas: set[tuple[str, int]] = set()
-    for bloco in blocos:
-        registro = _inicio_plausivel(interpretar_p1(bloco), hoje)
+    for i, registro in enumerate(registros):
         if registro.excecao is not None:
             itens.append(Planejado(registro))
             continue
-        numero = int(registro.prontuario) if registro.prontuario else None
-        doP4 = tuple(por_prontuario.get(numero, ())) if numero is not None else ()
+        doP4 = ligacoes.get(i, ())
         ligadas.update(id(li) for li in doP4)
         registro = _completar_com_p4(registro, doP4)
         doP3 = tuple(por_nome.get(norm_nome(registro.nome), ())) if registro.nome else ()

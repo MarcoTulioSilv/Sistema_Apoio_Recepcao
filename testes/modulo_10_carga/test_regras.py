@@ -452,3 +452,81 @@ def test_rotulo_com_erro_de_digitacao_e_reconhecido() -> None:
     for rotulo, campo in (("TELEONE:", "telefone"), ("CONVENIIO:", "convenio"), ("DATA DE NAS:", "nascimento"),
                           ("CIADADE/CEP:", "cidade"), ("INICIO TRT:", "inicio"), ("NOME DA:", "mae")):  # fmt: skip
         assert regras.campo_do_rotulo(rotulo) == campo, rotulo
+
+
+SEM_PT = bloco(("PACIENTE:", "JOAO DA SILVA FICTICIO"), *FICHA[1:])  # a FICHA sem o número do prontuário
+
+
+def p4_nome(linha: int, pront: str, nome: str, cpf: object = "", ent: object = "01/02/2016") -> LinhaP4:
+    return LinhaP4(linha, {"PRONT": pront, "ENT": ent, "PACIENTE": nome, "CPF": cpf, "CARTAOSUS": ""})  # type: ignore[dict-item]
+
+
+@pytest.mark.requisito("RF-1102", "DD-117")
+def test_cada_campo_vem_da_entrada_mais_recente_que_o_tem() -> None:
+    """Visto no uso (18/11/2026): o CPF estava numa entrada antiga, e valia só a mais recente, sem CPF."""
+    sem_cpf = bloco(*[par for par in FICHA if not par[0].startswith("DOC")])
+    linhas = [p4(3, "314", "05/05/2015", cpf="11144477735"), p4(4, "314", "05/05/2019")]
+    r = regras.planejar([sem_cpf], linhas, [], HOJE).itens[0].registro
+    assert r.cpf == "11144477735" and "p4.completou_cpf" in r.avisos
+
+
+@pytest.mark.requisito("RF-1102", "DD-117")
+def test_cpf_gravado_como_numero_recupera_o_zero() -> None:
+    assert LinhaP4(1, {"CPF": 1234567890}).digitos("CPF") == "01234567890"
+    assert LinhaP4(1, {"CPF": 12345678909.0}).digitos("CPF") == "12345678909"
+    assert LinhaP4(1, {"CPF": "123.456.789"}).digitos("CPF") == "123456789"  # texto fica como foi digitado
+
+
+@pytest.mark.requisito("RF-1102", "DD-117", "P-03")
+@pytest.mark.parametrize(
+    ("linha", "aviso"),
+    [
+        (p4_nome(3, "777", "OUTRO NOME FICTICIO", cpf="52998224725"), "p4.ligada_por_cpf"),
+        (p4_nome(3, "777", "João da Silva Fictício"), "p4.ligada_pelo_nome"),
+    ],
+)
+def test_ficha_sem_prontuario_se_liga_pelo_cpf_ou_pelo_nome(linha: LinhaP4, aviso: str) -> None:
+    plano = regras.planejar([SEM_PT], [linha], [], HOJE)
+    r = plano.itens[0].registro
+    assert r.excecao is None and r.prontuario == "777"
+    assert {aviso, "p4.completou_prontuario"} <= set(r.avisos)
+    assert plano.contagens_p4["ligadas"] == 1
+
+
+@pytest.mark.requisito("RF-1102", "DD-117", "P-03")
+def test_ficha_sem_nome_e_sem_prontuario_completa_pela_p4() -> None:
+    """Visto no uso (23/11/2026): "PACIENTE:" vazio, CPF e CNS na ficha; a P4 achava a entrada, mas o nome não vinha
+    e a ficha caía como sem nome."""
+    sem_nome = bloco(("PACIENTE:", ""), *FICHA[1:])
+    linha = p4_nome(3, "777", "  Joao da Silva Ficticio ", cpf="52998224725")
+    r = regras.planejar([sem_nome], [linha], [], HOJE).itens[0].registro
+    assert r.excecao is None and (r.nome, r.prontuario) == ("Joao da Silva Ficticio", "777")
+    assert {"p4.ligada_por_cpf", "p4.completou_nome", "p4.completou_prontuario"} <= set(r.avisos)
+    # Só com o CNS em comum, também liga.
+    so_cns = bloco(("PACIENTE:", ""), *[par for par in FICHA[1:] if not par[0].startswith("DOC")])
+    pelo_cns = LinhaP4(3, {"PRONT": "777", "ENT": "01/02/2016", "PACIENTE": "JOAO FICTICIO",
+                           "CARTAOSUS": "123456789012345"})  # fmt: skip
+    r = regras.planejar([so_cns], [pelo_cns], [], HOJE).itens[0].registro
+    assert r.excecao is None and r.prontuario == "777" and "p4.ligada_por_cns" in r.avisos
+
+
+@pytest.mark.requisito("RF-1102", "DD-117")
+def test_cidade_vazia_vem_da_p4_e_nome_da_p1_prevalece() -> None:
+    sem_cidade = bloco(*FICHA[:4], ("CIDADE /CEP:", "CEP: 75805-640"), *FICHA[5:])
+    linha = LinhaP4(3, {"PRONT": "314", "ENT": "01/02/2016", "PACIENTE": "OUTRA GRAFIA FICTICIA", "CIDADE": "JATAI-GO"})
+    r = regras.planejar([sem_cidade], [linha], [], HOJE).itens[0].registro
+    assert (r.municipio_nome, r.nome) == ("JATAI", "JOAO DA SILVA FICTICIO")
+    assert "p4.completou_cidade" in r.avisos and "p4.completou_nome" not in r.avisos
+
+
+@pytest.mark.requisito("DD-117", "P-03")
+def test_ligacao_pelo_nome_nao_adivinha() -> None:
+    dois = [p4_nome(3, "777", "JOAO DA SILVA FICTICIO"), p4_nome(4, "888", "JOAO DA SILVA FICTICIO")]
+    r = regras.planejar([SEM_PT], dois, [], HOJE).itens[0].registro
+    assert r.excecao == "P-03.minimo" and "p4.ligacao_ambigua" in r.avisos
+    outro_cpf = [p4_nome(3, "777", "JOAO DA SILVA FICTICIO", cpf="11144477735")]  # mesmo nome, outra pessoa
+    assert regras.planejar([SEM_PT], outro_cpf, [], HOJE).itens[0].excecao == "P-03.minimo"
+    # O prontuário de outra ficha da P1 nunca é dado a quem não tem.
+    com_pt = bloco(("PACIENTE:", "JOAO DA SILVA FICTICIO Nº PT: 777"), *FICHA[1:], linha=20)
+    plano = regras.planejar([SEM_PT, com_pt], [p4_nome(3, "777", "JOAO DA SILVA FICTICIO")], [], HOJE)
+    assert plano.itens[0].excecao == "P-03.minimo" and plano.itens[1].registro.prontuario == "777"
