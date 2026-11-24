@@ -530,3 +530,18 @@ def test_ligacao_pelo_nome_nao_adivinha() -> None:
     com_pt = bloco(("PACIENTE:", "JOAO DA SILVA FICTICIO Nº PT: 777"), *FICHA[1:], linha=20)
     plano = regras.planejar([SEM_PT, com_pt], [p4_nome(3, "777", "JOAO DA SILVA FICTICIO")], [], HOJE)
     assert plano.itens[0].excecao == "P-03.minimo" and plano.itens[1].registro.prontuario == "777"
+
+
+@pytest.mark.requisito("DD-118", "ND-49")
+def test_leitura_para_o_cadastro_tolera_o_rotulo_repetido_e_completa_pela_p4() -> None:
+    """A ficha com rótulo repetido vai às exceções sem dado nenhum; para o cadastro pela tela, a leitura segue e a
+    linha repetida fica como trecho que não entrou."""
+    repetida = (*[(r, v) for r, v in FICHA if not r.startswith("INICIO")], ("NOME DA MÃE:", "OUTRA FICTICIA"))
+    assert regras.interpretar_p1(bloco(*repetida)).excecao == "p1.rotulo_repetido"
+    p4 = [{"PRONT": "314", "ENT": "05/05/2019", "PACIENTE": "JOAO DA SILVA FICTICIO"}]
+    r = regras.ler_para_cadastro(10, [(str(rotulo), v) for rotulo, v in repetida], p4, HOJE)
+    assert r.excecao is None and r.numero_linha == 10
+    assert (r.nome, r.prontuario, r.nome_mae) == ("JOAO DA SILVA FICTICIO", "0314", "MARIA DA SILVA FICTICIA")
+    assert r.inicio == date(2019, 5, 5) and "p4.completou_inicio" in r.avisos
+    assert ("linha", "NOME DA MÃE: · OUTRA FICTICIA") in r.sobras
+    assert regras.ler_para_cadastro(1, [("TITULO SEM FICHA", None)], [], HOJE) == regras.RegistroP1(1)

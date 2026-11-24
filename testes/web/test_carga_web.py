@@ -4,6 +4,7 @@ planilhas sintéticas (PT §5.3). O TI não vê nada disso (RF-1004)."""
 from __future__ import annotations
 
 import re
+from html import escape
 from pathlib import Path
 
 import pytest
@@ -13,6 +14,7 @@ from sqlalchemy import Engine
 from sar.modulo_10_carga.contrato import CAMPOS_CONFERIDOS
 from testes.apoio import planilhas
 from testes.apoio.acesso import CriarUsuario
+from testes.apoio.cadastro import pessoa
 from testes.apoio.carga import contar, ti
 from testes.apoio.web import get, logado, montar, post, servicos_web
 
@@ -141,3 +143,79 @@ def test_aceite_da_administracao_com_a_contagem_da_recepcao(
     assert contar(engine_web, "SELECT COUNT(*) FROM carga_linha") == 0
     assert 'href="/carga"' not in get(admin, "/").get_data(as_text=True)  # o item some depois do aceite
     assert "A carga inicial está encerrada" in get(admin, "/carga").get_data(as_text=True)
+
+
+def linha_da_ficha(engine: Engine, usuarios: dict[str, int], numero_linha: int) -> int:
+    relatorio = servicos_web(engine).carga.relatorio(pessoa(usuarios))
+    assert relatorio is not None
+    return next(li.linha_id for li in relatorio.linhas if li.numero_linha == numero_linha)
+
+
+@pytest.mark.requisito("DD-118", "P-28", "RF-1106", "RF-919")
+def test_cadastro_aberto_pela_excecao_vem_preenchido_e_da_baixa_ao_salvar(
+    carga: dict[str, int],
+    engine_web: Engine,
+    criar_usuario: CriarUsuario,
+    sinteticas: tuple[planilhas.Sinteticas, Path],
+) -> None:
+    gerado, pasta = sinteticas
+    efetivar(engine_web, carga, pasta)
+    recepcao = cliente(engine_web, criar_usuario, "recepcao")
+    ficha = next(f for f in gerado.fichas if f.defeito == "sem_prontuario")
+    linha = linha_da_ficha(engine_web, carga, ficha.linha)
+    relatorio = get(recepcao, "/carga").get_data(as_text=True)
+    assert f'action="/carga/excecoes/{linha}/cadastrar"' in relatorio
+    saida = next(f for f in gerado.fichas if f.defeito == "evento_de_saida")  # a decisão vem antes: sem o botão
+    assert f'action="/carga/excecoes/{linha_da_ficha(engine_web, carga, saida.linha)}/cadastrar"' not in relatorio
+
+    aberto = post(recepcao, f"/carga/excecoes/{linha}/cadastrar", {})
+    assert aberto.status_code == 302 and aberto.headers["Location"].endswith("/cadastro/novo")  # nada na URL
+    tela = get(recepcao, "/cadastro/novo").get_data(as_text=True)
+    assert 'data-sobre="da-carga"' in tela and f'name="carga_linha" value="{linha}"' in tela
+    assert f'value="{escape(ficha.nome)}"' in tela and f'value="{escape(ficha.nome_mae)}"' in tela
+    assert ficha.inicio is not None and f'value="{ficha.inicio.isoformat()}"' in tela
+    assert "Rascunho retomado" not in tela  # o quadro da ficha da carga explica de onde veio
+
+    falta = post(recepcao, "/cadastro/novo", {"acao": "paciente", "carga_linha": str(linha), "nome": ficha.nome})
+    assert falta.status_code == 200 and 'data-sobre="da-carga"' in falta.get_data(as_text=True)  # o quadro fica
+    salvo = post(recepcao, "/cadastro/novo", {"acao": "paciente", "carga_linha": str(linha), "nome": ficha.nome,
+                                              "prontuario": "990001", "inicio": ficha.inicio.isoformat()})  # fmt: skip
+    assert salvo.status_code == 302
+    assert salvo.headers["Location"].endswith(f"/carga?resultado=cadastrada#linha-{linha}")
+    depois = get(recepcao, "/carga?resultado=cadastrada").get_data(as_text=True)
+    assert "A ficha da carga ficou como cadastrada pela tela" in depois
+    assert f'action="/carga/excecoes/{linha}/cadastrar"' not in depois  # já tratada
+    novo = get(recepcao, "/cadastro/novo").get_data(as_text=True)
+    assert 'data-sobre="da-carga"' not in novo and escape(ficha.nome) not in novo  # o rascunho foi junto
+
+
+@pytest.mark.requisito("DD-118", "RF-919")
+def test_rascunho_de_outro_cadastro_so_e_substituido_com_confirmacao(
+    carga: dict[str, int],
+    engine_web: Engine,
+    criar_usuario: CriarUsuario,
+    sinteticas: tuple[planilhas.Sinteticas, Path],
+) -> None:
+    gerado, pasta = sinteticas
+    efetivar(engine_web, carga, pasta)
+    recepcao = cliente(engine_web, criar_usuario, "recepcao")
+    ficha = next(f for f in gerado.fichas if f.defeito == "sem_prontuario")
+    linha = linha_da_ficha(engine_web, carga, ficha.linha)
+    assert post(recepcao, "/cadastro/rascunho", {"nome": "OUTRO PACIENTE FICTICIO"}).status_code == 200
+    em_andamento = post(recepcao, f"/carga/excecoes/{linha}/cadastrar", {})
+    html = em_andamento.get_data(as_text=True)
+    assert em_andamento.status_code == 200 and "Você tem um rascunho de cadastro não salvo" in html
+    assert "OUTRO PACIENTE FICTICIO" in get(recepcao, "/cadastro/novo").get_data(as_text=True)  # intacto
+
+    substituido = post(recepcao, f"/carga/excecoes/{linha}/cadastrar", {"substituir": "1"})
+    assert substituido.status_code == 302
+    tela = get(recepcao, "/cadastro/novo").get_data(as_text=True)
+    assert escape(ficha.nome) in tela and "OUTRO PACIENTE FICTICIO" not in tela
+    # O mesmo botão de novo continua o rascunho desta ficha, sem perguntar.
+    assert post(recepcao, f"/carga/excecoes/{linha}/cadastrar", {}).status_code == 302
+
+    voltou = post(recepcao, "/cadastro/novo", {"acao": "voltar_carga", "carga_linha": str(linha)})
+    assert voltou.status_code == 302 and voltou.headers["Location"].endswith(f"/carga#linha-{linha}")
+    assert escape(ficha.nome) not in get(recepcao, "/cadastro/novo").get_data(as_text=True)
+    relatorio = get(recepcao, "/carga").get_data(as_text=True)
+    assert f'action="/carga/excecoes/{linha}/cadastrar"' in relatorio  # a exceção continua a tratar

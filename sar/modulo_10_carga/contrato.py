@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime
 from enum import Enum
 from pathlib import Path
 from typing import Any, Protocol
 
+from sar.modulo_02_cadastro.contrato import DadosCobertura, DadosContato, DadosPaciente, DadosTelefone
 from sar.nucleo.contexto import Contexto
 
 
@@ -32,6 +33,11 @@ class ResumoCarga:
 class Tratamento(str, Enum):
     IMPORTADA_MANUAL = "importada_manual"  # a recepção cadastrou pela tela (P-28)
     DESCARTADA = "descartada"  # com motivo
+
+
+# DD-118: as exceções que a recepção cadastra a partir da própria ficha. Ficam de fora as de quem consta na planilha
+# de eventos (a decisão vem antes), as de documento ou prontuário já usado (é o mesmo paciente) e a ficha ilegível.
+CADASTRAVEIS = frozenset({"P-03.minimo", "p1.rotulo_repetido", "p1.rotulo_desconhecido", "p1.celula_ilegivel"})
 
 
 class ResultadoConferencia(str, Enum):
@@ -149,6 +155,22 @@ class Conferencia:
     campos: tuple[CampoConferencia, ...]
 
 
+@dataclass(frozen=True, slots=True)
+class FichaParaCadastro:
+    """DD-118: o que a carga leu da ficha de uma exceção, para abrir o cadastro pela tela já preenchido."""
+
+    linha_id: int
+    numero_linha: int
+    original: Original
+    dados: DadosPaciente  # município pelo código IBGE, como no cadastro
+    inicio: date | None
+    cobertura: DadosCobertura | None
+    telefones: tuple[DadosTelefone, ...]
+    contatos: tuple[DadosContato, ...]
+    # Campos que não estavam na ficha e vieram da planilha de entradas, pelos nomes de DadosPaciente, mais "inicio".
+    da_planilha_de_entradas: frozenset[str]
+
+
 class CargaService(Protocol):
     def simular(self, contexto: Contexto, pasta: Path) -> ResumoCarga:
         """Tudo numa transação desfeita no fim (DD-66); fica só o relatório de exceções e avisos, cifrado, até a
@@ -179,6 +201,18 @@ class CargaService(Protocol):
         motivo obrigatório. Pode ser refeito até o aceite. RegraViolada: "carga.sem_efetivacao", "carga.aceita",
         "carga.linha_sem_excecao", "carga.motivo", "carga.paciente_nao_encontrado", "carga.paciente_ja_ligado".
         NaoEncontrado se a linha não existe."""
+        ...
+
+    def ficha_para_cadastro(self, contexto: Contexto, linha_id: int) -> FichaParaCadastro:
+        """DD-118: a ficha de uma exceção ainda sem decisão, lida para o cadastro pela tela; a consulta é auditada.
+        RegraViolada: "carga.sem_efetivacao", "carga.aceita", "carga.nao_cadastravel". NaoEncontrado se a linha não
+        é da efetivação aberta."""
+        ...
+
+    def cadastrada_pela_tela(self, contexto: Contexto, linha_id: int, paciente_id: int) -> None:
+        """DD-118: o cadastro aberto pela exceção foi salvo; a linha fica importada à mão, ligada a ele. Só vale para a
+        exceção que se cadastra pelo botão e ainda não foi decidida ("carga.nao_cadastravel"). Os mesmos erros de
+        tratar_excecao."""
         ...
 
     def amostra(self, contexto: Contexto) -> Amostra:

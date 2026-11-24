@@ -1,13 +1,14 @@
 {% extends "layout.html" %}
-{# Relatório de exceções e avisos da carga (RF-1106, DDS §14.3; maquetes aprovadas em 11/11 e 18/11/2026). Quem consta
+{# Relatório de exceções e avisos da carga (RF-1106, DDS §14.3; maquetes aprovadas em 11/11, 18/11 e 23/11/2026). Quem consta
    na planilha de eventos vem num cartão próprio, antes das outras exceções; as exceções pedem uma decisão antes do
-   aceite. Os avisos não: vêm por paciente, com o que não entrou, e o que ficou vazio já está nas pendências. #}
+   aceite. Os avisos não: vêm por paciente, com o que não entrou, e o que ficou vazio já está nas pendências. A
+   exceção que se cadastra a partir da ficha tem o botão que abre o Novo cadastro preenchido (DD-118). #}
 {% from "_carga_original.html" import ficha_p1, ligadas %}
-{% macro decisao(li, d) %}
+{% macro decisao(li, d, cadastravel=false) %}
 <form class="mt-1 flex flex-col gap-3" method="post" action="{{ url_for('carga.tratar', linha_id=li.linha_id) }}">
   {% if erro_linha == li.linha_id %}<p class="m-0 rounded-lg border border-urgencia-borda bg-urgencia-fundo p-3 font-bold text-urgencia" role="alert">{{ erro }}</p>{% endif %}
   <fieldset class="m-0 flex flex-col gap-2 border-0 p-0">
-    <legend class="mb-1 p-0 font-bold">O que foi feito</legend>
+    <legend class="mb-1 p-0 font-bold">{{ "Ou registre o que já foi feito" if cadastravel else "O que foi feito" }}</legend>
     <div class="flex flex-wrap gap-3">
       <label class="opcao-decisao has-checked:border-aprovar has-checked:bg-aprovar-fundo has-checked:text-aprovar-escura">
         <input class="sr-only" type="radio" name="tratamento" value="importada_manual"{% if d.get("tratamento") == "importada_manual" %} checked{% endif %}> Cadastrei pela tela</label>
@@ -18,7 +19,7 @@
   <div class="flex flex-wrap items-end gap-3">
     <label class="campo w-44"><span class="rotulo">Prontuário do cadastro</span><input class="entrada numero" name="prontuario" autocomplete="off" value="{{ d.get('prontuario', '') }}"></label>
     <label class="campo min-w-60 grow"><span class="rotulo">Motivo <span class="font-normal text-suave">(obrigatório para descartar)</span></span><input class="entrada" name="motivo" maxlength="300" autocomplete="off" value="{{ d.get('motivo', '') }}"></label>
-    <button class="btn-primario" type="submit">Registrar<span class="sr-only">: {{ nome_da_ficha(li.original) }}</span></button>
+    <button class="{{ 'btn-secundario' if cadastravel else 'btn-primario' }}" type="submit">Registrar<span class="sr-only">: {{ nome_da_ficha(li.original) }}</span></button>
   </div>
 </form>
 {% endmacro %}
@@ -37,13 +38,33 @@
     <div class="mt-3 grid grid-cols-1 gap-4 xl:grid-cols-2">{{ ficha_p1(li.original) }}{{ ligadas(li.original) }}</div>
   </details>
   {% if li.tratamento %}
-  <p class="m-0 text-sm">{% if estado == "d" %}<span class="font-bold">Descartada:</span> {{ li.motivo }}{% else %}<span class="font-bold">Cadastrada pela tela.</span> <a href="{{ url_for('pacientes.ficha', paciente_id=li.paciente_id) }}">Abrir a ficha</a>{% endif %}</p>
+  <p class="m-0 text-sm">{% if estado == "d" %}<span class="font-bold">Descartada:</span> {{ li.motivo }}{% else %}<span class="font-bold">Cadastrada pela tela.</span> <a class="btn-pequeno ml-2" href="{{ url_for('pacientes.ficha', paciente_id=li.paciente_id) }}">Abrir a ficha<span class="sr-only">: {{ nome_da_ficha(li.original) }}</span></a>{% endif %}</p>
   {% endif %}
   {% if pode_tratar %}
   {% set d = digitado if erro_linha == li.linha_id else {} %}
+  {% set cadastravel = estado == "a" and li.excecao in cadastraveis %}
+  {% if cadastravel %}
+  <div class="flex flex-col gap-3 rounded-lg border border-borda p-4" data-sobre="cadastrar-da-carga">
+    {% if rascunho_em_andamento == li.linha_id %}
+    <div class="flex flex-col gap-3 rounded-lg border border-borda-forte bg-alta-fundo p-3 text-alta" role="alert">
+      <p class="m-0"><strong>Você tem um rascunho de cadastro não salvo</strong>, de outro paciente, salvo em {{ rascunho_salvo_em | data_hora }}. Os dados desta ficha o substituem, e ele se perde.</p>
+      <form class="flex flex-wrap gap-3" method="post" action="{{ url_for('carga.cadastrar', linha_id=li.linha_id) }}">
+        <input type="hidden" name="substituir" value="1">
+        <button class="btn-primario" type="submit" autofocus>Substituir pelos dados desta ficha</button>
+        <a class="btn-secundario" href="{{ url_for('cadastro.novo') }}">Abrir o rascunho</a>
+      </form>
+    </div>
+    {% else %}
+    <form class="flex flex-wrap items-center gap-x-4 gap-y-2" method="post" action="{{ url_for('carga.cadastrar', linha_id=li.linha_id) }}">
+      <button class="btn-primario" type="submit">Cadastrar com estes dados<span class="sr-only">: {{ nome_da_ficha(li.original) }}</span></button>
+      <span class="max-w-[60ch] text-[15px] text-suave">Abre o Novo cadastro preenchido com o que a carga leu. Ao salvar, a ficha fica como cadastrada pela tela.</span>
+    </form>
+    {% endif %}
+  </div>
+  {% endif %}
   {% if li.tratamento and erro_linha != li.linha_id %}
   <details><summary class="cursor-pointer text-sm font-bold text-acao">Refazer a decisão</summary>{{ decisao(li, d) }}</details>
-  {% else %}{{ decisao(li, d) }}{% endif %}
+  {% else %}{{ decisao(li, d, cadastravel) }}{% endif %}
   {% endif %}
 </li>
 {% endmacro %}

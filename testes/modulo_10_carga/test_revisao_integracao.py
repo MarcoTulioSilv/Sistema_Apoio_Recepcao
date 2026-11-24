@@ -3,6 +3,7 @@ aceite, pela recepção e pela administração. O TI nunca vê nada disso (RF-10
 
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -204,3 +205,50 @@ def test_aceite_exige_tudo_tratado_e_conferido_e_apaga_a_area_de_trabalho(
             tentativa()
         assert erro.value.codigo == "carga.aceita"
     assert carga_.amostra(admin).pacientes == ()
+
+
+# ------------------------------------------------------------------ cadastro pela exceção (DD-118)
+@pytest.mark.requisito("DD-118", "P-28", "RF-1004")
+def test_ficha_da_excecao_para_o_cadastro_e_a_baixa_ao_salvar(
+    efetivada: tuple[ServicoCarga, planilhas.Sinteticas, dict[str, int]], engine_web: Engine
+) -> None:
+    carga_, gerado, usuarios = efetivada
+    recepcao = pessoa(usuarios)
+    relatorio = carga_.relatorio(recepcao)
+    assert relatorio is not None
+    por_linha = {li.numero_linha: li for li in relatorio.linhas}
+    ficha = next(f for f in gerado.fichas if f.defeito == "sem_prontuario")
+    linha = por_linha[ficha.linha]
+
+    lida = carga_.ficha_para_cadastro(recepcao, linha.linha_id)
+    assert (lida.dados.nome, lida.dados.nome_mae, lida.dados.prontuario) == (ficha.nome, ficha.nome_mae, None)
+    assert lida.dados.data_nascimento == ficha.nascimento and lida.inicio == ficha.inicio
+    assert lida.dados.municipio == ficha.municipio.codigo_ibge and lida.numero_linha == ficha.linha
+    assert lida.original == linha.original and not lida.da_planilha_de_entradas
+    assert contar(engine_web, "SELECT COUNT(*) FROM auditoria WHERE operacao = 'carga.excecoes.ver' "
+                              "AND entidade = 'carga_linha'") == 1  # fmt: skip
+
+    saida = por_linha[next(f for f in gerado.fichas if f.defeito == "evento_de_saida").linha]
+    repetido = por_linha[next(f for f in gerado.fichas if f.defeito == "cpf_repetido").linha]
+    for nao_cadastravel in (saida, repetido):
+        with pytest.raises(RegraViolada) as erro:
+            carga_.ficha_para_cadastro(recepcao, nao_cadastravel.linha_id)
+        assert erro.value.codigo == "carga.nao_cadastravel"
+    with pytest.raises(AcessoNegado):
+        carga_.ficha_para_cadastro(ti(usuarios), linha.linha_id)
+
+    dados = replace(lida.dados, prontuario="990002")
+    paciente_id = montar(engine_web).pacientes.criar(recepcao, dados, lida.inicio)
+    carga_.cadastrada_pela_tela(recepcao, linha.linha_id, paciente_id)
+    tratada = next(li for li in (carga_.relatorio(recepcao) or relatorio).linhas if li.linha_id == linha.linha_id)
+    assert tratada.tratamento is Tratamento.IMPORTADA_MANUAL and tratada.paciente_id == paciente_id
+    with pytest.raises(RegraViolada) as erro:  # decidida: não abre de novo
+        carga_.ficha_para_cadastro(recepcao, linha.linha_id)
+    assert erro.value.codigo == "carga.nao_cadastravel"
+    with pytest.raises(AcessoNegado):
+        carga_.cadastrada_pela_tela(ti(usuarios), linha.linha_id, paciente_id)
+    # A linha vem de um campo do formulário: a baixa sem tríade não serve a outra exceção nem a uma já decidida.
+    for forcada in (saida, linha):
+        with pytest.raises(RegraViolada) as erro:
+            carga_.cadastrada_pela_tela(recepcao, forcada.linha_id, paciente_id)
+        assert erro.value.codigo == "carga.nao_cadastravel"

@@ -13,6 +13,7 @@ from werkzeug.wrappers import Response as RespostaWerkzeug
 
 from sar.modulo_01_acesso.contrato import PermissionGuard
 from sar.modulo_10_carga.contrato import (
+    CADASTRAVEIS,
     CAMPOS_CONFERIDOS,
     Amostra,
     Modo,
@@ -25,6 +26,7 @@ from sar.nucleo.contexto import Contexto
 from sar.nucleo.erros import ConfirmacaoNecessaria, RegraViolada
 from sar.web import contexto_atual
 from sar.web.configuracao import ServicosWeb
+from sar.web.formulario_cadastro import valores_da_carga
 
 bp = Blueprint("carga", __name__, url_prefix="/carga")
 GUARDA = PermissionGuard()
@@ -141,12 +143,17 @@ ERROS = {
     "carga.excecao_sem_tratamento": "Ainda há exceção sem decisão.",
     "carga.ativos_confirmados": "Informe quantos pacientes estão em tratamento hoje.",
     "carga.campo": "Campo desconhecido.",
+    "carga.nao_cadastravel": "Esta ficha não se cadastra a partir da carga: registre a decisão abaixo.",
+    "rascunho.conteudo": "A ficha passou do tamanho do rascunho: cadastre pelo Novo cadastro.",
 }
 RESULTADOS = {
     "tratada": "Decisão registrada.",
     "conferencia": "Conferência registrada.",
     "sorteados": "Mais pacientes sorteados para a conferência.",
     "aceita": "Carga aceita. A carga inicial está encerrada.",
+    "cadastrada": "Paciente cadastrado. A ficha da carga ficou como cadastrada pela tela.",
+    "cadastrada_sem_baixa": "Paciente cadastrado, mas a ficha da carga não pôde ser dada como tratada: registre a "
+    "decisão nela, com o prontuário do cadastro.",
 }
 SAIDA = "evento_saida"
 # A aba da P3 diz o tipo do evento; as grafias variam (perfilamento §2: TRANFERENCIA, sem o S).
@@ -163,10 +170,15 @@ def _servicos() -> ServicosWeb:
 
 
 def nome_da_ficha(original: Original) -> str:
-    """O nome como está na célula PACIENTE da planilha, sem o número do prontuário."""
+    """O nome como está na célula PACIENTE da planilha, sem o número do prontuário. Sem nome na ficha, o da planilha
+    de entradas ligada a ela, dito de onde veio (DD-118)."""
     for rotulo, valor in original.p1:
         if re.sub(r"[^A-Z]", "", rotulo.upper()) == "PACIENTE" and valor:
             return _PRONTUARIO.sub("", valor).strip() or valor
+    for entrada in original.p4:
+        nome = entrada.get("PACIENTE")
+        if isinstance(nome, str) and nome.strip():
+            return f"{' '.join(nome.split())} (nome da planilha de entradas)"
     return "Ficha sem nome"
 
 
@@ -230,6 +242,7 @@ def _relatorio(contexto: Contexto, **dados: Any) -> str:
         and relatorio.modo is Modo.EFETIVACAO
         and relatorio.aceito_em is None,
         resultado=RESULTADOS.get(request.args.get("resultado", "")),
+        cadastraveis=CADASTRAVEIS,
         **dados,
     )
 
@@ -261,6 +274,28 @@ def tratar(linha_id: int) -> RespostaWerkzeug | tuple[str, int]:
             digitado={"motivo": motivo, "prontuario": prontuario, "tratamento": escolha},
         ), 422
     return redirect(url_for("carga.relatorio", resultado="tratada", _anchor=f"linha-{linha_id}"))
+
+
+@bp.post("/excecoes/<int:linha_id>/cadastrar")
+def cadastrar(linha_id: int) -> RespostaWerkzeug | str | tuple[str, int]:
+    """DD-118: a ficha da exceção vira o rascunho do Novo cadastro, que abre preenchido. O rascunho é um por pessoa:
+    o de outro cadastro só é substituído com a confirmação."""
+    contexto = contexto_atual()
+    servicos = _servicos()
+    em_andamento = servicos.rascunhos.retomar(contexto)
+    desta_linha = em_andamento is not None and em_andamento.conteudo.get("carga_linha") == str(linha_id)
+    if em_andamento is not None and not desta_linha and request.form.get("substituir") != "1":
+        return _relatorio(contexto, rascunho_em_andamento=linha_id, rascunho_salvo_em=em_andamento.atualizado_em)
+    if not desta_linha:
+        try:
+            servicos.rascunhos.salvar(
+                contexto, valores_da_carga(servicos.carga.ficha_para_cadastro(contexto, linha_id))
+            )
+        except RegraViolada as erro:
+            return _relatorio(
+                contexto, erro_linha=linha_id, erro=ERROS.get(erro.codigo, "Confira os dados."), digitado={}
+            ), 422
+    return redirect(url_for("cadastro.novo"))
 
 
 def _pagina_amostra(contexto: Contexto, **dados: Any) -> str:

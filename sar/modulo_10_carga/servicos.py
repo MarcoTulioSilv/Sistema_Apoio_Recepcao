@@ -29,10 +29,12 @@ from sar.modulo_08_dados.interfaces.carga import DadosLinha, DadosLote, Reposito
 from sar.modulo_08_dados.relogio import FUSO_CLINICA
 from sar.modulo_10_carga import extrator, regras
 from sar.modulo_10_carga.contrato import (
+    CADASTRAVEIS,
     CAMPOS_CONFERIDOS,
     Amostra,
     CampoConferencia,
     Conferencia,
+    FichaParaCadastro,
     LinhaRelatorio,
     Modo,
     Original,
@@ -197,14 +199,7 @@ class ServicoCarga:
             desfecho = regras.Desfecho(registro.numero_linha, False, registro.excecao, registro.avisos)
             return _Resultado(bloco, item, desfecho, None)
         avisos = list(registro.avisos)
-        municipio = self._municipio(uow, registro, avisos)
-        dados = DadosPaciente(
-            prontuario=registro.prontuario, nome=registro.nome, data_nascimento=registro.nascimento,
-            nome_mae=registro.nome_mae, cpf=registro.cpf, cns=registro.cns, rg=registro.rg,
-            rg_orgao=registro.rg_orgao, logradouro=registro.logradouro, numero=registro.numero,
-            complemento=registro.complemento, bairro=registro.bairro,
-            municipio=municipio.codigo if municipio else None, cep=registro.cep,
-        )  # fmt: skip
+        dados = _dados(registro, self._municipio(uow, registro, avisos))
         telefones, contatos = _telefones_e_contatos(registro.telefones)
         try:
             criado = self._cadastro.criar_na_carga(
@@ -359,6 +354,24 @@ class ServicoCarga:
                 raise RegraViolada("carga.paciente_nao_encontrado")
             paciente_id = achados[0].paciente_id
 
+        self._tratar(contexto, linha_id, tratamento, motivo, paciente_id)
+
+    def cadastrada_pela_tela(self, contexto: Contexto, linha_id: int, paciente_id: int) -> None:
+        GUARDA.exigir(contexto, CONFERIR)
+        self._tratar(contexto, linha_id, Tratamento.IMPORTADA_MANUAL, None, paciente_id, pelo_botao=True)
+
+    def _tratar(
+        self,
+        contexto: Contexto,
+        linha_id: int,
+        tratamento: Tratamento,
+        motivo: str | None,
+        paciente_id: int | None,
+        pelo_botao: bool = False,
+    ) -> None:
+        """pelo_botao: a baixa do cadastro aberto pela exceção (DD-118), que só vale para a exceção que se cadastra pelo
+        botão e ainda não foi decidida; a linha vem do formulário, e o servidor não confia nela."""
+
         def operacao(uow: UnidadeDeTrabalho) -> None:
             repositorio = uow.repositorio(RepositorioCarga)
             lote = _efetivacao_aberta(repositorio)
@@ -367,6 +380,8 @@ class ServicoCarga:
                 raise NaoEncontrado()
             if linha.excecao_codigo is None:
                 raise RegraViolada("carga.linha_sem_excecao")
+            if pelo_botao and (linha.excecao_codigo not in CADASTRAVEIS or linha.excecao_tratada):
+                raise RegraViolada("carga.nao_cadastravel")
             if paciente_id is not None:
                 outra = repositorio.ligada_a(paciente_id)
                 if outra is not None and outra.id != linha.id:
@@ -380,6 +395,35 @@ class ServicoCarga:
             )  # fmt: skip
 
         self._executar(operacao)
+
+    def ficha_para_cadastro(self, contexto: Contexto, linha_id: int) -> FichaParaCadastro:
+        GUARDA.exigir(contexto, CONFERIR)  # quem cadastra a exceção é quem a trata (§4.9)
+        hoje = contexto.instante.astimezone(FUSO_CLINICA).date()
+
+        def operacao(uow: UnidadeDeTrabalho) -> FichaParaCadastro:
+            repositorio = uow.repositorio(RepositorioCarga)
+            lote = _efetivacao_aberta(repositorio)
+            linha = repositorio.linha(linha_id)
+            if linha is None or linha.lote_id != lote.id:
+                raise NaoEncontrado()
+            if linha.excecao_codigo not in CADASTRAVEIS or linha.excecao_tratada:
+                raise RegraViolada("carga.nao_cadastravel")
+            original = self._original(lote.id, linha)
+            registro = regras.ler_para_cadastro(linha.numero_linha, original.p1, original.p4, hoje)
+            avisos = list(registro.avisos)
+            convenios = {regras.norm_nome(c.nome): c.id for c in self._referencias.convenios_ativos(uow)}
+            telefones, contatos = _telefones_e_contatos(registro.telefones)
+            da_p4 = {a.removeprefix("p4.completou_") for a in registro.avisos if a.startswith("p4.completou_")}
+            self._auditoria.registrar(
+                uow, contexto, VER, "carga_linha", str(linha.id), {"aberta_no_cadastro": (None, True)}
+            )
+            return FichaParaCadastro(
+                linha.id, linha.numero_linha, original, _dados(registro, self._municipio(uow, registro, avisos)),
+                registro.inicio, _cobertura(registro, convenios, avisos), tuple(telefones), tuple(contatos),
+                frozenset("municipio" if campo == "cidade" else campo for campo in da_p4),
+            )  # fmt: skip
+
+        return self._executar(operacao)
 
     def _amostra_em(self, uow: UnidadeDeTrabalho, lote: DadosLote) -> Amostra:
         repositorio = uow.repositorio(RepositorioCarga)
@@ -536,6 +580,16 @@ def _efetivacao_aberta(repositorio: RepositorioCarga, travar: bool = False) -> D
     if lote.situacao == "aceita":
         raise RegraViolada("carga.aceita")
     return lote
+
+
+def _dados(registro: regras.RegistroP1, municipio: Municipio | None) -> DadosPaciente:
+    return DadosPaciente(
+        prontuario=registro.prontuario, nome=registro.nome, data_nascimento=registro.nascimento,
+        nome_mae=registro.nome_mae, cpf=registro.cpf, cns=registro.cns, rg=registro.rg,
+        rg_orgao=registro.rg_orgao, logradouro=registro.logradouro, numero=registro.numero,
+        complemento=registro.complemento, bairro=registro.bairro,
+        municipio=municipio.codigo if municipio else None, cep=registro.cep,
+    )  # fmt: skip
 
 
 def _data(valor: date | None) -> str | None:

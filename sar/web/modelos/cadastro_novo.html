@@ -1,5 +1,6 @@
 {% extends "layout.html" %}
 {% from "_cadastro_campos.html" import texto, telefone, contato %}
+{% from "_carga_original.html" import ficha_p1, ligadas %}
 {% block cabeca %}
   {# htmx sem histórico local: nada da ficha fica guardado no navegador (R-33); estilos do indicador vêm do sar.css #}
   <meta name="htmx-config" content="history:false includeIndicatorCSS:false">
@@ -7,7 +8,7 @@
   <script src="{{ url_for('static', filename='js/cadastro.js') }}" defer></script>
 {% endblock %}
 {% block titulo_pagina %}Novo cadastro{% endblock %}
-{% block subtitulo %}Na ordem da ficha de papel. Só nome, prontuário e início do tratamento são obrigatórios{% endblock %}
+{% block subtitulo %}{% if da_carga %}A partir da carga inicial: confira o que veio da planilha e complete{% else %}Na ordem da ficha de papel. Só nome, prontuário e início do tratamento são obrigatórios{% endif %}{% endblock %}
 {% block conteudo %}
 <form class="flex flex-col" method="post" action="{{ url_for('cadastro.salvar') }}" data-tela="cadastro" novalidate
       hx-post="{{ url_for('cadastro.rascunho') }}" hx-trigger="change delay:800ms" hx-target="#rascunho-estado" hx-swap="innerHTML">
@@ -36,6 +37,22 @@
         </table>
       </div>
       <div><button class="btn-secundario" type="submit" name="acao" value="{{ 'confirmar_foto' if com_foto else 'confirmar' }}">É outra pessoa: salvar o paciente{% if com_foto %} e tirar a foto{% endif %}</button></div>
+    </section>
+    {% endif %}
+
+    {# DD-118: cadastro aberto a partir de uma exceção da carga; ao salvar, a exceção fica tratada. #}
+    {% if da_carga %}
+    <section class="cartao flex flex-col gap-3 p-5" aria-labelledby="carga-t" data-sobre="da-carga">
+      <input type="hidden" name="carga_linha" value="{{ da_carga.linha_id }}">
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <h2 id="carga-t" class="m-0 text-lg">Ficha da carga inicial · linha {{ da_carga.numero_linha }} da planilha de endereços</h2>
+        <button class="btn-neutro" type="submit" form="voltar-carga">Voltar ao relatório sem cadastrar</button>
+      </div>
+      <p class="m-0 max-w-[80ch]">Os campos abaixo vêm do que a carga leu. Confira, complete e salve: no relatório da carga, a ficha fica como cadastrada pela tela.</p>
+      <p class="m-0 text-sm text-suave">Marcados com <span class="etiqueta-n">da planilha de entradas</span>: não estavam na ficha e vieram da planilha de entradas. Confira com atenção.</p>
+      <details><summary class="cursor-pointer font-bold text-acao">Ver a ficha como está na planilha</summary>
+        <div class="mt-3 grid grid-cols-1 gap-4 xl:grid-cols-2">{{ ficha_p1(da_carga.original) }}{{ ligadas(da_carga.original) }}</div>
+      </details>
     </section>
     {% endif %}
 
@@ -109,4 +126,11 @@
     </div>
   </footer>
 </form>
+{% if da_carga %}
+{# Fora do formulário do cadastro: o Enter num campo aciona o primeiro botão do formulário, e não pode ser este. #}
+<form id="voltar-carga" method="post" action="{{ url_for('cadastro.salvar') }}">
+  <input type="hidden" name="acao" value="voltar_carga">
+  <input type="hidden" name="carga_linha" value="{{ da_carga.linha_id }}">
+</form>
+{% endif %}
 {% endblock %}

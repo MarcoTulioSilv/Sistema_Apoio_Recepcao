@@ -13,6 +13,7 @@ from sqlalchemy import Engine
 from sar.modulo_10_carga.contrato import CAMPOS_CONFERIDOS
 from testes.apoio import planilhas
 from testes.apoio.acesso import CriarUsuario
+from testes.apoio.cadastro import pessoa
 from testes.apoio.carga import ti
 from testes.apoio.web import servicos_web
 from testes.web.conftest import entrar_no_navegador, sem_violacao
@@ -75,3 +76,41 @@ def test_da_excecao_ao_aceite(
     ).to_have_count(0)
     # O 422 é a resposta prevista do aceite que pediu a confirmação da diferença; erro de script não pode haver.
     assert not [e for e in erros if "status of 422" not in e], erros
+
+
+@pytest.mark.requisito("DD-118", "P-28", "RNF-406")
+def test_cadastro_aberto_pela_excecao_volta_ao_relatorio_tratada(
+    carga: dict[str, int],
+    criar_usuario: CriarUsuario,
+    engine_web: Engine,
+    endereco: str,
+    page: Page,
+    sinteticas: tuple[planilhas.Sinteticas, Path],
+) -> None:
+    erros = vigiar_erros(page)
+    gerado, pasta = sinteticas
+    servicos = servicos_web(engine_web)
+    servicos.carga.efetivar(ti(carga), pasta)
+    ficha = next(f for f in gerado.fichas if f.defeito == "sem_prontuario")
+    relatorio = servicos.carga.relatorio(pessoa(carga))
+    assert relatorio is not None
+    linha = next(li.linha_id for li in relatorio.linhas if li.numero_linha == ficha.linha)
+    criar_usuario("sistcarga_rec", perfil="recepcao")
+    entrar_no_navegador(page, endereco, "sistcarga_rec")
+
+    page.get_by_role("navigation", name="Navegação principal").get_by_role("link", name="Carga inicial").click()
+    cartao = page.locator(f"#linha-{linha}")
+    cartao.get_by_role("button", name=re.compile("^Cadastrar com estes dados")).click()
+    expect(
+        page.get_by_role("heading", name=re.compile(f"linha {ficha.linha} da planilha de endereços"))
+    ).to_be_visible()
+    expect(page.get_by_label(re.compile("^Nome completo"))).to_have_value(ficha.nome)
+    sem_violacao(page)
+    page.get_by_label(re.compile("^Prontuário")).fill("990003")
+    page.get_by_role("button", name="Salvar paciente").click()
+    expect(page.get_by_role("status")).to_have_text(
+        "Paciente cadastrado. A ficha da carga ficou como cadastrada pela tela."
+    )
+    expect(page.locator(f"#linha-{linha}")).to_have_attribute("data-estado", "i")
+    sem_violacao(page)
+    assert not erros, erros

@@ -17,7 +17,7 @@ from __future__ import annotations
 import re
 import unicodedata
 from collections import Counter, defaultdict
-from collections.abc import Callable, Iterable, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from datetime import date, timedelta
 
@@ -498,8 +498,10 @@ def ler_telefones(valor: str, avisos: list[str], sobras: list[tuple[str, str]] |
 
 
 # ------------------------------------------------------------------ P1: ficha → registro
-def interpretar_p1(bloco: BlocoP1) -> RegistroP1:
-    """Rótulo desconhecido ou repetido não é adivinhado: a ficha inteira vai às exceções (ND-49)."""
+def interpretar_p1(bloco: BlocoP1, tolerante: bool = False) -> RegistroP1:
+    """Rótulo desconhecido ou repetido não é adivinhado: a ficha inteira vai às exceções (ND-49). Tolerante (só para o
+    cadastro pela tela, DD-118), o rótulo repetido sem campo que falte vira trecho que não entrou, e a leitura segue:
+    quem decide é a recepção, olhando a ficha."""
     if not any(campo_do_rotulo(c.rotulo) for c in bloco.celulas):
         # Um título ou uma nota entre as fichas (visto no uso): não é paciente nem exceção; é contado à parte (RNF-103).
         return RegistroP1(bloco.numero_linha, excecao=SEM_FICHA)
@@ -514,8 +516,12 @@ def interpretar_p1(bloco: BlocoP1) -> RegistroP1:
             # A planilha é feita à mão copiando a ficha de cima: o rótulo repetido ("PACIENTE:" na linha da cidade,
             # "CONVENIO:" na do início; visto no uso, 18/11/2026) lê o campo que falta na ficha.
             trocado = _campo_pela_posicao(posicao, rotulados, vistos, celula.valor)
-            if trocado is None:
+            if trocado is None and not tolerante:
                 return RegistroP1(bloco.numero_linha, excecao="p1.rotulo_repetido")
+            if trocado is None:
+                repetida = " · ".join(str(v) for v in (celula.rotulo, celula.valor) if v not in (None, ""))
+                leitura.sobrou("linha", _sobra(repetida))
+                continue
             campo = trocado
             leitura.aviso("p1.rotulo_trocado")
         if campo is None:
@@ -782,6 +788,22 @@ def _prontuario_pela_p4(registro: RegistroP1, livres: dict[int, list[LinhaP4]]) 
         return None, None
     [(numero, aviso)] = candidatos.items()
     return numero, aviso
+
+
+def ler_para_cadastro(
+    numero_linha: int, p1: Sequence[tuple[str, Valor]], p4: Sequence[Mapping[str, Valor]], hoje: date
+) -> RegistroP1:
+    """DD-118: a ficha de uma exceção, lida de novo do original guardado, para o cadastro pela tela. A mesma leitura
+    da carga, completada pelas linhas da P4 que se ligaram a ela, mas tolerante ao rótulo repetido; sem exceção, que
+    aqui quem decide é a recepção. Ficha sem campo nenhum reconhecido devolve o registro vazio."""
+    bloco = BlocoP1(
+        numero_linha, tuple(CelulaP1(numero_linha + i, rotulo, valor) for i, (rotulo, valor) in enumerate(p1))
+    )
+    registro = interpretar_p1(bloco, tolerante=True)
+    if registro.excecao is not None:
+        return RegistroP1(numero_linha)
+    linhas = [LinhaP4(i, dict(valores)) for i, valores in enumerate(p4)]
+    return _completar_com_p4(_inicio_plausivel(registro, hoje), linhas)
 
 
 def _inicio_plausivel(registro: RegistroP1, hoje: date) -> RegistroP1:
