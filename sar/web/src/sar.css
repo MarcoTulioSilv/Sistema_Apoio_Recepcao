@@ -119,7 +119,7 @@
   &[aria-pressed="true"] { @apply border-ausente-borda bg-ausente-fundo font-bold text-ausente; }
 }
 @utility btn-urgente { @apply btn bg-urgencia text-white hover:bg-urgencia-texto; }
-@utility btn-aprovar { @apply btn bg-aprovar text-white hover:bg-aprovar-escura; }
+@utility btn-aprovar { @apply btn bg-aprovar text-white hover:bg-aprovar-escura disabled:cursor-not-allowed disabled:bg-borda disabled:text-suave; }
 /* Opção de um seletor de decisão (rádio escondido, rótulo visível): a cor de quem está marcado vem no modelo */
 @utility opcao-decisao {
   @apply inline-flex min-h-12 min-w-36 cursor-pointer items-center justify-center gap-2 rounded-lg border-2 border-borda-forte

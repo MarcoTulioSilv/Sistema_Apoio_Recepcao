@@ -54,7 +54,17 @@
     <h2 id="pend-t" class="m-0 text-xl">Pendências do cadastro</h2>
     {% set faltam = ficha.pendencias | reject("equalto", "cep_nao_verificado") | list %}
     {% if faltam %}<p class="m-0">Falta: {% for p in faltam %}{{ pendencias[p] }}{% if not loop.last %}, {% endif %}{% endfor %}.</p>{% endif %}
-    {% if "cep_nao_verificado" in ficha.pendencias %}
+    {% if "cep_nao_verificado" in ficha.pendencias and ficha.cep_generico %}
+    {# CEP único do município (DD-116): quem confirma é o paciente, não o serviço de CEP. #}
+    {% set cidade = ficha.residencia.nome ~ "/" ~ ficha.residencia.uf if ficha.residencia else none %}
+    <form class="flex flex-wrap items-center gap-3" method="post" action="{{ url_for('pacientes.confirmar_cep_generico', paciente_id=ficha.paciente_id) }}" data-sobre="cep-municipio">
+      <span><span class="etiqueta-a">CEP do município a confirmar</span> <span class="numero">{{ d.cep|cep }}</span> é o CEP único
+        {%- if cidade %} de {{ cidade }}, que não tem CEP por rua. Pergunte ao paciente se ele mora em {{ ficha.residencia.nome }}.
+        {%- else %} do município, que não tem CEP por rua. Pergunte ao paciente se ele mora nessa cidade.{% endif %}</span>
+      {% if pode.atualizar %}<button class="btn-secundario" type="submit">Confirmar com o paciente</button>{% endif %}
+    </form>
+    {% if pode.atualizar %}<p class="m-0 text-sm text-suave">Se ele mora em outra cidade, corrija o endereço e o CEP em Editar dados.</p>{% endif %}
+    {% elif "cep_nao_verificado" in ficha.pendencias %}
     <form class="flex flex-wrap items-center gap-3" method="post" action="{{ url_for('pacientes.verificar_cep', paciente_id=ficha.paciente_id) }}">
       <span><span class="etiqueta-a">CEP não verificado</span> O serviço de CEP estava fora do ar, ou não conhecia o número.</span>
       {% if pode.atualizar %}<button class="btn-secundario" type="submit">Verificar o CEP de novo</button>{% endif %}

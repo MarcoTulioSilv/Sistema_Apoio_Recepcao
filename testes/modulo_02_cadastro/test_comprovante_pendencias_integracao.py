@@ -109,7 +109,7 @@ def test_cadastro_incompleto_so_de_quem_esta_em_tratamento(
     minimo = cadastro.pacientes.criar(recepcao, DadosPaciente(nome=fabrica.nome(), prontuario="F1"), JANEIRO)
     completo = replace(
         dados_completos(fabrica), sexo=None, rg="1", rg_orgao="SSP", naturalidade_municipio="5211909",
-        logradouro="Rua A", numero="1", bairro="Centro", cep="75800000",
+        logradouro="Rua A", numero="1", bairro="Centro", cep="75803120",
     )  # fmt: skip
     so_cep = cadastro.pacientes.criar(recepcao, completo, JANEIRO)
     saiu, _ = com_evento(cadastro, cadastro_zerado, fabrica, TipoEvento.ALTA)  # incompleto, mas fora (DEC-71)

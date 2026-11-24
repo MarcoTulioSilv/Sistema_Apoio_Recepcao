@@ -17,7 +17,7 @@ from testes.apoio.fabrica import Fabrica
 
 pytestmark = pytest.mark.integracao
 
-CEP = "75800000"
+CEP = "75803120"
 JATAI_VIACEP = EnderecoCep(CEP, "Rua Fictícia", "Centro", "5211909", "GO", "Jataí")
 
 
@@ -27,7 +27,7 @@ def test_cep_fora_do_ar_conclui_o_cadastro_com_pendencia_e_verifica_depois(
 ) -> None:
     cadastro = montar(engine_web)  # o provedor começa fora do ar
     recepcao = pessoa(cadastro_zerado)
-    pid = cadastro.pacientes.criar(recepcao, replace(dados_completos(fabrica), cep="75800-000"), INICIO)
+    pid = cadastro.pacientes.criar(recepcao, replace(dados_completos(fabrica), cep="75803-120"), INICIO)
     ficha = cadastro.pacientes.ver_ficha(recepcao, pid)
     assert (ficha.dados.cep, ficha.cep_verificado) == (CEP, False) and CEP_NAO_VERIFICADO in ficha.pendencias
     [item] = cadastro.executar(lambda uow: FonteCadastroIncompleto().listar(uow, recepcao))
@@ -86,7 +86,7 @@ def test_consulta_do_preenchimento_resolve_o_municipio(cadastro_zerado: dict[str
     cadastro.provedor_cep.enderecos[CEP] = JATAI_VIACEP
     cadastro.provedor_cep.enderecos["75801000"] = EnderecoCep("75801000", None, "Vila Fictícia", None, "GO", "JATAI")
     cadastro.provedor_cep.enderecos["75802000"] = EnderecoCep("75802000", None, None, None, "XX", "Lugar")
-    sugerido = cadastro.cep.consultar(recepcao, "75800-000")
+    sugerido = cadastro.cep.consultar(recepcao, "75803-120")
     assert sugerido is not None and sugerido.municipio is not None
     assert (sugerido.logradouro, sugerido.municipio.codigo) == ("Rua Fictícia", "5211909")
     pelo_nome = cadastro.cep.consultar(recepcao, "75801000")  # BrasilAPI: sem código, pelo nome e pela UF
@@ -98,3 +98,53 @@ def test_consulta_do_preenchimento_resolve_o_municipio(cadastro_zerado: dict[str
         cadastro.cep.consultar(recepcao, "7580")
     with pytest.raises(AcessoNegado):
         cadastro.cep.consultar(pessoa(cadastro_zerado, "ti", Perfil.TI), CEP)
+
+
+@pytest.mark.requisito("DD-116", "RF-109")
+def test_cep_do_municipio_confirmado_pela_recepcao_resolve_a_pendencia(
+    cadastro_zerado: dict[str, int], engine_web: Engine, fabrica: Fabrica
+) -> None:
+    """Pedido do uso (18/11/2026): cidade pequena tem um CEP só; a recepção confirma com o paciente."""
+    cadastro = montar(engine_web)
+    recepcao = pessoa(cadastro_zerado)
+    pid = cadastro.pacientes.criar(recepcao, replace(dados_completos(fabrica), cep="75850-000"), INICIO)
+    ficha = cadastro.pacientes.ver_ficha(recepcao, pid)
+    assert ficha.cep_generico and CEP_NAO_VERIFICADO in ficha.pendencias
+    [item] = cadastro.executar(lambda uow: FonteCadastroIncompleto().listar(uow, recepcao))
+    assert "CEP do município a confirmar com o paciente" in item.descricao
+
+    cadastro.provedor_cep.consultados.clear()  # a criação consulta; a confirmação, não
+    cadastro.pacientes.confirmar_cep_generico(recepcao, pid)
+    cadastro.pacientes.confirmar_cep_generico(recepcao, pid)  # de novo: nada muda, nem na trilha
+    ficha = cadastro.pacientes.ver_ficha(recepcao, pid)
+    assert ficha.cep_verificado and CEP_NAO_VERIFICADO not in ficha.pendencias
+    assert cadastro.provedor_cep.consultados == []  # sem consulta ao serviço
+    with engine_web.connect() as c:
+        sql = "SELECT alteracoes FROM auditoria WHERE operacao = 'cadastro.paciente.atualizar'"
+        assert c.execute(text(sql)).scalars().all() == [
+            '{"cep_confirmado_com_paciente":[false,true],"cep_verificado":[false,true]}'
+        ]
+
+
+@pytest.mark.requisito("DD-116")
+def test_cep_de_rua_nao_se_confirma_pela_recepcao(
+    cadastro_zerado: dict[str, int], engine_web: Engine, fabrica: Fabrica
+) -> None:
+    cadastro = montar(engine_web)
+    recepcao = pessoa(cadastro_zerado)
+    pid = cadastro.pacientes.criar(recepcao, replace(dados_completos(fabrica), cep="75803-120"), INICIO)
+    assert not cadastro.pacientes.ver_ficha(recepcao, pid).cep_generico
+    with pytest.raises(RegraViolada) as erro:
+        cadastro.pacientes.confirmar_cep_generico(recepcao, pid)
+    assert erro.value.codigo == "cep.nao_generico"
+
+
+@pytest.mark.requisito("DD-116", "RF-1004")
+def test_so_quem_atualiza_o_cadastro_confirma_o_cep_do_municipio(
+    cadastro_zerado: dict[str, int], engine_web: Engine, fabrica: Fabrica
+) -> None:
+    cadastro = montar(engine_web)
+    pid = cadastro.pacientes.criar(pessoa(cadastro_zerado), replace(dados_completos(fabrica), cep="75850-000"), INICIO)
+    for perfil in (Perfil.TI, Perfil.VISUALIZADOR):
+        with pytest.raises(AcessoNegado):
+            cadastro.pacientes.confirmar_cep_generico(pessoa(cadastro_zerado, perfil.value, perfil), pid)

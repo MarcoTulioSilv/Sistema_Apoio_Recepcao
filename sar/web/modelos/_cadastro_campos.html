@@ -1,7 +1,7 @@
 {# Peças do formulário do cadastro. Erro com aria-invalid e mensagem ligada por aria-describedby (guia, Campos). #}
 {% macro texto(nome, rotulo, v, erros, tipo="text", obrigatorio=False, extra="") -%}
 <div class="campo">
-  <label class="rotulo" for="{{ nome }}">{{ rotulo }}{% if obrigatorio %} <span class="text-urgencia" aria-hidden="true">*</span>{% endif %}</label>
+  <label class="rotulo" for="{{ nome }}">{{ rotulo }}{% if obrigatorio %} <span class="text-urgencia" aria-hidden="true">*</span>{% endif %}{% if nome in v.get('_da_p4', '').split(',') %} <span class="etiqueta-n">da planilha de entradas</span>{% endif %}</label>
   <input class="entrada" id="{{ nome }}" name="{{ nome }}" type="{{ tipo }}" value="{{ v.get(nome, '') }}"{% if obrigatorio %} required data-minimo{% endif %}{% if erros.get(nome) %} aria-invalid="true"{% endif %} aria-describedby="{{ nome }}-erro" {{ extra|safe }}>
   <p class="ajuda-erro m-0" id="{{ nome }}-erro" aria-live="polite">{{ erros.get(nome, '') }}</p>
 </div>

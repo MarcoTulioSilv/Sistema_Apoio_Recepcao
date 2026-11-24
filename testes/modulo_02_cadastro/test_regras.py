@@ -14,6 +14,7 @@ from sar.modulo_02_cadastro.regras import (
     CAMPOS_DE_PENDENCIA,
     CEP_NAO_VERIFICADO,
     campos_alterados,
+    cep_generico,
     chave_triade,
     cns_valido,
     cpf_valido,
@@ -269,3 +270,12 @@ def test_regras_do_evento() -> None:
     ]
     for argumentos, esperado in casos:
         assert codigo(lambda a=argumentos: validar_evento(*a)) == esperado
+
+
+@pytest.mark.requisito("DD-116")
+@pytest.mark.parametrize(
+    ("cep", "esperado"),
+    [("75850000", True), ("75800000", True), ("75803120", False), ("7585000", False), (None, False)],
+)
+def test_cep_generico_e_o_unico_do_municipio(cep: str | None, esperado: bool) -> None:
+    assert cep_generico(cep) is esperado

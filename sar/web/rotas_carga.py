@@ -1,0 +1,408 @@
+"""Carga inicial na aplicação (DDS §14.3, RF-1106): o relatório de exceções e avisos com o tratamento, a conferência
+amostral lado a lado e o aceite da administração. A simulação e a efetivação são do TI, pela linha de comando (DD-65):
+aqui não há botão para elas. Nenhum dado de paciente vai à URL: as rotas levam só o id da linha da carga."""
+
+from __future__ import annotations
+
+import re
+from collections import Counter
+from typing import Any
+
+from flask import Blueprint, current_app, redirect, render_template, request, url_for
+from werkzeug.wrappers import Response as RespostaWerkzeug
+
+from sar.modulo_01_acesso.contrato import PermissionGuard
+from sar.modulo_10_carga.contrato import (
+    CADASTRAVEIS,
+    CAMPOS_CONFERIDOS,
+    Amostra,
+    Modo,
+    Original,
+    Relatorio,
+    ResultadoConferencia,
+    Tratamento,
+)
+from sar.nucleo.contexto import Contexto
+from sar.nucleo.erros import ConfirmacaoNecessaria, RegraViolada
+from sar.web import contexto_atual
+from sar.web.configuracao import ServicosWeb
+from sar.web.formulario_cadastro import valores_da_carga
+
+bp = Blueprint("carga", __name__, url_prefix="/carga")
+GUARDA = PermissionGuard()
+
+# Os códigos do MOD-10 em linguagem da recepção: (título, explicação).
+EXCECOES: dict[str, tuple[str, str]] = {
+    "evento_saida": (
+        "Consta na planilha de eventos",
+        "O nome aparece numa saída (óbito, alta, transferência ou "
+        "transplante). Confira se o paciente ainda está em tratamento: se estiver, cadastre pela tela; se "
+        "não, descarte.",
+    ),
+    "P-03.minimo": (
+        "Falta o mínimo do cadastro",
+        "Falta o nome, o prontuário ou o início do tratamento. Cadastre pela tela, onde o rascunho ajuda.",
+    ),
+    "prontuario.repetido": (
+        "Prontuário já usado por outra ficha",
+        "Duas fichas têm o mesmo prontuário; a primeira entrou.",
+    ),
+    "cpf.repetido": ("CPF já usado por outra ficha", "Duas fichas têm o mesmo CPF; a primeira entrou."),
+    "cns.repetido": ("CNS já usado por outra ficha", "Duas fichas têm o mesmo CNS; a primeira entrou."),
+    "p1.rotulo_desconhecido": (
+        "Ficha com um campo que a carga não reconhece",
+        "A carga não adivinha: confira a ficha e cadastre pela tela, ou descarte.",
+    ),
+    "p1.rotulo_repetido": ("Ficha com um campo repetido", "O mesmo campo aparece duas vezes na ficha."),
+    "p1.celula_ilegivel": ("Ficha com um campo ilegível", "Um campo de texto veio como data, fora do lugar."),
+    "p1.ilegivel": ("Ficha ilegível", "Nenhum campo da ficha foi reconhecido."),
+}
+AVISOS: dict[str, tuple[str, str]] = {
+    "convenio.desconhecido": (
+        "Convênio não cadastrado: ficou sem cobertura",
+        "Cadastre o convênio em Convênios e registre a cobertura na ficha.",
+    ),
+    "cep.generico": (
+        "CEP genérico do município (termina em 000)",
+        "Entra como pendência; confirme com o paciente pela ficha.",
+    ),
+    "cep.invalido": ("CEP malformado: ficou vazio", "Vira pendência do cadastro."),
+    "cep.ausente": ("Sem CEP na ficha", "Vira pendência do cadastro."),
+    "cpf.invalido": ("CPF com dígito inválido: ficou vazio", "Vira pendência do cadastro."),
+    "cns.invalido": ("CNS com dígito inválido: ficou vazio", "Vira pendência do cadastro."),
+    "data_nascimento.invalida": ("Data de nascimento ilegível: ficou vazia", "Vira pendência do cadastro."),
+    "inicio.antes_do_nascimento": ("Início antes do nascimento: o nascimento ficou vazio", "Confira as duas datas."),
+    "inicio.invalido": ("Início do tratamento ilegível", "Se a planilha de entradas tinha a data, ela foi usada."),
+    "ibge.ausente": ("Sem código do município", "Município ficou vazio; vira pendência."),
+    "ibge.sem_correspondencia": (
+        "Código do município não encontrado na tabela do IBGE",
+        "Município ficou vazio; vira pendência.",
+    ),
+    "municipio.nome_divergente": ("Nome do município diferente do código", "Vale o código; confira o município."),
+    "municipio.fora_de_goias": ("Município fora de Goiás: ficou vazio", "A residência é só em Goiás."),
+    "municipio.inexistente": ("Município inexistente: ficou vazio", "Vira pendência do cadastro."),
+    "telefone.ddd_presumido": ("Telefone sem DDD: presumido 64", "Confira com o paciente."),
+    "telefone.numero": ("Telefone que não é celular nem fixo válido: não entrou", "Confira com o paciente."),
+    "telefone.ddd": ("Telefone com DDD inexistente: não entrou", "Confira com o paciente."),
+    "telefone.repetido": ("Telefone repetido na ficha", "Entrou uma vez só."),
+    "telefone.nenhum": ("Sem telefone reconhecido", "Confira com o paciente."),
+    "contato.sem_nome": ("Telefone de parente sem nome", "Entrou como recado do paciente."),
+    "contato.parentesco_desconhecido": ("Parentesco fora da lista", "O contato entrou sem parentesco."),
+    "endereco.incompleto": ("Endereço que não se separou bem", "Confira logradouro, número e bairro na ficha."),
+    "rg.igual_cpf": ("RG igual ao CPF (é a CIN)", "O RG não entrou; o CPF basta."),
+    "triade.coincidente": (
+        "Possível duplicidade",
+        "Nome, nascimento e mãe iguais a outro cadastro; veja nas pendências.",
+    ),
+    "p4.sem_linha": ("Sem linha na planilha de entradas", "Importado com o início da ficha."),
+    "p4.varias_linhas": (
+        "Mais de uma linha na planilha de entradas",
+        "Cada campo veio da entrada mais recente que o tinha.",
+    ),
+    "p4.completou_prontuario": ("Prontuário veio da planilha de entradas", "A ficha não tinha o número; confira."),
+    "p4.ligada_por_cpf": ("Ligada à planilha de entradas pelo CPF", "A ficha não tinha prontuário."),
+    "p4.ligada_por_cns": ("Ligada à planilha de entradas pelo CNS", "A ficha não tinha prontuário."),
+    "p4.ligada_pelo_nome": ("Ligada à planilha de entradas pelo nome", "A ficha não tinha prontuário; confira."),
+    "p4.ligacao_ambigua": (
+        "Nome, CPF ou CNS em mais de um prontuário da planilha de entradas",
+        "Nada foi ligado; cadastre pela tela.",
+    ),
+    "p4.completou_nome": ("Nome veio da planilha de entradas", "A ficha não tinha o nome; confira."),
+    "p4.completou_cidade": ("Cidade veio da planilha de entradas", "A ficha não tinha a cidade."),
+    "p4.completou_inicio": ("Início do tratamento veio da planilha de entradas", "A ficha não tinha a data."),
+    "p4.completou_cpf": ("CPF veio da planilha de entradas", "A ficha não tinha o CPF."),
+    "p4.completou_cns": ("CNS veio da planilha de entradas", "A ficha não tinha o CNS."),
+    "p4.completou_cep": ("CEP veio da planilha de entradas", "A ficha não tinha o CEP."),
+    "p4.inicio_divergente": ("Início diferente na planilha de entradas", "Vale o da ficha; confira."),
+    "p4.cpf_divergente": ("CPF diferente na planilha de entradas", "Vale o da ficha; confira no documento."),
+    "p4.cns_divergente": ("CNS diferente na planilha de entradas", "Vale o da ficha; confira no cartão do paciente."),
+    "endereco.bairro_presumido": ("Bairro presumido pelo fim do endereço", "Sem SETOR ou JARDIM; confira o bairro."),
+    "telefone.nono_digito": ("Celular antigo: o 9 da frente foi acrescentado", "Confira o número com o paciente."),
+    "ibge.pelo_nome": ("Município achado pelo nome", "A ficha não trazia o código do IBGE; confira o município."),
+    "p1.rotulo_trocado": ("Rótulo repetido: o campo foi lido pela posição na ficha", "Confira o campo na ficha."),
+    "p1.prontuario_ambiguo": ("Mais de um número na linha do paciente: prontuário não lido", "Confira o prontuário."),
+    "p1.linha_nao_reconhecida": ("Linha que não é da ficha: ficou de fora", "Veja a linha marcada na ficha."),
+    "p1.linha_continuada": ("Linha sem rótulo juntada à de cima", "Confira o campo na ficha da planilha."),
+    "p1.telefone_fora_do_lugar": ("Telefone escrito na linha do convênio", "Entrou nos telefones; confira."),
+    "p1.cns_fora_do_lugar": ("CNS escrito noutra linha da ficha", "Entrou como CNS; confira no cartão."),
+    "p1.celula_fora_do_lugar": ("Data numa linha de texto: ficou de fora", "Veja a ficha da planilha."),
+    "p1.mae_com_prontuario": ("Linha da mãe com número de prontuário", "Confira o nome da mãe e o do paciente."),
+    "p1.sobra_endereco": ("Trecho do endereço que não entrou", "Veja o trecho na ficha da planilha."),
+    "p1.sobra_documentos": ("Trecho dos documentos que não entrou", "Veja o trecho na ficha da planilha."),
+    "p1.sobra_telefone": ("Texto do telefone que não entrou", "Veja o trecho na ficha da planilha."),
+}
+ERROS = {
+    "carga.motivo": "Descreva o motivo do descarte, com pelo menos 5 caracteres.",
+    "carga.paciente_nao_encontrado": "Nenhum cadastro com esse prontuário. Cadastre pela tela antes.",
+    "carga.paciente_ja_ligado": "Esse cadastro já está ligado a outra linha da carga.",
+    "carga.linha_sem_excecao": "Esta linha não é uma exceção.",
+    "carga.aceita": "A carga já foi aceita.",
+    "carga.sem_efetivacao": "A carga ainda não foi efetivada pelo TI.",
+    "carga.amostra_incompleta": "Termine de conferir todos os sorteados antes.",
+    "carga.sem_divergencia": "Sem divergência na amostra, não há o que sortear de novo.",
+    "carga.excecao_sem_tratamento": "Ainda há exceção sem decisão.",
+    "carga.ativos_confirmados": "Informe quantos pacientes estão em tratamento hoje.",
+    "carga.campo": "Campo desconhecido.",
+    "carga.triade_sem_dados": "A ficha não tem nome, nascimento nem nome da mãe para conferir com o cadastro: "
+    "descarte-a com o motivo.",
+    "carga.nao_cadastravel": "Esta ficha não se cadastra a partir da carga: registre a decisão abaixo.",
+    "rascunho.conteudo": "A ficha passou do tamanho do rascunho: cadastre pelo Novo cadastro.",
+}
+RESULTADOS = {
+    "tratada": "Decisão registrada.",
+    "conferencia": "Conferência registrada.",
+    "sorteados": "Mais pacientes sorteados para a conferência.",
+    "aceita": "Carga aceita. A carga inicial está encerrada.",
+    "cadastrada": "Paciente cadastrado. A ficha da carga ficou como cadastrada pela tela.",
+    "cadastrada_sem_baixa": "Paciente cadastrado, mas a ficha da carga não pôde ser dada como tratada: registre a "
+    "decisão nela, com o prontuário do cadastro.",
+}
+SAIDA = "evento_saida"
+# A aba da P3 diz o tipo do evento; as grafias variam (perfilamento §2: TRANFERENCIA, sem o S).
+TIPOS_DE_SAIDA = (("OBITO", "Óbito"), ("ALTA", "Alta"), ("TRANSPLANTE", "Transplante"), ("TRANF", "Transferência"),
+                  ("TRANSF", "Transferência"), ("DESIST", "Desistência"))  # fmt: skip
+_DATA = re.compile(r"\d{1,2}/\d{1,2}/\d{2,4}")
+_SEM_ACENTO = str.maketrans("ÁÂÃÀÉÊÍÓÔÕÚÇ", "AAAAEEIOOOUC")
+_PRONTUARIO = re.compile(r"\s*N\s*[ºo°]?\s*\.?\s*PT\b.*$", re.IGNORECASE)
+
+
+ITENS_DA_TRIADE = {"nome": "o nome", "nascimento": "o nascimento", "nome_mae": "o nome da mãe"}
+
+
+def triade_nao_confere(prontuario: str, itens: list[str]) -> str:
+    """DD-119: diz quais itens não batem, nunca os valores do cadastro."""
+    nomes = [ITENS_DA_TRIADE.get(item, item) for item in itens]
+    lista = nomes[0] if len(nomes) == 1 else f"{', '.join(nomes[:-1])} e {nomes[-1]}"
+    verbo = "é diferente" if len(nomes) == 1 else "são diferentes"
+    return (
+        f"O cadastro do prontuário {prontuario} não confere com esta ficha: {lista} {verbo}. Confira o prontuário; "
+        "se a ficha for de outra pessoa, cadastre-a pela tela."
+    )
+
+
+def _servicos() -> ServicosWeb:
+    servicos: ServicosWeb = current_app.config["SAR_SERVICOS"]
+    return servicos
+
+
+def nome_da_ficha(original: Original) -> str:
+    """O nome como está na célula PACIENTE da planilha, sem o número do prontuário. Sem nome na ficha, o da planilha
+    de entradas ligada a ela, dito de onde veio (DD-118)."""
+    for rotulo, valor in original.p1:
+        if re.sub(r"[^A-Z]", "", rotulo.upper()) == "PACIENTE" and valor:
+            return _PRONTUARIO.sub("", valor).strip() or valor
+    for entrada in original.p4:
+        nome = entrada.get("PACIENTE")
+        if isinstance(nome, str) and nome.strip():
+            return f"{' '.join(nome.split())} (nome da planilha de entradas)"
+    return "Ficha sem nome"
+
+
+def evento_da_saida(original: Original) -> str:
+    """'Transferência em 12/03/2026': o tipo pela aba da P3 e a primeira data da linha (DD-114)."""
+    for evento in original.p3:
+        aba = re.sub(r"[^A-Z]", "", str(evento.get("aba", "")).upper().translate(_SEM_ACENTO))
+        tipo = next((nome for prefixo, nome in TIPOS_DE_SAIDA if aba.startswith(prefixo)), "Saída")
+        valores = evento.get("valores")
+        lista = valores if isinstance(valores, list | tuple) else ()
+        data = next((v for v in lista if isinstance(v, str) and _DATA.fullmatch(v.strip())), None)
+        return f"{tipo} em {data.strip()}" if data else tipo
+    return "Saída"
+
+
+def _passos(relatorio: Relatorio | None, amostra: Amostra) -> list[tuple[str, bool]]:
+    if relatorio is None:
+        return []
+    if relatorio.modo is Modo.SIMULACAO:
+        return [("Simulada pelo TI; a efetivação vem depois", False)]
+    excecoes = [li for li in relatorio.linhas if li.excecao]
+    tratadas = sum(1 for li in excecoes if li.tratamento)
+    conferidos = sum(1 for p in amostra.pacientes if p.completo)
+    return [
+        ("Efetivada", True),
+        (f"Exceções: {tratadas} de {len(excecoes)} tratadas", tratadas == len(excecoes)),
+        (f"Amostra: {conferidos} de {len(amostra.pacientes)} conferidos", amostra.completa),
+        ("Aceite da administração", relatorio.aceito_em is not None),
+    ]
+
+
+def _amostra(contexto: Contexto, relatorio: Relatorio | None) -> Amostra:
+    if relatorio is None or relatorio.modo is not Modo.EFETIVACAO or relatorio.aceito_em is not None:
+        return Amostra((), 0)
+    return _servicos().carga.amostra(contexto)
+
+
+def _relatorio(contexto: Contexto, **dados: Any) -> str:
+    relatorio = _servicos().carga.relatorio(contexto)
+    amostra = _amostra(contexto, relatorio)
+    linhas = relatorio.linhas if relatorio else ()
+    excecoes = [li for li in linhas if li.excecao]
+    com_avisos = [li for li in linhas if not li.excecao and li.avisos]
+    resumo = Counter(codigo for li in com_avisos for codigo in set(li.avisos))
+    return render_template(
+        "carga_relatorio.html",
+        rel=relatorio,
+        excecoes=excecoes,
+        saidas=[li for li in excecoes if li.excecao == SAIDA],
+        outras=[li for li in excecoes if li.excecao != SAIDA],
+        com_avisos=com_avisos,
+        resumo_avisos=sorted(resumo.items(), key=lambda par: (-par[1], par[0])),
+        textos_excecao=EXCECOES,
+        textos_aviso=AVISOS,
+        passos=_passos(relatorio, amostra),
+        nome_da_ficha=nome_da_ficha,
+        evento_da_saida=evento_da_saida,
+        aba="relatorio",
+        pode_tratar=GUARDA.pode(contexto, "carga.conferencia.registrar")
+        and relatorio is not None
+        and relatorio.modo is Modo.EFETIVACAO
+        and relatorio.aceito_em is None,
+        resultado=RESULTADOS.get(request.args.get("resultado", "")),
+        cadastraveis=CADASTRAVEIS,
+        **dados,
+    )
+
+
+@bp.get("")
+def relatorio() -> str:
+    return _relatorio(contexto_atual())
+
+
+@bp.post("/excecoes/<int:linha_id>")
+def tratar(linha_id: int) -> RespostaWerkzeug | tuple[str, int]:
+    contexto = contexto_atual()
+    escolha = request.form.get("tratamento", "")
+    motivo, prontuario = request.form.get("motivo", ""), request.form.get("prontuario", "")
+    if escolha not in Tratamento:
+        return _relatorio(
+            contexto,
+            erro_linha=linha_id,
+            erro="Escolha o que foi feito com a ficha.",
+            digitado={"motivo": motivo, "prontuario": prontuario},
+        ), 422
+    try:
+        _servicos().carga.tratar_excecao(contexto, linha_id, Tratamento(escolha), motivo, prontuario)
+    except RegraViolada as erro:
+        mensagem = (
+            triade_nao_confere(" ".join(prontuario.split()), list(erro.detalhe.get("itens", [])))
+            if erro.codigo == "carga.triade_nao_confere"
+            else ERROS.get(erro.codigo, "Confira os dados.")
+        )
+        return _relatorio(
+            contexto,
+            erro_linha=linha_id,
+            erro=mensagem,
+            digitado={"motivo": motivo, "prontuario": prontuario, "tratamento": escolha},
+        ), 422
+    return redirect(url_for("carga.relatorio", resultado="tratada", _anchor=f"linha-{linha_id}"))
+
+
+@bp.post("/excecoes/<int:linha_id>/cadastrar")
+def cadastrar(linha_id: int) -> RespostaWerkzeug | str | tuple[str, int]:
+    """DD-118: a ficha da exceção vira o rascunho do Novo cadastro, que abre preenchido. O rascunho é um por pessoa:
+    o de outro cadastro só é substituído com a confirmação."""
+    contexto = contexto_atual()
+    servicos = _servicos()
+    em_andamento = servicos.rascunhos.retomar(contexto)
+    desta_linha = em_andamento is not None and em_andamento.conteudo.get("carga_linha") == str(linha_id)
+    if em_andamento is not None and not desta_linha and request.form.get("substituir") != "1":
+        return _relatorio(contexto, rascunho_em_andamento=linha_id, rascunho_salvo_em=em_andamento.atualizado_em)
+    if not desta_linha:
+        try:
+            servicos.rascunhos.salvar(
+                contexto, valores_da_carga(servicos.carga.ficha_para_cadastro(contexto, linha_id))
+            )
+        except RegraViolada as erro:
+            return _relatorio(
+                contexto, erro_linha=linha_id, erro=ERROS.get(erro.codigo, "Confira os dados."), digitado={}
+            ), 422
+    return redirect(url_for("cadastro.novo"))
+
+
+def _pagina_amostra(contexto: Contexto, **dados: Any) -> str:
+    relatorio = _servicos().carga.relatorio(contexto)
+    amostra = _amostra(contexto, relatorio)
+    excecoes = [li for li in relatorio.linhas if li.excecao] if relatorio else []
+    carregados = sum(
+        1 for li in (relatorio.linhas if relatorio else ()) if li.tratamento is Tratamento.IMPORTADA_MANUAL
+    )
+    return render_template(
+        "carga_amostra.html",
+        rel=relatorio,
+        amostra=amostra,
+        passos=_passos(relatorio, amostra),
+        aba="amostra",
+        total_campos=len(CAMPOS_CONFERIDOS),
+        pode_aceitar=GUARDA.pode(contexto, "carga.aceitar"),
+        excecoes=len(excecoes),
+        tratadas=sum(1 for li in excecoes if li.tratamento),
+        importadas_a_mao=carregados,
+        descartadas=sum(1 for li in excecoes if li.tratamento is Tratamento.DESCARTADA),
+        resultado=RESULTADOS.get(request.args.get("resultado", "")),
+        **dados,
+    )
+
+
+@bp.get("/amostra")
+def amostra() -> str:
+    return _pagina_amostra(contexto_atual())
+
+
+@bp.post("/amostra/sortear")
+def sortear() -> RespostaWerkzeug | tuple[str, int]:
+    contexto = contexto_atual()
+    try:
+        _servicos().carga.sortear_mais(contexto)
+    except RegraViolada as erro:
+        return _pagina_amostra(contexto, erro=ERROS.get(erro.codigo, "Não foi possível sortear.")), 422
+    return redirect(url_for("carga.amostra", resultado="sorteados"))
+
+
+@bp.post("/aceitar")
+def aceitar() -> RespostaWerkzeug | tuple[str, int]:
+    contexto = contexto_atual()
+    texto = request.form.get("ativos", "").strip()
+    confirmar = request.form.get("confirmar") == "sim"
+    if not texto.isdigit():
+        return _pagina_amostra(contexto, erro_ativos=ERROS["carga.ativos_confirmados"], ativos=texto), 422
+    try:
+        _servicos().carga.aceitar(contexto, int(texto), confirmar)
+    except ConfirmacaoNecessaria as pedido:
+        return _pagina_amostra(contexto, diferenca=pedido.dados, ativos=texto), 422
+    except RegraViolada as erro:
+        return _pagina_amostra(contexto, erro=ERROS.get(erro.codigo, "Não foi possível aceitar."), ativos=texto), 422
+    return redirect(url_for("carga.relatorio", resultado="aceita"))
+
+
+def _pagina_conferencia(contexto: Contexto, linha_id: int, **dados: Any) -> str:
+    conferencia = _servicos().carga.conferencia(contexto, linha_id)
+    amostra = _servicos().carga.amostra(contexto)
+    posicao = next((i for i, p in enumerate(amostra.pacientes, 1) if p.linha_id == linha_id), 0)
+    return render_template(
+        "carga_conferencia.html",
+        c=conferencia,
+        nome=nome_da_ficha(conferencia.original),
+        posicao=posicao,
+        total=len(amostra.pacientes),
+        resultado=RESULTADOS.get(request.args.get("resultado", "")),
+        **dados,
+    )
+
+
+@bp.get("/amostra/<int:linha_id>")
+def conferir(linha_id: int) -> str:
+    return _pagina_conferencia(contexto_atual(), linha_id)
+
+
+@bp.post("/amostra/<int:linha_id>")
+def registrar(linha_id: int) -> RespostaWerkzeug | tuple[str, int]:
+    """Cada campo marcado vai à conferência; os não marcados ficam como estavam (dá para registrar em partes)."""
+    contexto = contexto_atual()
+    try:
+        for campo, _ in CAMPOS_CONFERIDOS:
+            valor = request.form.get(f"campo-{campo}", "")
+            if valor in ResultadoConferencia:
+                _servicos().carga.registrar_conferencia(contexto, linha_id, campo, ResultadoConferencia(valor))
+    except RegraViolada as erro:
+        return _pagina_conferencia(contexto, linha_id, erro=ERROS.get(erro.codigo, "Confira os campos.")), 422
+    return redirect(url_for("carga.conferir", linha_id=linha_id, resultado="conferencia"))

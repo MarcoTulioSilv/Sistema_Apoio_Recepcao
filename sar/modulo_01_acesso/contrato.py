@@ -218,6 +218,13 @@ class AuthService(Protocol):
         anterior do mesmo usuário (P-02)."""
         ...
 
+    def autenticar_terminal(self, login: str, senha: str, origem: str) -> Contexto:
+        """Identifica no terminal do servidor quem roda um comando que a matriz dá a uma pessoa, como a carga
+        inicial (DD-113). Mesma conferência do entrar (senha, ativo, bloqueio progressivo, termo), mas sem abrir
+        sessão: a sessão web do usuário continua (P-02). Troca de senha pendente se resolve pela tela
+        (TrocaDeSenhaExigida). Toda tentativa entra na trilha, com o motivo "terminal"."""
+        ...
+
     def sair(self, contexto: Contexto) -> None: ...
 
     def trocar_propria_senha(self, contexto: Contexto, senha_atual: str, nova_senha: str) -> None: ...

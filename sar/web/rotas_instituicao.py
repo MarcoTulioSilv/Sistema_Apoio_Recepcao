@@ -30,6 +30,7 @@ ERROS = {
     "instituicao.ausente": "Salve os dados da clínica antes de enviar o logotipo.",
     "logotipo.vazio": "Escolha o arquivo do logotipo.",
     "logotipo.tipo": "O logotipo precisa ser uma imagem PNG ou JPEG.",
+    "logotipo.outro_formato": "A imagem traz conteúdo de outro formato. Abra e salve de novo como PNG ou JPEG.",
     "logotipo.tamanho": "O logotipo passa de 2 MB.",
     "logotipo.invalido": "Não foi possível ler a imagem, ou ela é grande demais (até 4 milhões de pixels).",
     "logotipo.tempo": "A imagem demorou demais para ser processada. Tente uma imagem menor.",

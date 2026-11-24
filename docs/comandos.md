@@ -223,9 +223,27 @@ umount /media/pendrive-a
 
 ```powershell
 sar migrar                                   # aplica as migrações até a última
-sar reverter base; sar migrar                # desfaz tudo e refaz (só antes do go-live, DD-60)
-sar reverter 0003                            # volta até uma migração específica
+sar zerar-desenvolvimento --confirmo         # apaga os dados de uso e mantém estrutura, dados fixos e usuários
+sar reverter base; sar migrar                # desfaz e refaz a estrutura: só com o banco SEM dados
 sar verificar-cadeia                         # confere a trilha de auditoria, como o job diário (§13.1)
+```
+
+**Para recomeçar no desenvolvimento** (por exemplo, repetir a carga), use `sar zerar-desenvolvimento --confirmo` com
+`$env:SAR_AMBIENTE = "desenvolvimento"`. Ele apaga pacientes, documentos, cargas, sessões e a trilha (que recomeça
+vazia), esvazia o cofre e a quarentena de desenvolvimento e mantém a estrutura, os municípios, as escalas, as faixas
+etárias, os tipos de documento e os usuários. Com `--sem-usuarios`, apaga também os usuários. Fora do desenvolvimento,
+é recusado.
+
+**`sar reverter` recusa banco com dados.** Com pacientes, a reversão da 0002 parava no meio (eles apontam para os
+municípios), mas o MySQL não desfaz o que as reversões anteriores já tinham feito na estrutura: colunas sumiam sem a
+versão acompanhar, e o `sar migrar` seguinte não as recriava. Agora ele recusa antes de começar. Para a estrutura do
+zero, recrie o banco (perde tudo, inclusive os usuários):
+
+```powershell
+docker compose exec -T mysql bash -c 'mysql -uroot -p"$(cat /run/secrets/mysql_root)" -e "DROP DATABASE sar; CREATE DATABASE sar CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;"'
+sar migrar
+sar criar-usuarios-banco
+sar criar-superusuario --nome "Seu Nome" --login seu.login      # seção 5
 ```
 
 Para agir no banco de testes, defina `$env:SAR_BANCO_NOME = "sar_teste"` antes (e remova depois com
@@ -378,7 +396,46 @@ python -m pytest testes\modulo_05_emissao\test_validacao.py -q
 
 ---
 
-## 10. Problemas comuns
+## 10. Carga inicial (MOD-10)
+
+A carga é do TI, no servidor, e roda uma vez só (DDS §14, DD-65, DD-66). O terminal mostra só contagens; o relatório
+com as linhas fica na aplicação, para a recepção e a administração. O TI entra com o próprio login e a senha, pedida
+sem eco, sem abrir sessão: a sessão dele na tela continua (DD-113).
+
+Preparar a pasta (protegida, fora do repositório) com as três planilhas, salvas como `.xlsx` e com estes nomes. A P4
+da clínica é `.xls`: abra no Excel ou no LibreOffice e salve como `.xlsx` antes. No Excel, escolha
+**"Pasta de Trabalho do Excel (*.xlsx)"**, e não "Planilha Strict Open XML", que também é `.xlsx` mas o leitor não
+entende (a carga recusa com o aviso de formato Strict).
+
+| Arquivo na pasta | Planilha |
+|---|---|
+| `p1_enderecos.xlsx` | P1, endereços e telefones (a base). A carga lê a única aba visível com fichas; abas ocultas e a tentativa de tabela ficam de fora |
+| `p4_entradas.xlsx` | P4, entradas (só completa e confere) |
+| `p3_eventos.xlsx` | P3, eventos (só conferida) |
+
+```powershell
+sar carga simular D:\carga --login ti.fulano                 # quantas vezes for preciso; desfaz tudo no fim
+sar carga efetivar D:\carga --login ti.fulano --definitiva   # uma vez só, depois do relatório aceito
+```
+
+Cada simulação substitui o relatório da anterior. Sem `--definitiva`, a efetivação é recusada. Se a conta de alguma
+planilha não fechar (RNF-103), o comando falha com `carga.contagem_nao_fecha` e nada é gravado.
+
+Planilhas sintéticas para ensaiar no banco de desenvolvimento ou na homologação (dados fictícios, PT §5.3; nunca use
+planilha real para ensaio):
+
+```powershell
+python scripts\gerar_planilhas_sinteticas.py armazenamento\carga_sintetica              # 146 fichas, como a base real
+python scripts\gerar_planilhas_sinteticas.py armazenamento\carga_sintetica --fichas 30 --semente 3
+sar carga simular armazenamento\carga_sintetica --login ti.fulano
+```
+
+Para repetir o ensaio da efetivação no banco de desenvolvimento, zere-o com `sar zerar-desenvolvimento --confirmo`
+(seção 4), porque a efetivação não se desfaz pela aplicação. Os usuários continuam; entre de novo pela tela.
+
+---
+
+## 11. Problemas comuns
 
 | Sintoma | Causa e solução |
 |---|---|

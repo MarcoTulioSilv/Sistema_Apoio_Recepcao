@@ -15,8 +15,9 @@ from werkzeug.wrappers import Response
 from sar.modulo_01_acesso.contrato import PermissionGuard
 from sar.modulo_02_cadastro.contrato import PARENTESCOS, Identificacao
 from sar.modulo_06_configuracao.contrato import Municipio
+from sar.modulo_10_carga.contrato import FichaParaCadastro
 from sar.nucleo.contexto import Contexto
-from sar.nucleo.erros import ConfirmacaoNecessaria, IndisponivelExterno, NaoEncontrado, RegraViolada
+from sar.nucleo.erros import AcessoNegado, ConfirmacaoNecessaria, IndisponivelExterno, NaoEncontrado, RegraViolada
 from sar.web import contexto_atual
 from sar.web.configuracao import ServicosWeb
 from sar.web.formulario_cadastro import (
@@ -124,8 +125,25 @@ def municipios_para_nomes(contexto: Contexto, v: dict[str, str]) -> dict[str, st
     return exibido
 
 
+def ficha_da_carga(contexto: Contexto, v: dict[str, str]) -> FichaParaCadastro | None:
+    """DD-118: a ficha da exceção de onde o cadastro veio. None se a exceção já foi decidida ou a carga foi aceita
+    nesse meio tempo: o rascunho segue como um cadastro comum."""
+    linha = v.get("carga_linha", "")
+    if not linha.isdigit():
+        return None
+    try:
+        return _servicos().carga.ficha_para_cadastro(contexto, int(linha))
+    except RegraViolada, NaoEncontrado, AcessoNegado:
+        return None
+
+
 def _pagina(contexto: Contexto, v: dict[str, str], **dados: Any) -> str:
+    da_carga = ficha_da_carga(contexto, v)
+    if da_carga is None:
+        v = {chave: valor for chave, valor in v.items() if chave != "carga_linha"}
     v = municipios_para_nomes(contexto, v)
+    if da_carga is not None:  # só para mostrar a etiqueta nos campos (_cadastro_campos.html); não volta no envio
+        v["_da_p4"] = ",".join(sorted(da_carga.da_planilha_de_entradas))
     uf_naturalidade = v.get("naturalidade_uf") or UF_RESIDENCIA
     configuracao = _servicos().configuracao
     return render_template(
@@ -144,6 +162,7 @@ def _pagina(contexto: Contexto, v: dict[str, str], **dados: Any) -> str:
         tipos_telefone=TIPOS_TELEFONE,
         erros=dados.pop("erros", {}),
         pode_foto=GUARDA.pode(contexto, "documento.ingestao.abrir"),
+        da_carga=da_carga,
         **dados,
     )
 
@@ -186,6 +205,8 @@ def novo() -> str:
     retomado = _servicos().rascunhos.retomar(contexto)
     if retomado is None:
         return _pagina(contexto, {})
+    if "carga_linha" in retomado.conteudo:
+        return _pagina(contexto, retomado.conteudo, tem_rascunho=True)  # o quadro da ficha da carga explica
     aviso = (
         f"Rascunho retomado, salvo às {_hora(retomado.atualizado_em)}"
         f" de {retomado.atualizado_em.astimezone(FUSO):%d/%m}."
@@ -202,6 +223,11 @@ def salvar() -> Response | str:
     if acao == "descartar":
         _servicos().rascunhos.descartar(contexto)
         return redirect(url_for("cadastro.novo"))
+    carga_linha = v.get("carga_linha", "")
+    if acao == "voltar_carga":  # DD-118: sem cadastrar, a exceção fica como estava e o rascunho dela some
+        _servicos().rascunhos.descartar(contexto)
+        ancora = f"linha-{carga_linha}" if carga_linha.isdigit() else None
+        return redirect(url_for("carga.relatorio", _anchor=ancora))
     if acao == "rascunho":
         try:
             salvo = _servicos().rascunhos.salvar(contexto, v)
@@ -222,8 +248,17 @@ def salvar() -> Response | str:
     except RegraViolada as erro:
         campos, geral = erro_do_formulario(contexto, erro, cadastro)
         return _pagina(contexto, v, erros=campos, erro=geral or "Confira os campos marcados.")
+    if carga_linha.isdigit():  # DD-118: o cadastro veio de uma exceção da carga, que fica tratada
+        try:
+            _servicos().carga.cadastrada_pela_tela(contexto, int(carga_linha), paciente_id)
+        except RegraViolada, NaoEncontrado:
+            return redirect(
+                url_for("carga.relatorio", resultado="cadastrada_sem_baixa", _anchor=f"linha-{carga_linha}")
+            )
     if com_foto and GUARDA.pode(contexto, "documento.ingestao.abrir"):
         return redirect(url_for("documentos.foto", paciente_id=paciente_id, abrir="1", criado="1"))
+    if carga_linha.isdigit():
+        return redirect(url_for("carga.relatorio", resultado="cadastrada", _anchor=f"linha-{carga_linha}"))
     return redirect(url_for("pacientes.ficha", paciente_id=paciente_id, resultado="criado"))
 
 

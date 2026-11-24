@@ -11,6 +11,7 @@ from sqlalchemy import Engine
 import sar.modulo_08_dados.modelos.acesso
 import sar.modulo_08_dados.modelos.agendamento
 import sar.modulo_08_dados.modelos.cadastro
+import sar.modulo_08_dados.modelos.carga
 import sar.modulo_08_dados.modelos.configuracao
 import sar.modulo_08_dados.modelos.documentos
 import sar.modulo_08_dados.modelos.emissao

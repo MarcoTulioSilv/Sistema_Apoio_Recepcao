@@ -114,6 +114,15 @@ class ServicoReferencias:
         dados = uow.repositorio(RepositorioMunicipio).por_codigo(codigo)
         return _municipio(dados) if dados is not None else None
 
+    def codigo_7_digitos(self, uow: UnidadeDeTrabalho, codigo_6: str) -> Municipio | None:
+        if len(codigo_6) != 6 or not (codigo_6.isascii() and codigo_6.isdigit()):
+            raise ValueError("o código reduzido do IBGE tem 6 dígitos")
+        encontrados = uow.repositorio(RepositorioMunicipio).com_prefixo(codigo_6)
+        # Os seis primeiros dígitos identificam o município de forma única (DD-53); mais de um seria tabela corrompida.
+        if len(encontrados) > 1:
+            raise RuntimeError("tabela de municípios com prefixo repetido")
+        return _municipio(encontrados[0]) if encontrados else None
+
     def buscar_municipios(self, uow: UnidadeDeTrabalho, termo: str, uf: str | None = None) -> list[Municipio]:
         return _buscar_municipios(uow, termo, uf)
 

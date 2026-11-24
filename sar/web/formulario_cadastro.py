@@ -20,12 +20,13 @@ from sar.modulo_02_cadastro.contrato import (
     TipoCobertura,
     TipoTelefone,
 )
+from sar.modulo_10_carga.contrato import FichaParaCadastro
 from sar.nucleo.erros import RegraViolada
 
 CAMPOS = (
     "prontuario", "nome", "inicio", "nascimento", "sexo", "mae", "cpf", "cns", "rg", "rg_orgao", "naturalidade_uf",
     "naturalidade", "cep", "logradouro", "numero", "complemento", "bairro", "municipio", "cobertura", "convenio",
-    "carteirinha",
+    "carteirinha", "carga_linha",
 )  # fmt: skip
 _TELEFONE = re.compile(r"^tel-(\d{1,2})-(ddd|numero|tipo)$")
 _CONTATO = re.compile(r"^contato-(\d{1,2})-(nome|parentesco)$")
@@ -65,6 +66,32 @@ def valores(formulario: Mapping[str, str]) -> dict[str, str]:
         for nome, valor in formulario.items()
         if nome in CAMPOS or _TELEFONE.match(nome) or _CONTATO.match(nome) or _TELEFONE_CONTATO.match(nome)
     }
+
+
+def valores_da_carga(ficha: FichaParaCadastro) -> dict[str, str]:
+    """DD-118: a ficha de uma exceção da carga no formato do formulário, para virar o rascunho do cadastro. O
+    "carga_linha" leva a linha junto, para a baixa na exceção quando o paciente for salvo."""
+    d = ficha.dados
+    pares: dict[str, str | None] = {
+        "carga_linha": str(ficha.linha_id), "prontuario": d.prontuario, "nome": d.nome,
+        "inicio": ficha.inicio.isoformat() if ficha.inicio else None,
+        "nascimento": d.data_nascimento.isoformat() if d.data_nascimento else None, "mae": d.nome_mae,
+        "cpf": d.cpf, "cns": d.cns, "rg": d.rg, "rg_orgao": d.rg_orgao, "cep": d.cep, "logradouro": d.logradouro,
+        "numero": d.numero, "complemento": d.complemento, "bairro": d.bairro, "municipio": d.municipio,
+    }  # fmt: skip
+    if ficha.cobertura is not None:
+        pares["cobertura"] = ficha.cobertura.tipo.value
+        pares["convenio"] = str(ficha.cobertura.convenio_id) if ficha.cobertura.convenio_id else None
+    for i, telefone in enumerate(ficha.telefones):
+        pares.update({f"tel-{i}-ddd": telefone.ddd, f"tel-{i}-numero": telefone.numero,
+                      f"tel-{i}-tipo": telefone.tipo.value})  # fmt: skip
+    for j, contato in enumerate(ficha.contatos):
+        pares.update({f"contato-{j}-nome": contato.nome, f"contato-{j}-parentesco": contato.parentesco})
+        for k, telefone in enumerate(contato.telefones):
+            prefixo = f"contato-{j}-tel-{k}"
+            pares.update({f"{prefixo}-ddd": telefone.ddd, f"{prefixo}-numero": telefone.numero,
+                          f"{prefixo}-tipo": telefone.tipo.value})  # fmt: skip
+    return {chave: valor for chave, valor in pares.items() if valor}
 
 
 def telefones_do_paciente(v: Mapping[str, str]) -> list[LinhaTelefone]:
