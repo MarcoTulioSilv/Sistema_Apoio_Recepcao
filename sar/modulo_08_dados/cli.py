@@ -56,7 +56,10 @@ def _contagem(tabela: str) -> int:
                 ),
                 {"t": tabela},
             ).scalar_one()
-            return int(conexao.execute(text(f"SELECT COUNT(*) FROM `{tabela}`")).scalar_one()) if existe else 0  # noqa: S608
+            if not existe:
+                return 0
+            # O nome só chega aqui depois de o banco confirmar que a tabela existe; quem chama passa nomes fixos.
+            return int(conexao.execute(text(f"SELECT COUNT(*) FROM `{tabela}`")).scalar_one())  # noqa: S608 # nosec B608
     finally:
         engine.dispose()
 
@@ -89,7 +92,8 @@ def zerar_desenvolvimento(manter_usuarios: bool) -> dict[str, int]:
             ]
             conexao.execute(text("SET FOREIGN_KEY_CHECKS = 0"))
             for tabela in tabelas:
-                resultado = conexao.execute(text(f"DELETE FROM `{tabela}`"))  # noqa: S608 — nome vindo do próprio banco
+                # O nome vem da lista de tabelas do próprio banco (information_schema), nunca de fora.
+                resultado = conexao.execute(text(f"DELETE FROM `{tabela}`"))  # noqa: S608 # nosec B608
                 apagadas[tabela] = int(getattr(resultado, "rowcount", 0) or 0)
             conexao.execute(
                 text("UPDATE auditoria_cabeca SET ultimo_registro_id = 0, ultimo_hash = REPEAT('0', 64) WHERE id = 1")
